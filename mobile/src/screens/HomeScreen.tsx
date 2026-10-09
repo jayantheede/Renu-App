@@ -2,12 +2,42 @@ import React, { useState, useEffect } from 'react';
 import * as Location from 'expo-location';
 import { View, StyleSheet, ScrollView, TouchableOpacity, ImageBackground, Image } from 'react-native';
 import { Text } from 'react-native-paper';
+import { useNavigation } from '@react-navigation/native';
 import { useAuthStore } from '../store/useAuthStore';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { fetchGrowerDashboard } from '../api/client';
 import { ActivityIndicator } from 'react-native-paper';
 
 export const HomeScreen = ({ navigation }: any) => {
+  const nativeNav = useNavigation<any>();
+  const activeNav = navigation || nativeNav;
+
+  const navigateTo = (screenName: string) => {
+    try {
+      if (typeof activeNav?.navigate === 'function') {
+        activeNav.navigate(screenName);
+        return;
+      }
+      if (typeof activeNav?.jumpTo === 'function') {
+        activeNav.jumpTo(screenName);
+        return;
+      }
+      const parent = activeNav?.getParent?.();
+      if (parent) {
+        if (typeof parent.navigate === 'function') {
+          parent.navigate(screenName);
+          return;
+        }
+        if (typeof parent.jumpTo === 'function') {
+          parent.jumpTo(screenName);
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('Navigation error:', e);
+    }
+  };
+
   const user = useAuthStore((state) => state.user);
   const session = useAuthStore((state) => state.session);
   const fullName = user?.name || session?.user?.name || session?.user?.user_metadata?.full_name || 'Grower';
@@ -184,7 +214,12 @@ export const HomeScreen = ({ navigation }: any) => {
           <Text style={styles.sectionTitle}>This week</Text>
 
           {homeData.pendingOrders?.map((order: any) => (
-            <TouchableOpacity key={order.id} style={styles.actionCard} activeOpacity={0.7}>
+            <TouchableOpacity
+              key={order.id}
+              style={styles.actionCard}
+              activeOpacity={0.7}
+              onPress={() => navigateTo('Orders')}
+            >
               <View style={styles.actionBadgeDelivery}>
                 <Text style={styles.actionBadgeTextDelivery}>Delivery</Text>
               </View>
@@ -197,7 +232,12 @@ export const HomeScreen = ({ navigation }: any) => {
           ))}
 
           {homeData.recentMessages?.filter((m: any) => m.dot === 'on').map((msg: any) => (
-            <TouchableOpacity key={msg.id} style={styles.actionCard} activeOpacity={0.7}>
+            <TouchableOpacity
+              key={msg.id}
+              style={styles.actionCard}
+              activeOpacity={0.7}
+              onPress={() => navigateTo('Messages')}
+            >
               <View style={styles.actionBadgeN4}>
                 <Text style={styles.actionBadgeTextN4}>Action</Text>
               </View>
@@ -209,7 +249,11 @@ export const HomeScreen = ({ navigation }: any) => {
             </TouchableOpacity>
           ))}
 
-          <TouchableOpacity style={styles.actionCard} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={styles.actionCard}
+            activeOpacity={0.7}
+            onPress={() => navigateTo('Invoices')}
+          >
             <View style={styles.actionBadgeTransparent}>
               <Text style={styles.actionTitle}>Balance due</Text>
               <Text style={styles.actionSubtext}>{homeData.openInvoices?.length || 0} open invoices</Text>
@@ -251,14 +295,14 @@ export const HomeScreen = ({ navigation }: any) => {
             <TouchableOpacity
               style={styles.quickActionButton}
               activeOpacity={0.7}
-              onPress={() => navigation?.navigate('Orders')}
+              onPress={() => navigateTo('Orders')}
             >
               <Text style={styles.quickActionText}>Reorder last delivery</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.quickActionButton}
               activeOpacity={0.7}
-              onPress={() => navigation?.navigate('Shop')}
+              onPress={() => navigateTo('Shop')}
             >
               <Text style={styles.quickActionText}>Request an order</Text>
             </TouchableOpacity>
@@ -268,7 +312,7 @@ export const HomeScreen = ({ navigation }: any) => {
           <TouchableOpacity
             style={styles.messageUsButton}
             activeOpacity={0.7}
-            onPress={() => navigation?.navigate('Messages')}
+            onPress={() => navigateTo('Messages')}
           >
             <Text style={styles.messageUsText}>Message us</Text>
           </TouchableOpacity>
