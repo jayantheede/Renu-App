@@ -179,7 +179,7 @@ export const EmployeeDashboardScreen = ({ navigation }: any) => {
             subtitle="8 completed"
           />
         </View>
-        <View style={[styles.gridColumn, { marginTop: 20 }]}>
+        <View style={styles.gridColumn}>
           <StatCard 
             title="Acres Covered" 
             value="450" 
@@ -190,8 +190,8 @@ export const EmployeeDashboardScreen = ({ navigation }: any) => {
         </View>
       </View>
 
-      <View style={[styles.gridContainer, { marginTop: -20, zIndex: -1 }]}>
-        <View style={[styles.gridColumn, { marginTop: 20 }]}>
+      <View style={styles.gridContainer}>
+        <View style={styles.gridColumn}>
           <StatCard 
             title="Hours Logged" 
             value="34h" 
@@ -541,6 +541,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
     borderRadius: 24,
     padding: 20,
+    minHeight: 160,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.03,

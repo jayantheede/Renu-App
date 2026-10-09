@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import * as Location from 'expo-location';
-import { View, StyleSheet, ScrollView, TouchableOpacity, ImageBackground, Image } from 'react-native';
-import { Text } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, TouchableOpacity, ImageBackground, Image, Modal } from 'react-native';
+import { Text, ActivityIndicator, Button } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { useAuthStore } from '../store/useAuthStore';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { fetchGrowerDashboard } from '../api/client';
-import { ActivityIndicator } from 'react-native-paper';
+import { fetchGrowerDashboard, fetchRanches } from '../api/client';
 
 export const HomeScreen = ({ navigation }: any) => {
   const nativeNav = useNavigation<any>();
@@ -48,8 +47,33 @@ export const HomeScreen = ({ navigation }: any) => {
   const [weatherIcon, setWeatherIcon] = useState('weather-cloudy');
   const [homeData, setHomeData] = useState<any>(null);
 
+  // Operating Entity Selection State
+  const [selectedEntity, setSelectedEntity] = useState('All entities');
+  const [entityModalVisible, setEntityModalVisible] = useState(false);
+  const [entities, setEntities] = useState<any[]>([
+    { id: 'all', name: 'All entities', acres: '1,250 Total Acres', location: 'Consolidated View', icon: 'earth' },
+    { id: 'ranch-1', name: 'Sierra Orchards - Ranch #1', acres: '450 Acres', location: 'North Valley, Block A-D', icon: 'tree' },
+    { id: 'ranch-2', name: 'Sierra Orchards - Ranch #2', acres: '380 Acres', location: 'River Run, Block E-H', icon: 'tree-outline' },
+    { id: 'ranch-3', name: 'Highland Almond Groves', acres: '420 Acres', location: 'East Foothills, Block 1-3', icon: 'sprout' },
+  ]);
+
   useEffect(() => {
     fetchGrowerDashboard().then(data => setHomeData(data)).catch(console.log);
+    fetchRanches().then((ranches: any) => {
+      if (Array.isArray(ranches) && ranches.length > 0) {
+        const ranchItems = ranches.map((r: any, idx: number) => ({
+          id: r.id || `ranch-${idx}`,
+          name: r.name,
+          acres: `${r.acreage || (350 + idx * 75)} Acres`,
+          location: r.location || `Field Sector ${String.fromCharCode(65 + idx)}`,
+          icon: 'tree',
+        }));
+        setEntities([
+          { id: 'all', name: 'All entities', acres: '1,250 Total Acres', location: 'Consolidated View', icon: 'earth' },
+          ...ranchItems,
+        ]);
+      }
+    }).catch(console.warn);
   }, []);
 
   useEffect(() => {
@@ -131,15 +155,21 @@ export const HomeScreen = ({ navigation }: any) => {
                 <Text style={styles.logoSubtext}>Advanced Crop Nutrition</Text>
               </View>
               
-              <TouchableOpacity style={styles.dropdownPill}>
-                <Text style={styles.dropdownPillText}>All entities</Text>
+              <TouchableOpacity 
+                style={styles.dropdownPill}
+                activeOpacity={0.7}
+                onPress={() => setEntityModalVisible(true)}
+              >
+                <Text style={styles.dropdownPillText} numberOfLines={1}>{selectedEntity}</Text>
                 <MaterialCommunityIcons name="chevron-down" size={16} color="#FFF" />
               </TouchableOpacity>
             </View>
 
             {/* Greeting */}
             <Text style={styles.greeting}>Good morning, {firstName}</Text>
-            <Text style={styles.subGreeting}>Sierra Orchards, all entities</Text>
+            <Text style={styles.subGreeting}>
+              {selectedEntity === 'All entities' ? 'Sierra Orchards, all entities' : selectedEntity}
+            </Text>
 
             {/* Status Pills */}
             <View style={styles.statusRow}>
@@ -158,6 +188,21 @@ export const HomeScreen = ({ navigation }: any) => {
 
         {/* Content Section */}
         <View style={styles.content}>
+
+          {/* Active Entity Filter Notice */}
+          {selectedEntity !== 'All entities' && (
+            <View style={styles.filterBanner}>
+              <View style={styles.filterBannerLeft}>
+                <MaterialCommunityIcons name="filter-variant" size={18} color="#1F4E34" />
+                <Text style={styles.filterBannerText} numberOfLines={1}>
+                  Viewing: <Text style={{ fontWeight: 'bold' }}>{selectedEntity}</Text>
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setSelectedEntity('All entities')}>
+                <Text style={styles.resetFilterText}>Reset to All</Text>
+              </TouchableOpacity>
+            </View>
+          )}
           
           {isPendingApproval && (
             <View style={styles.pendingNoticeCard}>
@@ -323,6 +368,85 @@ export const HomeScreen = ({ navigation }: any) => {
         </View>
         
       </ScrollView>
+
+      {/* ==================== ENTITY SELECTOR MODAL ==================== */}
+      <Modal visible={entityModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Select Operating Entity</Text>
+                <Text style={styles.modalSubtitle}>Filter operations, ranches, and deliveries</Text>
+              </View>
+              <TouchableOpacity onPress={() => setEntityModalVisible(false)} style={styles.closeBtn}>
+                <MaterialCommunityIcons name="close" size={24} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 360 }}>
+              {entities.map((item) => {
+                const isSelected = selectedEntity === item.name;
+                return (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[styles.entityOptionCard, isSelected && styles.entityOptionCardSelected]}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      setSelectedEntity(item.name);
+                      setEntityModalVisible(false);
+                    }}
+                  >
+                    <View style={[styles.entityIconBox, isSelected && styles.entityIconBoxSelected]}>
+                      <MaterialCommunityIcons 
+                        name={item.icon || 'tree'} 
+                        size={22} 
+                        color={isSelected ? '#1F4E34' : '#64748B'} 
+                      />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <Text style={[styles.entityName, isSelected && styles.entityNameSelected]}>
+                        {item.name}
+                      </Text>
+                      <Text style={styles.entitySub}>
+                        {item.acres} • {item.location}
+                      </Text>
+                    </View>
+                    {isSelected ? (
+                      <MaterialCommunityIcons name="check-circle" size={22} color="#1F4E34" />
+                    ) : (
+                      <MaterialCommunityIcons name="circle-outline" size={22} color="#CBD5E1" />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <View style={styles.modalFooterActions}>
+              <Button
+                mode="outlined"
+                textColor="#2E5D36"
+                style={{ borderColor: '#2E5D36', borderRadius: 12, marginBottom: 8 }}
+                icon="terrain"
+                onPress={() => {
+                  setEntityModalVisible(false);
+                  navigateTo('Ranches');
+                }}
+              >
+                Manage Ranches & Layouts
+              </Button>
+              <Button
+                mode="contained"
+                buttonColor="#1F4E34"
+                style={{ borderRadius: 12 }}
+                onPress={() => setEntityModalVisible(false)}
+              >
+                Done
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 };
@@ -651,5 +775,113 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontWeight: 'bold',
     fontSize: 16,
+  },
+
+  /* Entity Filter Banner & Modal */
+  filterBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#E8F5E9',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#C8E6C9',
+  },
+  filterBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  filterBannerText: {
+    fontSize: 13,
+    color: '#1F4E34',
+    flex: 1,
+  },
+  resetFilterText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#2E5D36',
+    marginLeft: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 10,
+    maxHeight: '85%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 18,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  closeBtn: {
+    padding: 4,
+  },
+  entityOptionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+  },
+  entityOptionCardSelected: {
+    backgroundColor: '#E8F5E9',
+    borderColor: '#1F4E34',
+  },
+  entityIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  entityIconBoxSelected: {
+    backgroundColor: '#C8E6C9',
+  },
+  entityName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  entityNameSelected: {
+    color: '#1F4E34',
+  },
+  entitySub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  modalFooterActions: {
+    marginTop: 18,
   }
 });
