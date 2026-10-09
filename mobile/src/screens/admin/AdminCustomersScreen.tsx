@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity, Alert, Modal } from 'react-native';
+import { View, StyleSheet, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity, Alert, Modal, Share, Platform } from 'react-native';
 import { Text, TextInput, Button, Chip, Divider } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
-import { updateCustomer } from '../../api/client';
+import { updateCustomer, assignGrowerToEmployee, exportData, importData } from '../../api/client';
 
 export const AdminCustomersScreen = () => {
   const [customers, setCustomers] = useState<any[]>([]);
@@ -15,7 +15,18 @@ export const AdminCustomersScreen = () => {
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newRole, setNewRole] = useState('Grower');
+  const [newHarvestStages, setNewHarvestStages] = useState<string[]>(['Pre Harvest', 'Harvest']);
   const [creating, setCreating] = useState(false);
+
+  // Assign to Employee Modal State
+  const [assignModalVisible, setAssignModalVisible] = useState(false);
+  const [targetCustomer, setTargetCustomer] = useState<any>(null);
+  const [selectedEmployeeEmail, setSelectedEmployeeEmail] = useState('employee@renu.com');
+  const [assigning, setAssigning] = useState(false);
+
+  // Import Modal State
+  const [importModalVisible, setImportModalVisible] = useState(false);
+  const [importJsonText, setImportJsonText] = useState('');
 
   // Edit Modal State
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -83,16 +94,18 @@ export const AdminCustomersScreen = () => {
           name: newName.trim(),
           email: newEmail.trim(),
           password: newPassword.trim() || 'Customer123!',
-          role: newRole
+          role: newRole,
+          harvestStages: newHarvestStages
         })
       });
       const data = await res.json();
       if (res.ok) {
-        Alert.alert('Success', 'Customer created successfully!');
+        Alert.alert('Success', 'Customer account created with operational crop stages!');
         setNewName('');
         setNewEmail('');
         setNewPassword('');
         setNewRole('Grower');
+        setNewHarvestStages(['Pre Harvest', 'Harvest']);
         setModalVisible(false);
         fetchCustomers();
       } else {
@@ -102,6 +115,55 @@ export const AdminCustomersScreen = () => {
       Alert.alert('Error', e.message || 'Network request failed');
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleAssignGrower = async () => {
+    if (!targetCustomer) return;
+    setAssigning(true);
+    try {
+      await assignGrowerToEmployee(targetCustomer.id, selectedEmployeeEmail);
+      Alert.alert('Success', `${targetCustomer.name || targetCustomer.email} successfully assigned to ${selectedEmployeeEmail}.`);
+      setAssignModalVisible(false);
+      fetchCustomers();
+    } catch (e: any) {
+      Alert.alert('Assignment Error', e.message || 'Failed to assign grower');
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  const handleExportCustomers = async () => {
+    try {
+      const res = await exportData('customers');
+      const jsonStr = JSON.stringify(res.data, null, 2);
+      if (Platform.OS === 'web') {
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `renu_customers_${Date.now()}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        await Share.share({ title: 'Export Customers', message: jsonStr });
+      }
+    } catch (e: any) {
+      Alert.alert('Export Failed', e.message || 'Could not export customers');
+    }
+  };
+
+  const handleImportCustomers = async () => {
+    try {
+      const parsed = JSON.parse(importJsonText);
+      const items = Array.isArray(parsed) ? parsed : [parsed];
+      await importData('customers', items);
+      Alert.alert('Success', `Imported ${items.length} customers successfully`);
+      setImportModalVisible(false);
+      setImportJsonText('');
+      fetchCustomers();
+    } catch (e: any) {
+      Alert.alert('Invalid Format', 'Please enter a valid JSON array of customers.');
     }
   };
 
@@ -161,6 +223,25 @@ export const AdminCustomersScreen = () => {
             <Text variant="bodyMedium" style={styles.subtitle}>All registered clients and growers</Text>
           </View>
           <View style={styles.headerButtons}>
+            <TouchableOpacity onPress={handleExportCustomers} style={[styles.iconBtn, { paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+              <Ionicons name="download-outline" size={16} color="#2E5D36" />
+              <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2E5D36' }}>Export</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                setImportJsonText(JSON.stringify([{
+                  name: 'Pacific Ag Farms',
+                  email: 'ops@pacificag.com',
+                  role: 'Grower',
+                  approvalStatus: 'APPROVED'
+                }], null, 2));
+                setImportModalVisible(true);
+              }}
+              style={[styles.iconBtn, { paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 4 }]}
+            >
+              <Ionicons name="cloud-upload-outline" size={16} color="#2E5D36" />
+              <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2E5D36' }}>Import</Text>
+            </TouchableOpacity>
             <TouchableOpacity onPress={onRefresh} style={styles.iconBtn}>
               <Ionicons name="refresh" size={18} color="#0F172A" />
             </TouchableOpacity>
@@ -187,6 +268,7 @@ export const AdminCustomersScreen = () => {
             const displayRole = c.role || c.user_metadata?.role || 'Grower';
             const status = c.approvalStatus || c.user_metadata?.approvalStatus || 'APPROVED';
             const isPending = status.toUpperCase() === 'PENDING';
+            const stages = c.harvestStages || ['Pre Harvest', 'Harvest', 'Post Harvest'];
 
             return (
               <View key={c.id || idx} style={styles.card}>
@@ -213,6 +295,20 @@ export const AdminCustomersScreen = () => {
                   </View>
                 </View>
 
+                {/* Harvest / Crop Lifecycle Badges */}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                  {stages.map((st: string) => (
+                    <Chip key={st} compact style={{ backgroundColor: '#F1F5F9', height: 24 }} textStyle={{ fontSize: 10, color: '#334155' }}>
+                      🌱 {st}
+                    </Chip>
+                  ))}
+                  {c.assignedEmpEmail && (
+                    <Chip compact style={{ backgroundColor: '#DBEAFE', height: 24 }} textStyle={{ fontSize: 10, color: '#1D4ED8', fontWeight: 'bold' }}>
+                      👤 Assigned: {c.assignedEmpEmail}
+                    </Chip>
+                  )}
+                </View>
+
                 <View style={styles.metaRow}>
                   <View>
                     <Text style={styles.role}>Role: {displayRole}</Text>
@@ -223,10 +319,22 @@ export const AdminCustomersScreen = () => {
                     )}
                   </View>
 
-                  <TouchableOpacity onPress={() => openEditModal(c)} style={styles.editCardBtn}>
-                    <Ionicons name="pencil" size={14} color="#2E5D36" />
-                    <Text style={styles.editCardBtnText}>Edit</Text>
-                  </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setTargetCustomer(c);
+                        setAssignModalVisible(true);
+                      }}
+                      style={[styles.editCardBtn, { borderColor: '#1D4ED8', backgroundColor: '#EFF6FF' }]}
+                    >
+                      <Ionicons name="person-add" size={13} color="#1D4ED8" />
+                      <Text style={[styles.editCardBtnText, { color: '#1D4ED8' }]}>Assign</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => openEditModal(c)} style={styles.editCardBtn}>
+                      <Ionicons name="pencil" size={14} color="#2E5D36" />
+                      <Text style={styles.editCardBtnText}>Edit</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
                 {isPending && (
@@ -433,6 +541,31 @@ export const AdminCustomersScreen = () => {
               ))}
             </View>
 
+            {/* Operational Crop Lifecycle Phases */}
+            <Text style={[styles.fieldSectionLabel, { marginTop: 12 }]}>Crop Lifecycle Phases</Text>
+            <View style={{ flexDirection: 'row', gap: 6, marginVertical: 8 }}>
+              {['Pre Harvest', 'Harvest', 'Post Harvest'].map(stage => {
+                const selected = newHarvestStages.includes(stage);
+                return (
+                  <Button
+                    key={stage}
+                    mode={selected ? 'contained' : 'outlined'}
+                    buttonColor={selected ? '#2E5D36' : undefined}
+                    textColor={selected ? '#FFFFFF' : '#2E5D36'}
+                    onPress={() => {
+                      if (selected) setNewHarvestStages(newHarvestStages.filter(s => s !== stage));
+                      else setNewHarvestStages([...newHarvestStages, stage]);
+                    }}
+                    style={{ flex: 1, borderRadius: 8, borderColor: '#2E5D36' }}
+                    labelStyle={{ fontSize: 11, marginHorizontal: 0 }}
+                    compact
+                  >
+                    {stage}
+                  </Button>
+                );
+              })}
+            </View>
+
             <View style={styles.modalBtnRow}>
               <Button
                 mode="text"
@@ -451,6 +584,104 @@ export const AdminCustomersScreen = () => {
                 style={{ flex: 1 }}
               >
                 Create
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ---------------- ASSIGN GROWER TO EMPLOYEE MODAL ---------------- */}
+      <Modal visible={assignModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeaderRow}>
+              <View>
+                <Text variant="titleLarge" style={styles.modalTitle}>Assign Grower to Employee</Text>
+                <Text variant="bodySmall" style={styles.modalSub}>
+                  Assign {targetCustomer?.name || targetCustomer?.email} to an agronomist
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setAssignModalVisible(false)} style={styles.closeModalBtn}>
+                <Ionicons name="close" size={22} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <TextInput
+              label="Employee / Agronomist Email"
+              value={selectedEmployeeEmail}
+              onChangeText={setSelectedEmployeeEmail}
+              mode="outlined"
+              style={styles.input}
+              activeOutlineColor="#2E5D36"
+            />
+
+            <View style={{ flexDirection: 'row', gap: 8, marginVertical: 8 }}>
+              {['employee@renu.com', 'agronomist@renu.com'].map(emp => (
+                <TouchableOpacity
+                  key={emp}
+                  onPress={() => setSelectedEmployeeEmail(emp)}
+                  style={[
+                    styles.roleSelectChip,
+                    selectedEmployeeEmail === emp && styles.roleSelectChipActive
+                  ]}
+                >
+                  <Text style={[styles.roleSelectChipText, selectedEmployeeEmail === emp && styles.roleSelectChipTextActive]}>
+                    {emp}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={styles.modalBtnRow}>
+              <Button
+                mode="outlined"
+                onPress={() => setAssignModalVisible(false)}
+                style={{ flex: 1, borderColor: '#CBD5E1' }}
+                textColor="#64748B"
+              >
+                Cancel
+              </Button>
+              <Button
+                mode="contained"
+                buttonColor="#2E5D36"
+                loading={assigning}
+                disabled={assigning}
+                onPress={handleAssignGrower}
+                style={{ flex: 1 }}
+              >
+                Confirm Assignment
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ---------------- IMPORT CUSTOMERS MODAL ---------------- */}
+      <Modal visible={importModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeaderRow}>
+              <Text variant="titleLarge" style={styles.modalTitle}>Import Customers</Text>
+              <TouchableOpacity onPress={() => setImportModalVisible(false)} style={styles.closeModalBtn}>
+                <Ionicons name="close" size={22} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              mode="outlined"
+              multiline
+              numberOfLines={8}
+              value={importJsonText}
+              onChangeText={setImportJsonText}
+              style={{ backgroundColor: '#F8FAFC', fontSize: 12, marginBottom: 16 }}
+              outlineColor="#CBD5E1"
+              activeOutlineColor="#2E5D36"
+            />
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <Button mode="outlined" onPress={() => setImportModalVisible(false)} style={{ flex: 1 }} textColor="#64748B">
+                Cancel
+              </Button>
+              <Button mode="contained" onPress={handleImportCustomers} style={{ flex: 1, backgroundColor: '#2E5D36' }}>
+                Import
               </Button>
             </View>
           </View>

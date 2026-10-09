@@ -1,10 +1,48 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const RAW_URL = (process.env.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
-const API_BASE_URL = RAW_URL.endsWith('/api') ? RAW_URL : `${RAW_URL}/api`;
+// Known production mapping: Render frontend → Render backend
+const RENDER_BACKEND_URL = 'https://renu-app-backend.onrender.com';
+const RENDER_FRONTEND_HOSTS = ['renu-app-1.onrender.com', 'renu-app.onrender.com'];
+
+export const getApiBaseUrl = async (): Promise<string> => {
+  try {
+    const custom = await AsyncStorage.getItem('@custom_api_url');
+    if (custom && custom.trim()) {
+      const clean = custom.trim().replace(/\/+$/, '');
+      return clean.endsWith('/api') ? clean : `${clean}/api`;
+    }
+  } catch (e) {}
+
+  if (typeof window !== 'undefined' && window.location) {
+    const hostname = window.location.hostname;
+    // On Render production frontend → use Render backend
+    if (RENDER_FRONTEND_HOSTS.some(h => hostname === h || hostname.endsWith('.onrender.com'))) {
+      return `${RENDER_BACKEND_URL}/api`;
+    }
+    // Local dev
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return 'http://localhost:3000/api';
+    }
+  }
+
+  // React Native app: use EXPO_PUBLIC_RENDER_BACKEND_URL if set, else EXPO_PUBLIC_API_URL
+  const RENDER_URL = process.env.EXPO_PUBLIC_RENDER_BACKEND_URL;
+  const RAW_URL = (RENDER_URL || process.env.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
+  return RAW_URL.endsWith('/api') ? RAW_URL : `${RAW_URL}/api`;
+};
+
+
+export const setCustomApiUrl = async (url: string) => {
+  if (!url || !url.trim()) {
+    await AsyncStorage.removeItem('@custom_api_url');
+  } else {
+    await AsyncStorage.setItem('@custom_api_url', url.trim());
+  }
+};
 
 export const apiClient = async (endpoint: string, options: RequestInit = {}) => {
   const token = await AsyncStorage.getItem('@auth_token');
+  const baseUrl = await getApiBaseUrl();
   
   const headers: Record<string, any> = {
     'Content-Type': 'application/json',
@@ -17,14 +55,14 @@ export const apiClient = async (endpoint: string, options: RequestInit = {}) => 
 
   let response;
   try {
-    response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    response = await fetch(`${baseUrl}${endpoint}`, {
       ...options,
       headers,
     });
   } catch (error: any) {
-    console.error(`[Network Error] Failed to reach ${API_BASE_URL}${endpoint}:`, error.message);
+    console.error(`[Network Error] Failed to reach ${baseUrl}${endpoint}:`, error.message);
     throw new Error(
-      `Cannot connect to backend server at ${API_BASE_URL}.\n\nPlease ensure your Android phone is on the SAME Wi-Fi network as your Mac, and that your Mac's Firewall is turned OFF (System Settings > Network > Firewall).`
+      `Cannot connect to backend server at ${baseUrl}.\n\nPlease ensure your local backend is running on port 3000, or verify the deployed server URL.`
     );
   }
 
@@ -82,6 +120,10 @@ export const approveCustomer = (id: string, status: string) => apiClient(`/app/a
 export const approveRanch = (id: string, status: string) => apiClient(`/app/admin/approvals/ranch/${id}`, { method: 'POST', body: JSON.stringify({ status }) });
 export const approveTank = (id: string, status: string) => apiClient(`/app/admin/approvals/tank/${id}`, { method: 'POST', body: JSON.stringify({ status }) });
 export const acceptAdminOrder = (id: string) => apiClient(`/app/admin/orders/${id}/accept`, { method: 'POST' });
+export const acceptOrderAndEmail = (id: string) => apiClient(`/app/admin/orders/${id}/accept-and-email`, { method: 'POST' });
+export const payOrder = (id: string) => apiClient(`/app/orders/${id}/pay`, { method: 'POST' });
+export const updateOrderTracking = (id: string, status: string, step: number) => apiClient(`/app/admin/orders/${id}/tracking`, { method: 'PUT', body: JSON.stringify({ status, step }) });
+
 export const submitProduct = (data: any) => apiClient('/app/admin/products', { method: 'POST', body: JSON.stringify(data) });
 export const deleteProduct = (id: string) => apiClient(`/app/admin/products/${id}`, { method: 'DELETE' });
 export const fetchPlatformSettings = () => apiClient('/app/admin/settings');
@@ -89,5 +131,25 @@ export const savePlatformSettings = (settings: any) => apiClient('/app/admin/set
 export const fetchAuditLogs = () => apiClient('/app/admin/audit-logs');
 export const resetSystemCache = () => apiClient('/app/admin/reset-cache', { method: 'POST' });
 export const updateCustomer = (id: string, data: any) => apiClient(`/app/admin/customers/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+
+// Tasks & Agronomy Field Operations
+export const fetchTasks = () => apiClient('/app/tasks');
+export const createAdminTask = (data: any) => apiClient('/app/admin/tasks', { method: 'POST', body: JSON.stringify(data) });
+export const updateTaskStatus = (id: string, status: string, empEmail?: string) => apiClient(`/app/tasks/${id}/status`, { method: 'PUT', body: JSON.stringify({ status, empEmail }) });
+
+// Lab Results & Grower Assignments
+export const fetchLabResults = () => apiClient('/app/lab-results');
+export const submitLabResult = (data: any) => apiClient('/app/lab-results', { method: 'POST', body: JSON.stringify(data) });
+export const assignGrowerToEmployee = (customerId: string, employeeEmail: string) => apiClient('/app/admin/assign-grower', { method: 'POST', body: JSON.stringify({ customerId, employeeEmail }) });
+export const toggleRanchVisibility = (ranchId: string, hidden: boolean) => apiClient(`/app/ranches/${ranchId}/visibility`, { method: 'PUT', body: JSON.stringify({ hidden }) });
+
+// Notifications
+export const fetchAdminNotifications = () => apiClient('/app/admin/notifications');
+export const markNotificationsRead = () => apiClient('/app/admin/notifications/mark-read', { method: 'POST' });
+
+// Universal Export / Import
+export const exportData = (entity: string) => apiClient(`/app/export/${entity}`);
+export const importData = (entity: string, items: any[]) => apiClient(`/app/import/${entity}`, { method: 'POST', body: JSON.stringify({ items }) });
+
 
 

@@ -28,7 +28,7 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <PaperProvider theme={theme} settings={{ icon: props => <MaterialCommunityIcons {...props as any} /> }}>
+      <PaperProvider theme={theme as any} settings={{ icon: props => <MaterialCommunityIcons {...props as any} /> }}>
         <View style={styles.container}>
           <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />
           <View style={StyleSheet.absoluteFill}>

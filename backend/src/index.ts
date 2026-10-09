@@ -31,7 +31,22 @@ import {
   mockPlatformSettings,
   mockAuditLogs,
   addAuditLog,
-  mockProducts
+  mockProducts,
+  mockOrdersList,
+  mockInvoices,
+  mockTasks,
+  mockLabResults,
+  mockNotifications,
+  acceptOrderAndSendPaymentEmail,
+  payOrderAndGenerateInvoice,
+  updateOrderTracking,
+  createEmployeeTask,
+  updateTaskStatus,
+  addLabResult,
+  toggleRanchHidden,
+  assignGrowerToEmployee,
+  saveStore,
+  syncStoreFromDB
 } from './usersStore';
 
 import helmet from 'helmet';
@@ -112,7 +127,7 @@ app.post('/api/auth/send-otp', async (req, res) => {
 
 app.post('/api/auth/verify-otp', async (req, res) => {
   try {
-    const { email, otp, password, name } = req.body;
+    const { email, otp, password, name, harvestStages } = req.body;
     if (!email || !otp || !password) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
@@ -131,7 +146,8 @@ app.post('/api/auth/verify-otp', async (req, res) => {
       password,
       name,
       role: 'Grower',
-      approvalStatus: 'PENDING'
+      approvalStatus: 'PENDING',
+      harvestStages: Array.isArray(harvestStages) && harvestStages.length > 0 ? harvestStages : ['Pre Harvest', 'Harvest', 'Post Harvest']
     });
 
     const token = jwt.sign(
@@ -390,6 +406,7 @@ app.post(['/api/admin/customers/:id/update', '/api/app/admin/customers/:id/updat
 
 
 app.get(['/api/admin/approvals', '/api/app/admin/approvals'], async (req, res) => {
+  await syncStoreFromDB();
   const pendingOrders = mockOrdersList.filter(o => o.status === 'PENDING');
   const pendingCustomers = mockUsers.filter(u => u.approvalStatus === 'PENDING').map(u => ({
     id: u.id,
@@ -414,13 +431,11 @@ app.post(['/api/admin/approvals/customer/:id'], async (req, res) => {
   }
 });
 
-const mockOrdersList = [
-  { id: 'ord-1', orderId: 'ORD-1099', customerEmail: 'customer@renu.com', product: 'Biome Care', qty: '10 Gal', amt: 1240, status: 'PENDING', date: '2026-10-08' },
-  { id: 'ord-2', orderId: 'ORD-1098', customerEmail: 'john@grower.com', product: 'N-CARE', qty: '25 Gal', amt: 6250, status: 'ACCEPTED', date: '2026-10-07' },
-  { id: 'ord-3', orderId: 'ORD-1097', customerEmail: 'sarah@farms.com', product: 'K-RUSH', qty: '5 Gal', amt: 900, status: 'PENDING', date: '2026-10-06' },
-];
-
+// ---------------------------------
+// Orders, Payments & Tracking Endpoints
+// ---------------------------------
 app.get(['/api/orders', '/api/app/orders', '/api/admin/orders', '/api/app/admin/orders'], async (req, res) => {
+  await syncStoreFromDB();
   res.json(mockOrdersList);
 });
 
@@ -438,10 +453,20 @@ app.post(['/api/orders', '/api/app/orders'], async (req, res) => {
       product: prodName,
       qty: quantity,
       amt: amount,
-      status: 'PENDING',
-      date: new Date().toISOString().split('T')[0] || '2026-10-09'
+      status: 'PENDING' as const,
+      date: new Date().toISOString().split('T')[0] || '2026-10-09',
+      paymentEmailSent: false,
+      trackingStep: 1,
+      trackingTimeline: [
+        { title: 'Order Placed', desc: 'Received and awaiting admin acceptance', date: new Date().toISOString().replace('T', ' ').substring(0, 16), done: true },
+        { title: 'Accepted & Payment Sent', desc: 'Awaiting customer payment', date: 'Pending', done: false },
+        { title: 'Payment Confirmed', desc: 'Invoice generated & blending initiated', date: 'Pending', done: false },
+        { title: 'Dispatched', desc: 'Tank delivery in transit', date: 'Pending', done: false },
+        { title: 'Delivered', desc: 'Injected into ranch tank', date: 'Pending', done: false }
+      ]
     };
     mockOrdersList.unshift(newOrder as any);
+    saveStore();
 
     addAuditLog({
       action: 'ORDER_PLACED',
@@ -456,19 +481,243 @@ app.post(['/api/orders', '/api/app/orders'], async (req, res) => {
   }
 });
 
+app.post([
+  '/api/admin/orders/:id/accept',
+  '/api/app/admin/orders/:id/accept',
+  '/api/admin/orders/:id/accept-and-email',
+  '/api/app/admin/orders/:id/accept-and-email'
+], async (req, res) => {
+  try {
+    const order = acceptOrderAndSendPaymentEmail(req.params.id as string);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
 
-app.post(['/api/admin/orders/:id/accept', '/api/app/admin/orders/:id/accept'], async (req, res) => {
-  const order = mockOrdersList.find(o => o.id === req.params.id);
-  if (order) {
-    order.status = 'ACCEPTED';
-    addAuditLog({
-      action: 'ORDER_ACCEPTED',
-      details: `Order #${order.orderId} ($${order.amt}) accepted and approved for dispatch`,
-      actor: 'admin@renu.com',
-      category: 'ORDERS'
-    });
+    // Send email notification via nodemailer if configured
+    if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+      try {
+        await transporter.sendMail({
+          from: `"Renu Biome Billing" <${process.env.SMTP_USER}>`,
+          to: order.customerEmail,
+          subject: `Order Accepted: Payment Required for #${order.orderId}`,
+          html: `
+            <div style="font-family: sans-serif; padding: 24px; color: #1E293B;">
+              <h2 style="color: #2E5D36;">Order #${order.orderId} Accepted!</h2>
+              <p>Dear Valued Grower,</p>
+              <p>Your order for <strong>${order.product}</strong> (${order.qty}) has been reviewed and accepted by agronomist staff.</p>
+              <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 16px; margin: 16px 0;">
+                <p style="margin: 0 0 8px 0;"><strong>Total Amount Due:</strong> $${order.amt.toLocaleString()}</p>
+                <p style="margin: 0;"><strong>Status:</strong> Awaiting Secure Online Payment</p>
+              </div>
+              <p>Please open the Renu Biome mobile app or click below to complete payment:</p>
+              <a href="https://app.renubiome.com/pay/${order.id}" style="display: inline-block; background: #2E5D36; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Pay Invoice Online</a>
+              <p style="margin-top: 24px; color: #64748B; font-size: 13px;">Upon payment confirmation, an official invoice will be generated and dispatched automatically.</p>
+            </div>
+          `
+        });
+      } catch (mailErr: any) {
+        console.warn('[Mail Warning] Could not send payment email:', mailErr.message);
+      }
+    }
+
+    res.json({ success: true, order, message: 'Order accepted and payment link emailed to customer' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to accept order' });
   }
-  res.json({ success: true, order });
+});
+
+app.post(['/api/orders/:id/pay', '/api/app/orders/:id/pay'], async (req, res) => {
+  try {
+    const result = payOrderAndGenerateInvoice(req.params.id as string);
+    if (!result) return res.status(404).json({ error: 'Order not found' });
+
+    const { order, invoice } = result;
+
+    // Send invoice delivery email to customer
+    if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+      try {
+        await transporter.sendMail({
+          from: `"Renu Biome Accounting" <${process.env.SMTP_USER}>`,
+          to: order.customerEmail,
+          subject: `Payment Confirmed & Invoice #${invoice.invoiceNumber} Attached`,
+          html: `
+            <div style="font-family: sans-serif; padding: 24px; color: #1E293B;">
+              <h2 style="color: #2E5D36;">Payment Confirmed - Thank You!</h2>
+              <p>Payment of <strong>$${invoice.amount.toLocaleString()}</strong> has been processed successfully for Order #${order.orderId}.</p>
+              <div style="background: #F1F8F5; border: 1px solid #C8E6C9; border-radius: 8px; padding: 16px; margin: 16px 0;">
+                <p style="margin: 0 0 6px 0;"><strong>Invoice Number:</strong> ${invoice.invoiceNumber}</p>
+                <p style="margin: 0 0 6px 0;"><strong>Date:</strong> ${invoice.date}</p>
+                <p style="margin: 0 0 6px 0;"><strong>Item:</strong> ${invoice.product} (${invoice.qty})</p>
+                <p style="margin: 0;"><strong>Status:</strong> PAID IN FULL</p>
+              </div>
+              <p>You can access this invoice in the Renu Biome Invoices section anytime.</p>
+            </div>
+          `
+        });
+      } catch (mailErr: any) {
+        console.warn('[Mail Warning] Could not send invoice delivery email:', mailErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Payment verified, invoice generated & delivered via email and in-app',
+      order,
+      invoice
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to process payment' });
+  }
+});
+
+app.put(['/api/admin/orders/:id/tracking', '/api/app/admin/orders/:id/tracking'], async (req, res) => {
+  try {
+    const { status, step } = req.body;
+    const order = updateOrderTracking(req.params.id as string, status, Number(step));
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    res.json({ success: true, order });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to update tracking' });
+  }
+});
+
+// ---------------------------------
+// Invoices Endpoints
+// ---------------------------------
+app.get(['/api/invoices', '/api/app/invoices', '/api/admin/invoices', '/api/app/admin/invoices'], async (req, res) => {
+  res.json(mockInvoices);
+});
+
+// ---------------------------------
+// Employee Tasks Endpoints (3 Statuses: PENDING, IN_PROGRESS, COMPLETED)
+// ---------------------------------
+app.get(['/api/tasks', '/api/app/tasks'], async (req, res) => {
+  await syncStoreFromDB();
+  res.json(mockTasks);
+});
+
+app.post(['/api/admin/tasks', '/api/app/admin/tasks'], async (req, res) => {
+  try {
+    const task = createEmployeeTask(req.body);
+    res.json({ success: true, task });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to create task' });
+  }
+});
+
+app.put(['/api/tasks/:id/status', '/api/app/tasks/:id/status'], async (req, res) => {
+  try {
+    const { status, empEmail } = req.body;
+    const task = updateTaskStatus(req.params.id as string, status, empEmail);
+    if (!task) return res.status(404).json({ error: 'Task not found' });
+    res.json({ success: true, task });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to update task status' });
+  }
+});
+
+// ---------------------------------
+// Lab Results Endpoints
+// ---------------------------------
+app.get(['/api/lab-results', '/api/app/lab-results'], async (req, res) => {
+  await syncStoreFromDB();
+  res.json(mockLabResults);
+});
+
+app.post(['/api/lab-results', '/api/app/lab-results'], async (req, res) => {
+  try {
+    const lab = addLabResult(req.body);
+    res.json({ success: true, labResult: lab });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to submit lab result' });
+  }
+});
+
+// ---------------------------------
+// Ranch Operations & Grower Assignment
+// ---------------------------------
+app.post(['/api/admin/assign-grower', '/api/app/admin/assign-grower'], async (req, res) => {
+  try {
+    const { customerId, employeeEmail } = req.body;
+    const customer = assignGrowerToEmployee(customerId, employeeEmail);
+    if (!customer) return res.status(404).json({ error: 'Customer not found' });
+    res.json({ success: true, customer });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to assign grower' });
+  }
+});
+
+app.put(['/api/ranches/:id/visibility', '/api/app/ranches/:id/visibility'], async (req, res) => {
+  try {
+    const { hidden } = req.body;
+    const ranch = toggleRanchHidden(req.params.id as string, Boolean(hidden));
+    if (!ranch) return res.status(404).json({ error: 'Ranch not found' });
+    res.json({ success: true, ranch });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to update ranch visibility' });
+  }
+});
+
+// ---------------------------------
+// Admin Notifications Endpoints
+// ---------------------------------
+app.get(['/api/admin/notifications', '/api/app/admin/notifications'], async (req, res) => {
+  res.json(mockNotifications);
+});
+
+app.post(['/api/admin/notifications/mark-read', '/api/app/admin/notifications/mark-read'], async (req, res) => {
+  mockNotifications.forEach(n => { n.read = true; });
+  res.json({ success: true, message: 'All notifications marked as read' });
+});
+
+// ---------------------------------
+// Universal Export & Import Endpoints
+// ---------------------------------
+app.get(['/api/export/:entity', '/api/app/export/:entity'], async (req, res) => {
+  const { entity } = req.params;
+  let data: any[] = [];
+  switch (entity) {
+    case 'orders': data = mockOrdersList; break;
+    case 'customers': data = await getAllCustomersList(); break;
+    case 'ranches': data = mockRanches; break;
+    case 'invoices': data = mockInvoices; break;
+    case 'tasks': data = mockTasks; break;
+    case 'lab-results': data = mockLabResults; break;
+    case 'products': data = mockProducts; break;
+    default: return res.status(400).json({ error: `Unknown entity: ${entity}` });
+  }
+  res.json({ entity, count: data.length, data });
+});
+
+app.post(['/api/import/:entity', '/api/app/import/:entity'], async (req, res) => {
+  const { entity } = req.params;
+  const { items } = req.body;
+  if (!Array.isArray(items)) return res.status(400).json({ error: 'Items must be an array' });
+
+  let count = 0;
+  switch (entity) {
+    case 'orders':
+      items.forEach(item => { mockOrdersList.unshift(item); count++; });
+      break;
+    case 'ranches':
+      items.forEach(item => { mockRanches.unshift(item); count++; });
+      break;
+    case 'tasks':
+      items.forEach(item => { mockTasks.unshift(item); count++; });
+      break;
+    case 'lab-results':
+      items.forEach(item => { mockLabResults.unshift(item); count++; });
+      break;
+    default:
+      return res.status(400).json({ error: `Import not supported for entity: ${entity}` });
+  }
+
+  addAuditLog({
+    action: `DATA_IMPORTED_${entity.toUpperCase()}`,
+    details: `Imported ${count} records for entity: ${entity}`,
+    actor: 'admin@renu.com',
+    category: 'SYSTEM'
+  });
+
+  res.json({ success: true, entity, importedCount: count });
 });
 
 app.get(['/api/admin/settings', '/api/app/admin/settings'], async (req, res) => {
@@ -505,6 +754,7 @@ app.post(['/api/admin/reset-cache', '/api/app/admin/reset-cache'], async (req, r
 });
 
 app.get(['/api/admin/products', '/api/app/admin/products', '/api/products', '/api/app/products'], async (req, res) => {
+  await syncStoreFromDB();
   try {
     const dbProds = await prisma.product.findMany();
     if (dbProds && dbProds.length > 0) {
@@ -530,6 +780,7 @@ app.post(['/api/admin/products', '/api/app/admin/products'], async (req, res) =>
       createdAt: new Date().toISOString()
     };
     mockProducts.unshift(newProd);
+    saveStore();
 
     try {
       await prisma.product.create({
@@ -556,6 +807,7 @@ app.delete(['/api/admin/products/:id', '/api/app/admin/products/:id'], async (re
   const idx = mockProducts.findIndex(p => p.id === req.params.id);
   if (idx !== -1) {
     mockProducts.splice(idx, 1);
+    saveStore();
   }
   try {
     await prisma.product.delete({ where: { id: req.params.id as string } });
@@ -567,8 +819,10 @@ app.delete(['/api/admin/products/:id', '/api/app/admin/products/:id'], async (re
 
 // Only listen if not running on Vercel Serverless
 if (process.env.VERCEL !== '1') {
-  app.listen(Number(PORT), '0.0.0.0', () => {
+  app.listen(Number(PORT), '0.0.0.0', async () => {
     console.log(`Backend server running on port ${PORT}`);
+    await syncStoreFromDB();
+    saveStore();
   });
 }
 

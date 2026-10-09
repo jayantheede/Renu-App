@@ -1,311 +1,666 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, FlatList, Dimensions, Modal, TextInput, ActivityIndicator as RNActivityIndicator } from 'react-native';
-import { Text, ActivityIndicator } from 'react-native-paper';
+import {
+  View,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Dimensions,
+  Modal,
+  Alert,
+  Image,
+  Share,
+  Platform,
+  Switch
+} from 'react-native';
+import { Text, TextInput, Button, Chip, Card, Divider, ActivityIndicator } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from 'expo-image-picker';
+import { fetchRanches as fetchRanchesApi, submitRanch, submitTankSetup, toggleRanchVisibility, exportData, importData } from '../api/client';
+import { useAuthStore } from '../store/useAuthStore';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
-const MOCK_BLOCKS = [
-  { id: 'N-1', crop: 'Almond, Nonpareil / Monterey', ac: 142, planted: 2012, irrigation: 'Drip, set 3', apn: '054-121-002', coalition: 'East San Joaquin WQC', yield: '2,480 lb/ac', status: 'normal' },
-  { id: 'N-2', crop: 'Almond, Nonpareil / Monterey', ac: 138, planted: 2012, irrigation: 'Drip, set 4', apn: '054-121-003', coalition: 'East San Joaquin WQC', yield: '2,300 lb/ac', status: 'normal' },
-  { id: 'N-3', crop: 'Almond, Independence', ac: 96, planted: 2019, irrigation: 'Drip, set 5', apn: '054-121-004', coalition: 'East San Joaquin WQC', yield: '2,100 lb/ac', status: 'normal' },
-  { id: 'N-4', crop: 'Almond, Nonpareil / Aldrich', ac: 160, planted: 2008, irrigation: 'Drip, set 7', apn: '054-121-005', coalition: 'East San Joaquin WQC', yield: '2,800 lb/ac', status: 'warning' },
-  { id: 'S-1', crop: 'Almond, Butte / Padre', ac: 210, planted: 2005, irrigation: 'Valve 7, set 7', apn: '054-121-006', coalition: 'East San Joaquin WQC', yield: '1,900 lb/ac', status: 'normal' },
+const DEFAULT_RANCH_IMAGES = [
+  'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800&auto=format&fit=crop',
+  'https://images.unsplash.com/photo-1592417817098-8f3d6910985c?w=800&auto=format&fit=crop',
+  'https://images.unsplash.com/photo-1574943320219-553eb213f72d?w=800&auto=format&fit=crop'
 ];
 
 export const RanchesScreen = () => {
-  const [viewMode, setViewMode] = useState<'list' | 'blocks' | 'blockDetail'>('list');
-  const [selectedRanch, setSelectedRanch] = useState<any>(null);
-  const [selectedBlock, setSelectedBlock] = useState<any>(null);
+  const user = useAuthStore(state => state.user);
+  const isEmployeeOrAdmin = user?.role === 'employee' || user?.role === 'admin';
 
-  const [isImporting, setIsImporting] = useState(false);
+  const [ranches, setRanches] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+  const [selectedRanch, setSelectedRanch] = useState<any>(null);
+
+  // Add Ranch Modal State
   const [addRanchModalVisible, setAddRanchModalVisible] = useState(false);
   const [newRanchName, setNewRanchName] = useState('');
+  const [newRanchCounty, setNewRanchCounty] = useState('');
   const [newRanchAc, setNewRanchAc] = useState('');
-  const [newRanchDesc, setNewRanchDesc] = useState('');
-  
-  const [ranchesList, setRanchesList] = useState([
-    { name: 'Home Ranch', desc: 'Madera County, 5 blocks, Sierra Orchards LLC', ac: '1,180 ac', status: 'APPROVED' },
-    { name: 'North Ranch', desc: 'Fresno County, 2 blocks, Sierra Orchards LLC', ac: '1,120 ac', status: 'APPROVED' },
-    { name: 'West Ranch', desc: 'Kern County, 3 blocks, SO Farming Partners', ac: '1,400 ac', status: 'APPROVED' },
-    { name: 'Rio Vista', desc: 'Madera County, 2 blocks, Rio Vista Vineyards', ac: '420 ac', status: 'APPROVED' }
-  ]);
+  const [newRanchImage, setNewRanchImage] = useState(DEFAULT_RANCH_IMAGES[0]);
+  const [submittingRanch, setSubmittingRanch] = useState(false);
 
-  const [blocksList, setBlocksList] = useState(MOCK_BLOCKS);
+  // Add Tank Modal State
+  const [addTankModalVisible, setAddTankModalVisible] = useState(false);
+  const [tankCapacity, setTankCapacity] = useState('1000');
+  const [tankLocationName, setTankLocationName] = useState('North Station');
+  const [pendingPinCoords, setPendingPinCoords] = useState<{ x: number; y: number } | null>(null);
 
-  const handleImport = () => {
-    setIsImporting(true);
-    setTimeout(() => {
-      setIsImporting(false);
-      setBlocksList([...blocksList, { id: 'E-1', crop: 'Almond, New Import', ac: 85, planted: 2024, irrigation: 'Drip, set 1', apn: '054-999-001', coalition: 'East San Joaquin WQC', yield: 'Pending', status: 'normal' }]);
-    }, 2000);
-  };
+  // Selected Pin Telemetry Drawer State
+  const [selectedPinTank, setSelectedPinTank] = useState<any>(null);
 
-  const handleAddRanch = () => {
-    if (newRanchName && newRanchAc) {
-       setRanchesList([{ name: newRanchName, desc: newRanchDesc || 'Pending Admin Approval', ac: `${newRanchAc} ac`, status: 'PENDING' }, ...ranchesList]);
-       setAddRanchModalVisible(false);
-       setNewRanchName(''); setNewRanchAc(''); setNewRanchDesc('');
+  // Import Modal State
+  const [importModalVisible, setImportModalVisible] = useState(false);
+  const [importJsonText, setImportJsonText] = useState('');
+
+  const loadRanches = async () => {
+    setLoading(true);
+    try {
+      const data = await fetchRanchesApi();
+      if (Array.isArray(data)) {
+        setRanches(data);
+        if (selectedRanch) {
+          const updated = data.find((r: any) => r.id === selectedRanch.id);
+          if (updated) setSelectedRanch(updated);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load ranches:', e);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const renderHeader = () => {
-    if (viewMode === 'list') {
-      return (
-        <LinearGradient colors={['#1F4D36', '#2A6B45']} style={styles.header}>
-          <View style={styles.headerContent}>
-            <View>
-              <Text style={styles.headerTitle}>Ranches</Text>
-              <Text style={styles.headerSubtitle}>Sierra Orchards, all entities</Text>
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <TouchableOpacity style={styles.addRanchIcon} onPress={() => setAddRanchModalVisible(true)}>
-                <MaterialCommunityIcons name="plus" size={24} color="#FFF" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.entityDropdown}>
-                <Text style={styles.entityText}>All</Text>
-                <MaterialCommunityIcons name="chevron-down" size={16} color="#FFF" />
-              </TouchableOpacity>
-            </View>
-          </View>
-        </LinearGradient>
+  useEffect(() => {
+    loadRanches();
+  }, []);
+
+  const handlePickRanchImage = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission Denied', 'Camera roll permissions are required to upload ranch images.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [16, 9],
+        quality: 0.7,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const isPng = asset.mimeType?.includes('png') || asset.uri?.toLowerCase().endsWith('.png');
+        const mime = isPng ? 'image/png' : 'image/jpeg';
+        if (asset.base64) {
+          setNewRanchImage(`data:${mime};base64,${asset.base64}`);
+        } else {
+          setNewRanchImage(asset.uri);
+        }
+      }
+    } catch (e: any) {
+      Alert.alert('Error', 'Failed to pick image');
+    }
+  };
+
+  const handleCreateRanch = async () => {
+    if (!newRanchName.trim() || !newRanchAc.trim()) {
+      Alert.alert('Required Fields', 'Please enter Ranch Name and Acreage');
+      return;
+    }
+
+    setSubmittingRanch(true);
+    try {
+      const res = await submitRanch({
+        name: newRanchName.trim(),
+        county: newRanchCounty.trim() || 'Fresno',
+        ac: parseFloat(newRanchAc) || 100,
+        imageUrl: newRanchImage
+      });
+
+      Alert.alert('Success', 'Ranch created with aerial mapping enabled!');
+      setAddRanchModalVisible(false);
+      setNewRanchName('');
+      setNewRanchCounty('');
+      setNewRanchAc('');
+      await loadRanches();
+
+      if (res) {
+        setSelectedRanch(res);
+        setViewMode('map');
+      }
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to create ranch');
+    } finally {
+      setSubmittingRanch(false);
+    }
+  };
+
+  const handleToggleHide = async (ranch: any) => {
+    const nextHidden = !ranch.hidden;
+    try {
+      await toggleRanchVisibility(ranch.id, nextHidden);
+      setRanches(ranches.map(r => r.id === ranch.id ? { ...r, hidden: nextHidden } : r));
+      Alert.alert(
+        nextHidden ? 'Ranch Hidden' : 'Ranch Visible',
+        `"${ranch.name}" is now ${nextHidden ? 'hidden from operational field view' : 'visible in operations'}.`
       );
+    } catch (e: any) {
+      Alert.alert('Error', 'Failed to update visibility toggle');
     }
-
-    const title = viewMode === 'blocks' ? 'Blocks' : `Block ${selectedBlock?.id}`;
-    const subtitle = viewMode === 'blocks' ? selectedRanch?.name : `${selectedRanch?.name}, Almond`;
-
-    return (
-      <LinearGradient colors={['#1F4D36', '#2A6B45']} style={styles.headerSmall}>
-        <View style={styles.headerContentSmall}>
-          <TouchableOpacity onPress={() => setViewMode(viewMode === 'blockDetail' ? 'blocks' : 'list')} style={styles.backButton}>
-            <MaterialCommunityIcons name="chevron-left" size={28} color="#FFF" />
-          </TouchableOpacity>
-          <View>
-            <Text style={styles.headerTitleSmall}>{title}</Text>
-            <Text style={styles.headerSubtitle}>{subtitle}</Text>
-          </View>
-        </View>
-      </LinearGradient>
-    );
   };
 
-  const renderBlockMap = () => (
-    <View style={styles.mapContainer}>
-      <View style={styles.mapRow}>
-        <TouchableOpacity style={[styles.mapBlock, { flex: 1.4 }]} onPress={() => { setSelectedBlock(MOCK_BLOCKS[0]); setViewMode('blockDetail'); }}>
-          <Text style={styles.mapBlockTitle}>N-1</Text>
-          <Text style={styles.mapBlockSub}>142 ac, set 3</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.mapBlock, { flex: 1.4 }]} onPress={() => { setSelectedBlock(MOCK_BLOCKS[1]); setViewMode('blockDetail'); }}>
-          <Text style={styles.mapBlockTitle}>N-2</Text>
-          <Text style={styles.mapBlockSub}>138 ac, set 4</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.mapBlock, { flex: 1 }]} onPress={() => { setSelectedBlock(MOCK_BLOCKS[2]); setViewMode('blockDetail'); }}>
-          <Text style={styles.mapBlockTitle}>N-3</Text>
-          <Text style={styles.mapBlockSub}>96 ac, set 5</Text>
-        </TouchableOpacity>
-      </View>
-      <View style={styles.mapRow}>
-        <TouchableOpacity style={[styles.mapBlock, styles.mapBlockWarning, { flex: 1.3 }]} onPress={() => { setSelectedBlock(MOCK_BLOCKS[3]); setViewMode('blockDetail'); }}>
-          <Text style={styles.mapBlockTitle}>N-4</Text>
-          <Text style={styles.mapBlockSub}>160 ac, set 7</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.mapBlock, { flex: 1.3 }]} onPress={() => { setSelectedBlock(MOCK_BLOCKS[4]); setViewMode('blockDetail'); }}>
-          <Text style={styles.mapBlockTitle}>S-1</Text>
-          <Text style={styles.mapBlockSub}>210 ac, set 9</Text>
-        </TouchableOpacity>
-        <View style={[styles.mapBlockEmpty, { flex: 1 }]}>
-           <MaterialCommunityIcons name="circle-slice-8" size={20} color="#D97706" />
-           <Text style={styles.mapBlockSub}>Tank 3</Text>
-        </View>
-      </View>
-      <View style={styles.legendRow}>
-        <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#86EFAC' }]} /><Text style={styles.legendText}>Tissue in range</Text></View>
-        <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#FDE047' }]} /><Text style={styles.legendText}>Needs attention</Text></View>
-        <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#93C5FD' }]} /><Text style={styles.legendText}>Canal</Text></View>
-      </View>
-    </View>
-  );
+  const handleMapPress = (evt: any) => {
+    const { locationX, locationY } = evt.nativeEvent;
+    // Map container height is 260
+    const xPct = Math.round((locationX / (SCREEN_WIDTH - 40)) * 100);
+    const yPct = Math.round((locationY / 260) * 100);
+    setPendingPinCoords({ x: Math.max(5, Math.min(95, xPct)), y: Math.max(5, Math.min(95, yPct)) });
+    setAddTankModalVisible(true);
+  };
 
-  const renderRanchList = () => (
-    <ScrollView style={styles.listContainer} contentContainerStyle={styles.listContent}>
-      {ranchesList.map((ranch, idx) => (
-        <TouchableOpacity key={idx} style={styles.ranchCard} onPress={() => { setSelectedRanch(ranch); setViewMode('blocks'); }}>
-          <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={styles.ranchName}>{ranch.name}</Text>
-              {ranch.status === 'PENDING' && (
-                <View style={styles.pendingBadge}><Text style={styles.pendingText}>PENDING</Text></View>
-              )}
+  const handleAddTankPin = async () => {
+    if (!selectedRanch) return;
+    try {
+      await submitTankSetup({
+        ranchId: selectedRanch.id,
+        capacity: parseInt(tankCapacity) || 1000,
+        location: tankLocationName.trim() || 'Field Station',
+        pinX: pendingPinCoords?.x || 50,
+        pinY: pendingPinCoords?.y || 50
+      });
+
+      Alert.alert('Tank Pinned', `Tank setup mapped at coordinates (${pendingPinCoords?.x}%, ${pendingPinCoords?.y}%)`);
+      setAddTankModalVisible(false);
+      setPendingPinCoords(null);
+      await loadRanches();
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to save tank pin');
+    }
+  };
+
+  const handleExportRanches = async () => {
+    try {
+      const res = await exportData('ranches');
+      const jsonStr = JSON.stringify(res.data, null, 2);
+      if (Platform.OS === 'web') {
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `renu_ranches_${Date.now()}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        await Share.share({ title: 'Export Ranches', message: jsonStr });
+      }
+    } catch (e: any) {
+      Alert.alert('Export Failed', e.message || 'Could not export ranches');
+    }
+  };
+
+  const handleImportRanches = async () => {
+    try {
+      const parsed = JSON.parse(importJsonText);
+      const items = Array.isArray(parsed) ? parsed : [parsed];
+      await importData('ranches', items);
+      Alert.alert('Success', `Imported ${items.length} ranches successfully`);
+      setImportModalVisible(false);
+      setImportJsonText('');
+      loadRanches();
+    } catch (e: any) {
+      Alert.alert('Invalid Format', 'Please enter a valid JSON array of ranch objects.');
+    }
+  };
+
+  // ---------------------------------
+  // Interactive Map View
+  // ---------------------------------
+  if (viewMode === 'map' && selectedRanch) {
+    const ranchImage = selectedRanch.imageUrl || DEFAULT_RANCH_IMAGES[0];
+    const tanks = selectedRanch.tankSetups || [
+      { id: 't1', capacity: 1000, location: 'North Injection Valve', pinX: 30, pinY: 40, level: '82%', pressure: '45 PSI' },
+      { id: 't2', capacity: 500, location: 'South Field Tank 2', pinX: 70, pinY: 65, level: '64%', pressure: '38 PSI' }
+    ];
+
+    return (
+      <View style={styles.container}>
+        <View style={styles.mapHeader}>
+          <TouchableOpacity onPress={() => setViewMode('list')} style={styles.backBtn}>
+            <MaterialCommunityIcons name="arrow-left" size={24} color="#0F172A" />
+          </TouchableOpacity>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={styles.mapTitle}>{selectedRanch.name}</Text>
+            <Text style={styles.mapSubTitle}>{selectedRanch.county} County • {selectedRanch.ac} Acres</Text>
+          </View>
+          <Button
+            mode="contained"
+            icon="plus"
+            buttonColor="#2E5D36"
+            onPress={() => {
+              setPendingPinCoords({ x: 50, y: 50 });
+              setAddTankModalVisible(true);
+            }}
+            style={{ borderRadius: 8 }}
+          >
+            Add Tank
+          </Button>
+        </View>
+
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
+          {/* Interactive Ranch Canvas Container */}
+          <Text style={styles.canvasInstruction}>
+            Tap anywhere on the aerial photo to drop or relocate tank injection pins:
+          </Text>
+
+          <TouchableOpacity
+            activeOpacity={0.95}
+            onPress={handleMapPress}
+            style={styles.canvasWrapper}
+          >
+            <Image source={{ uri: ranchImage }} style={styles.canvasImage} resizeMode="cover" />
+
+            {/* Render Mapped Tank Pins */}
+            {tanks.map((tank: any, index: number) => {
+              const posX = `${tank.pinX || (30 + index * 35)}%` as any;
+              const posY = `${tank.pinY || (40 + index * 25)}%` as any;
+              const isSelected = selectedPinTank?.id === tank.id;
+
+              return (
+                <TouchableOpacity
+                  key={tank.id || index}
+                  onPress={() => setSelectedPinTank(tank)}
+                  style={[
+                    styles.pinMarker,
+                    { left: posX, top: posY },
+                    isSelected && styles.pinMarkerActive
+                  ]}
+                >
+                  <MaterialCommunityIcons name="water-pump" size={20} color="#FFFFFF" />
+                  <View style={styles.pinCallout}>
+                    <Text style={styles.pinCalloutText}>{tank.location || `Tank ${index + 1}`}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </TouchableOpacity>
+
+          {/* Selected Pin Telemetry Card */}
+          {selectedPinTank && (
+            <Card style={styles.telemetryCard}>
+              <Card.Content>
+                <View style={styles.row}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <MaterialCommunityIcons name="gauge" size={24} color="#2E5D36" style={{ marginRight: 8 }} />
+                    <View>
+                      <Text style={{ fontWeight: 'bold', fontSize: 16, color: '#0F172A' }}>
+                        {selectedPinTank.location || 'Station Telemetry'}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#64748B' }}>
+                        Mapped at ({selectedPinTank.pinX || 30}%, {selectedPinTank.pinY || 40}%)
+                      </Text>
+                    </View>
+                  </View>
+                  <Chip style={{ backgroundColor: '#DCFCE7' }} textStyle={{ color: '#15803D', fontWeight: 'bold' }}>
+                    ONLINE
+                  </Chip>
+                </View>
+
+                <Divider style={{ marginVertical: 12 }} />
+
+                <View style={styles.telemetryGrid}>
+                  <View style={styles.telemetryItem}>
+                    <Text style={styles.tLabel}>Capacity</Text>
+                    <Text style={styles.tVal}>{selectedPinTank.capacity} Gal</Text>
+                  </View>
+                  <View style={styles.telemetryItem}>
+                    <Text style={styles.tLabel}>Fill Level</Text>
+                    <Text style={[styles.tVal, { color: '#15803D' }]}>{selectedPinTank.level || '78%'}</Text>
+                  </View>
+                  <View style={styles.telemetryItem}>
+                    <Text style={styles.tLabel}>Line Pressure</Text>
+                    <Text style={styles.tVal}>{selectedPinTank.pressure || '42 PSI'}</Text>
+                  </View>
+                  <View style={styles.telemetryItem}>
+                    <Text style={styles.tLabel}>Nutrient Active</Text>
+                    <Text style={styles.tVal}>Biome Care</Text>
+                  </View>
+                </View>
+              </Card.Content>
+            </Card>
+          )}
+
+          {/* List of mapped tanks */}
+          <Text style={[styles.sectionTitle, { marginTop: 24, marginBottom: 12 }]}>
+            Mapped Tank Assets ({tanks.length})
+          </Text>
+          {tanks.map((t: any, idx: number) => (
+            <View key={t.id || idx} style={styles.tankListItem}>
+              <MaterialCommunityIcons name="propane-tank" size={24} color="#2E5D36" style={{ marginRight: 12 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: '700', color: '#0F172A' }}>{t.location || `Tank Station ${idx + 1}`}</Text>
+                <Text style={{ color: '#64748B', fontSize: 13 }}>{t.capacity} Gal capacity • Auto-telemetry synced</Text>
+              </View>
+              <Button
+                mode="text"
+                textColor="#2E5D36"
+                onPress={() => setSelectedPinTank(t)}
+              >
+                Inspect
+              </Button>
             </View>
-            <Text style={styles.ranchDesc}>{ranch.desc}</Text>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={styles.ranchAc}>{ranch.ac}</Text>
-            <MaterialCommunityIcons name="chevron-right" size={20} color="#9CA3AF" />
-          </View>
-        </TouchableOpacity>
-      ))}
-      
-      <TouchableOpacity style={styles.importButton} onPress={() => setAddRanchModalVisible(true)}>
-        <MaterialCommunityIcons name="plus-circle" size={22} color="#15803D" />
-        <Text style={styles.importButtonText}>Add New Ranch</Text>
-      </TouchableOpacity>
-    </ScrollView>
-  );
+          ))}
+        </ScrollView>
 
-  const renderBlocksList = () => (
-    <ScrollView style={styles.listContainer}>
-      {renderBlockMap()}
-      <View style={styles.blocksListHeader}>
-        <Text style={styles.blocksTitle}>Blocks</Text>
+        {/* Add Tank Pin Modal */}
+        <Modal visible={addTankModalVisible} animationType="slide" transparent>
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalSheet}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Map Tank Injection Station</Text>
+                <TouchableOpacity onPress={() => setAddTankModalVisible(false)}>
+                  <MaterialCommunityIcons name="close-circle" size={28} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+              <TextInput
+                label="Station Name / Location"
+                value={tankLocationName}
+                onChangeText={setTankLocationName}
+                mode="outlined"
+                style={styles.input}
+                outlineColor="#CBD5E1"
+                activeOutlineColor="#2E5D36"
+              />
+              <TextInput
+                label="Capacity (Gallons)"
+                value={tankCapacity}
+                onChangeText={setTankCapacity}
+                keyboardType="numeric"
+                mode="outlined"
+                style={styles.input}
+                outlineColor="#CBD5E1"
+                activeOutlineColor="#2E5D36"
+              />
+              <Text style={{ color: '#64748B', fontSize: 12, marginBottom: 16 }}>
+                Pin Location: X: {pendingPinCoords?.x}%, Y: {pendingPinCoords?.y}%
+              </Text>
+              <Button
+                mode="contained"
+                buttonColor="#2E5D36"
+                onPress={handleAddTankPin}
+                style={{ borderRadius: 10, paddingVertical: 4 }}
+              >
+                Save Tank to Map
+              </Button>
+            </View>
+          </View>
+        </Modal>
       </View>
-      <View style={styles.blocksTable}>
-        <View style={styles.tableRowHeader}>
-          <Text style={[styles.tableColHeader, { flex: 0.5 }]}>Block</Text>
-          <Text style={[styles.tableColHeader, { flex: 2 }]}>Crop, variety</Text>
-          <Text style={[styles.tableColHeader, { flex: 0.5, textAlign: 'right' }]}>Ac</Text>
-          <Text style={[styles.tableColHeader, { flex: 0.6, textAlign: 'right' }]}>Planted</Text>
-        </View>
-        {blocksList.map((block, i) => (
-          <TouchableOpacity key={i} style={styles.tableRow} onPress={() => { setSelectedBlock(block); setViewMode('blockDetail'); }}>
-            <Text style={[styles.tableCol, styles.tableColBold, { flex: 0.5 }]}>{block.id}</Text>
-            <Text style={[styles.tableCol, { flex: 2 }]}>{block.crop}</Text>
-            <Text style={[styles.tableCol, { flex: 0.5, textAlign: 'right' }]}>{block.ac}</Text>
-            <Text style={[styles.tableCol, { flex: 0.6, textAlign: 'right' }]}>{block.planted}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      <TouchableOpacity style={[styles.importButton, { margin: 15, marginTop: 0 }]} onPress={handleImport} disabled={isImporting}>
-        {isImporting ? <RNActivityIndicator size="small" color="#15803D" /> : <MaterialCommunityIcons name="file-excel" size={22} color="#15803D" />}
-        <Text style={styles.importButtonText}>{isImporting ? 'Importing Blocks...' : 'Import blocks from spreadsheet'}</Text>
-      </TouchableOpacity>
-    </ScrollView>
-  );
-
-  const renderBlockDetail = () => {
-    const block = selectedBlock;
-    if (!block) return null;
-    return (
-      <ScrollView style={styles.listContainer} contentContainerStyle={{ paddingBottom: 40 }}>
-        {renderBlockMap()}
-        <View style={styles.detailCard}>
-          <View style={styles.detailRow}><Text style={styles.detailLabel}>Crop</Text><Text style={styles.detailValueBold}>{block.crop}</Text></View>
-          <View style={styles.detailRow}><Text style={styles.detailLabel}>Acres</Text><Text style={styles.detailValueBold}>{block.ac}</Text></View>
-          <View style={styles.detailRow}><Text style={styles.detailLabel}>Planted</Text><Text style={styles.detailValueBold}>{block.planted}</Text></View>
-          <View style={styles.detailRow}><Text style={styles.detailLabel}>Irrigation</Text><Text style={styles.detailValueBold}>{block.irrigation}</Text></View>
-          <View style={styles.detailRow}><Text style={styles.detailLabel}>APN</Text><Text style={styles.detailValueBold}>{block.apn}</Text></View>
-          <View style={styles.detailRow}><Text style={styles.detailLabel}>Coalition</Text><Text style={styles.detailValueBold}>{block.coalition}</Text></View>
-          <View style={[styles.detailRow, { borderBottomWidth: 0 }]}><Text style={styles.detailLabel}>2025 yield</Text><Text style={styles.detailValueBold}>{block.yield}</Text></View>
-        </View>
-
-        <Text style={styles.sectionTitle}>Nitrogen plan vs delivered, lb N per acre</Text>
-        <View style={styles.chartCard}>
-          {/* Mock Chart Area */}
-          <View style={styles.barChartContainer}>
-             <View style={styles.barGroup}>
-               <View style={[styles.bar, styles.barPlan, { height: 40 }]} />
-               <View style={[styles.bar, styles.barDelivered, { height: 40 }]}><Text style={styles.barLabel}>40</Text></View>
-             </View>
-             <View style={styles.barGroup}>
-               <View style={[styles.bar, styles.barPlan, { height: 70 }]} />
-               <View style={[styles.bar, styles.barDelivered, { height: 58 }]}><Text style={styles.barLabel}>58</Text></View>
-             </View>
-             <View style={styles.barGroup}>
-               <View style={[styles.bar, styles.barPlan, { height: 42 }]} />
-               <View style={[styles.bar, styles.barDelivered, { height: 42 }]}><Text style={styles.barLabel}>42</Text></View>
-             </View>
-          </View>
-
-          {/* Nutrients Sliders Mock */}
-          <View style={styles.nutrientRow}>
-             <Text style={styles.nutrientLabel}>N %</Text>
-             <View style={styles.sliderTrack}><View style={[styles.sliderThumb, { left: '40%', backgroundColor: '#10B981' }]} /></View>
-             <View style={styles.nutrientValues}><Text style={styles.nutrientValMain}>2.3</Text><Text style={styles.nutrientValSub}>2.2 to 2.6</Text></View>
-          </View>
-          <View style={styles.nutrientRow}>
-             <Text style={styles.nutrientLabel}>P %</Text>
-             <View style={styles.sliderTrack}><View style={[styles.sliderThumb, { left: '30%', backgroundColor: '#10B981' }]} /></View>
-             <View style={styles.nutrientValues}><Text style={styles.nutrientValMain}>0.12</Text><Text style={styles.nutrientValSub}>0.1 to 0.3</Text></View>
-          </View>
-          <View style={styles.nutrientRow}>
-             <Text style={styles.nutrientLabel}>K %</Text>
-             <View style={styles.sliderTrack}><View style={[styles.sliderThumb, { left: '20%', backgroundColor: '#EF4444' }]} /></View>
-             <View style={styles.nutrientValues}><Text style={styles.nutrientValMain}>1.4</Text><Text style={styles.nutrientValSub}>1.6 to 2.4</Text></View>
-          </View>
-          <View style={styles.nutrientRow}>
-             <Text style={styles.nutrientLabel}>Ca %</Text>
-             <View style={styles.sliderTrack}><View style={[styles.sliderThumb, { left: '60%', backgroundColor: '#10B981' }]} /></View>
-             <View style={styles.nutrientValues}><Text style={styles.nutrientValMain}>2.9</Text><Text style={styles.nutrientValSub}>2 to 4</Text></View>
-          </View>
-
-          <Text style={styles.chartFootnote}>Green band is the UC reference range for almond, July leaf.</Text>
-          <TouchableOpacity style={styles.uploadButton}>
-            <MaterialCommunityIcons name="cloud-upload" size={20} color="#10B981" />
-            <Text style={styles.uploadButtonText}>Upload lab PDF or CSV</Text>
-          </TouchableOpacity>
-        </View>
-
-        <Text style={styles.sectionTitle}>Timeline</Text>
-        <View style={styles.timelineCard}>
-           <View style={styles.timelineItem}>
-             <View style={styles.timelineDot} />
-             <View style={styles.timelineContent}>
-               <Text style={styles.timelineTitle}>Delivered 1,200 gal Green Nitrogen, post-harvest N, tank 3</Text>
-               <Text style={styles.timelineSub}>Sep 9, proof of delivery attached</Text>
-             </View>
-           </View>
-           <View style={styles.timelineItem}>
-             <View style={styles.timelineDot} />
-             <View style={styles.timelineContent}>
-               <Text style={styles.timelineTitle}>July leaf tissue results received</Text>
-               <Text style={styles.timelineSub}>Jul 22, N 2.3%, K 1.4% low</Text>
-             </View>
-           </View>
-           <View style={[styles.timelineItem, { borderLeftColor: 'transparent' }]}>
-             <View style={styles.timelineDot} />
-             <View style={styles.timelineContent}>
-               <Text style={styles.timelineTitle}>Delivered 1,000 gal KTS</Text>
-               <Text style={styles.timelineSub}>Jun 12</Text>
-             </View>
-           </View>
-        </View>
-      </ScrollView>
     );
-  };
+  }
 
+  // ---------------------------------
+  // Ranches List View
+  // ---------------------------------
   return (
     <View style={styles.container}>
-      {renderHeader()}
-      {viewMode === 'list' && renderRanchList()}
-      {viewMode === 'blocks' && renderBlocksList()}
-      {viewMode === 'blockDetail' && renderBlockDetail()}
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Screen Header */}
+        <View style={styles.header}>
+          <View>
+            <Text variant="headlineMedium" style={styles.title}>Ranches & Fields</Text>
+            <Text variant="bodyMedium" style={styles.subtitle}>Aerial mapping, field boundaries & tank setups</Text>
+          </View>
+          <View style={styles.topActionsRow}>
+            <Button
+              mode="contained"
+              icon="plus"
+              onPress={() => setAddRanchModalVisible(true)}
+              buttonColor="#2E5D36"
+              style={styles.topBtn}
+            >
+              Add Ranch
+            </Button>
+            <Button
+              mode="outlined"
+              icon="download"
+              onPress={handleExportRanches}
+              textColor="#2E5D36"
+              style={[styles.topBtn, { borderColor: '#2E5D36' }]}
+            >
+              Export
+            </Button>
+            <Button
+              mode="outlined"
+              icon="upload"
+              onPress={() => {
+                setImportJsonText(JSON.stringify([{
+                  id: `ranch-${Date.now()}`,
+                  name: 'Green Orchard 4',
+                  county: 'Fresno',
+                  ac: 160,
+                  approvalStatus: 'APPROVED'
+                }], null, 2));
+                setImportModalVisible(true);
+              }}
+              textColor="#2E5D36"
+              style={[styles.topBtn, { borderColor: '#2E5D36' }]}
+            >
+              Import
+            </Button>
+          </View>
+        </View>
 
-      <Modal visible={addRanchModalVisible} animationType="slide" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.addRanchContainer}>
-            <View style={styles.addRanchHeader}>
-              <Text style={styles.addRanchTitle}>Add New Ranch</Text>
+        {loading ? (
+          <ActivityIndicator color="#2E5D36" size="large" style={{ marginTop: 40 }} />
+        ) : ranches.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <MaterialCommunityIcons name="sprout" size={60} color="#94A3B8" />
+            <Text style={styles.emptyText}>No ranches registered yet.</Text>
+            <Button
+              mode="contained"
+              buttonColor="#2E5D36"
+              onPress={() => setAddRanchModalVisible(true)}
+              style={{ marginTop: 16, borderRadius: 10 }}
+            >
+              Add First Ranch
+            </Button>
+          </View>
+        ) : (
+          ranches.map((ranch) => {
+            const isApproved = ranch.approvalStatus === 'APPROVED';
+            const isHidden = Boolean(ranch.hidden);
+            const imageUri = ranch.imageUrl || DEFAULT_RANCH_IMAGES[0];
+
+            return (
+              <Card key={ranch.id} style={[styles.card, isHidden && styles.cardHidden]}>
+                <Image source={{ uri: imageUri }} style={styles.cardCover} resizeMode="cover" />
+                <Card.Content style={{ paddingTop: 14 }}>
+                  <View style={styles.row}>
+                    <Text variant="titleMedium" style={{ fontWeight: 'bold', color: '#0F172A', fontSize: 18 }}>
+                      {ranch.name}
+                    </Text>
+                    <Chip
+                      compact
+                      style={{ backgroundColor: isApproved ? '#DCFCE7' : '#FEF3C7' }}
+                      textStyle={{ color: isApproved ? '#15803D' : '#D97706', fontWeight: 'bold' }}
+                    >
+                      {ranch.approvalStatus || 'PENDING'}
+                    </Chip>
+                  </View>
+
+                  <Text variant="bodyMedium" style={{ color: '#64748B', marginTop: 4 }}>
+                    {ranch.county} County • {ranch.ac} Acres • {ranch.entity?.name || 'Registered Farm'}
+                  </Text>
+
+                  {/* Employee Hide Ranch Toggle */}
+                  {isEmployeeOrAdmin && (
+                    <View style={styles.toggleRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <MaterialCommunityIcons
+                          name={isHidden ? 'eye-off' : 'eye'}
+                          size={18}
+                          color={isHidden ? '#EF4444' : '#2E5D36'}
+                          style={{ marginRight: 6 }}
+                        />
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: isHidden ? '#EF4444' : '#334155' }}>
+                          {isHidden ? 'Hidden from Ops View' : 'Visible in Field Ops'}
+                        </Text>
+                      </View>
+                      <Switch
+                        value={!isHidden}
+                        onValueChange={() => handleToggleHide(ranch)}
+                        trackColor={{ false: '#CBD5E1', true: '#86EFAC' }}
+                        thumbColor={!isHidden ? '#2E5D36' : '#94A3B8'}
+                      />
+                    </View>
+                  )}
+
+                  <Divider style={{ marginVertical: 12 }} />
+
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <Button
+                      mode="contained"
+                      buttonColor="#2E5D36"
+                      icon="map-marker-radius"
+                      onPress={() => {
+                        setSelectedRanch(ranch);
+                        setViewMode('map');
+                      }}
+                      style={{ flex: 1, borderRadius: 8 }}
+                    >
+                      Interactive Map
+                    </Button>
+                    <Button
+                      mode="outlined"
+                      icon="plus-circle"
+                      onPress={() => {
+                        setSelectedRanch(ranch);
+                        setPendingPinCoords({ x: 50, y: 50 });
+                        setAddTankModalVisible(true);
+                      }}
+                      textColor="#2E5D36"
+                      style={{ flex: 1, borderRadius: 8, borderColor: '#2E5D36' }}
+                    >
+                      Add Tank
+                    </Button>
+                  </View>
+                </Card.Content>
+              </Card>
+            );
+          })
+        )}
+      </ScrollView>
+
+      {/* Add Ranch Modal (with Image Upload & Interactive Canvas Trigger) */}
+      <Modal visible={addRanchModalVisible} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add New Ranch</Text>
               <TouchableOpacity onPress={() => setAddRanchModalVisible(false)}>
-                <MaterialCommunityIcons name="close" size={24} color="#374151" />
+                <MaterialCommunityIcons name="close-circle" size={28} color="#64748B" />
               </TouchableOpacity>
             </View>
-            <Text style={styles.modalSub}>Ranches added will be sent to admin and employee for approval.</Text>
-            
-            <Text style={styles.inputLabel}>Ranch Name</Text>
-            <TextInput style={styles.modalInput} placeholder="e.g. South Ranch" value={newRanchName} onChangeText={setNewRanchName} />
-            
-            <Text style={styles.inputLabel}>Total Acreage</Text>
-            <TextInput style={styles.modalInput} placeholder="e.g. 500" keyboardType="numeric" value={newRanchAc} onChangeText={setNewRanchAc} />
-            
-            <Text style={styles.inputLabel}>Description / County (Optional)</Text>
-            <TextInput style={styles.modalInput} placeholder="e.g. Fresno County" value={newRanchDesc} onChangeText={setNewRanchDesc} />
-            
-            <TouchableOpacity style={styles.submitBtn} onPress={handleAddRanch}>
-              <Text style={styles.submitBtnText}>Submit for Approval</Text>
-            </TouchableOpacity>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <TextInput
+                label="Ranch / Farm Name"
+                value={newRanchName}
+                onChangeText={setNewRanchName}
+                mode="outlined"
+                style={styles.input}
+                outlineColor="#CBD5E1"
+                activeOutlineColor="#2E5D36"
+              />
+              <TextInput
+                label="County / Region"
+                value={newRanchCounty}
+                onChangeText={setNewRanchCounty}
+                placeholder="e.g. Fresno, Kern, Madera"
+                mode="outlined"
+                style={styles.input}
+                outlineColor="#CBD5E1"
+                activeOutlineColor="#2E5D36"
+              />
+              <TextInput
+                label="Total Acreage (Acres)"
+                value={newRanchAc}
+                onChangeText={setNewRanchAc}
+                keyboardType="numeric"
+                mode="outlined"
+                style={styles.input}
+                outlineColor="#CBD5E1"
+                activeOutlineColor="#2E5D36"
+              />
+
+              {/* Ranch Photo Upload (PNG / JPG) */}
+              <Text style={{ fontWeight: '700', color: '#0F172A', marginTop: 10, marginBottom: 8 }}>
+                Ranch Photo / Aerial Map (PNG / JPG)
+              </Text>
+
+              <TouchableOpacity onPress={handlePickRanchImage} style={styles.imagePickerBox}>
+                <Image source={{ uri: newRanchImage }} style={styles.imagePreview} />
+                <View style={styles.imagePickerOverlay}>
+                  <MaterialCommunityIcons name="camera-plus" size={28} color="#FFFFFF" />
+                  <Text style={{ color: '#FFFFFF', fontWeight: 'bold', marginTop: 4 }}>
+                    Choose Photo (PNG / JPG)
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              <Button
+                mode="contained"
+                buttonColor="#2E5D36"
+                loading={submittingRanch}
+                disabled={submittingRanch}
+                onPress={handleCreateRanch}
+                style={{ marginTop: 20, borderRadius: 10, paddingVertical: 4 }}
+              >
+                Create Ranch & Enable Map
+              </Button>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* JSON Import Modal */}
+      <Modal visible={importModalVisible} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Import Ranches</Text>
+              <TouchableOpacity onPress={() => setImportModalVisible(false)}>
+                <MaterialCommunityIcons name="close-circle" size={28} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              mode="outlined"
+              multiline
+              numberOfLines={8}
+              value={importJsonText}
+              onChangeText={setImportJsonText}
+              style={{ backgroundColor: '#F8FAFC', fontSize: 12, marginBottom: 16 }}
+              outlineColor="#CBD5E1"
+              activeOutlineColor="#2E5D36"
+            />
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <Button mode="outlined" onPress={() => setImportModalVisible(false)} style={{ flex: 1 }} textColor="#64748B">
+                Cancel
+              </Button>
+              <Button mode="contained" onPress={handleImportRanches} style={{ flex: 1, backgroundColor: '#2E5D36' }}>
+                Import
+              </Button>
+            </View>
           </View>
         </View>
       </Modal>
@@ -314,94 +669,249 @@ export const RanchesScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FAF9F6' }, // Warm earthy off-white
-  header: { paddingTop: 60, paddingBottom: 35, paddingHorizontal: 20, borderBottomLeftRadius: 30, borderBottomRightRadius: 30, shadowColor: '#166534', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.15, shadowRadius: 15, elevation: 5 },
-  headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  headerTitle: { fontSize: 30, fontWeight: '900', color: '#ECFDF5', letterSpacing: 0.5 },
-  headerSubtitle: { fontSize: 15, color: '#A7F3D0', marginTop: 4, fontWeight: '500' },
-  entityDropdown: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 25, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
-  entityText: { color: '#FFF', marginRight: 6, fontWeight: '600' },
-  addRanchIcon: { backgroundColor: 'rgba(255,255,255,0.15)', padding: 6, borderRadius: 20, marginRight: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
-  
-  headerSmall: { paddingTop: 50, paddingBottom: 25, paddingHorizontal: 15, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
-  headerContentSmall: { flexDirection: 'row', alignItems: 'center' },
-  backButton: { marginRight: 15, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20, padding: 4 },
-  headerTitleSmall: { fontSize: 22, fontWeight: '800', color: '#ECFDF5' },
-
-  listContainer: { flex: 1 },
-  listContent: { padding: 15, paddingTop: 20 },
-  ranchCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 18, marginBottom: 15, flexDirection: 'row', alignItems: 'center', shadowColor: '#8C7C61', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3, borderWidth: 1, borderColor: '#F0EBE1' },
-  ranchName: { fontSize: 18, fontWeight: '800', color: '#164E63' },
-  ranchDesc: { fontSize: 13, color: '#78716C', marginTop: 6, lineHeight: 18 },
-  ranchAc: { fontSize: 17, fontWeight: '900', color: '#15803D', marginRight: 8 },
-  importButton: { backgroundColor: '#F0FDF4', borderWidth: 1.5, borderColor: '#16A34A', borderRadius: 30, paddingVertical: 16, alignItems: 'center', marginTop: 15, flexDirection: 'row', justifyContent: 'center', shadowColor: '#16A34A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 6 },
-  importButtonText: { color: '#15803D', fontWeight: 'bold', fontSize: 16, marginLeft: 8 },
-
-  mapContainer: { backgroundColor: '#E7E5E4', padding: 15, paddingBottom: 15, borderBottomLeftRadius: 20, borderBottomRightRadius: 20, marginHorizontal: -1 },
-  mapRow: { flexDirection: 'row', marginBottom: 10, height: 100 },
-  mapBlock: { backgroundColor: '#A7F3D0', borderRadius: 8, marginHorizontal: 5, padding: 8, borderWidth: 2.5, borderColor: '#34D399', justifyContent: 'center', alignItems: 'center', borderStyle: 'dashed' },
-  mapBlockWarning: { backgroundColor: '#FEF08A', borderColor: '#EAB308', borderStyle: 'solid' },
-  mapBlockEmpty: { marginHorizontal: 5, justifyContent: 'center', alignItems: 'center' },
-  mapBlockTitle: { fontWeight: '900', fontSize: 16, color: '#064E3B' },
-  mapBlockSub: { fontSize: 11, color: '#065F46', marginTop: 3, textAlign: 'center', fontWeight: '500' },
-  
-  legendRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 15, backgroundColor: '#FFF', paddingVertical: 12, borderRadius: 25, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4 },
-  legendItem: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 12 },
-  legendDot: { width: 12, height: 12, borderRadius: 6, marginRight: 8 },
-  legendText: { fontSize: 13, color: '#57534E', fontWeight: '600' },
-
-  blocksListHeader: { padding: 20, paddingBottom: 5 },
-  blocksTitle: { fontSize: 22, fontWeight: '900', color: '#164E63' },
-  blocksTable: { backgroundColor: '#FFF', margin: 15, borderRadius: 16, padding: 12, shadowColor: '#8C7C61', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 8, borderWidth: 1, borderColor: '#F0EBE1' },
-  tableRowHeader: { flexDirection: 'row', paddingVertical: 12, borderBottomWidth: 1.5, borderBottomColor: '#E7E5E4' },
-  tableColHeader: { fontSize: 13, color: '#78716C', fontWeight: 'bold' },
-  tableRow: { flexDirection: 'row', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#F5F5F4' },
-  tableCol: { fontSize: 14, color: '#44403C' },
-  tableColBold: { fontWeight: '900', color: '#164E63' },
-
-  detailCard: { backgroundColor: '#FFF', margin: 15, borderRadius: 16, paddingHorizontal: 18, shadowColor: '#8C7C61', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 8, borderWidth: 1, borderColor: '#F0EBE1' },
-  detailRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#F5F5F4' },
-  detailLabel: { fontSize: 14, color: '#78716C', fontWeight: '500' },
-  detailValueBold: { fontSize: 15, fontWeight: '800', color: '#164E63' },
-  
-  sectionTitle: { fontSize: 18, fontWeight: '900', color: '#164E63', marginHorizontal: 20, marginTop: 25, marginBottom: 12 },
-  chartCard: { backgroundColor: '#FFF', marginHorizontal: 15, borderRadius: 16, padding: 20, shadowColor: '#8C7C61', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 8, borderWidth: 1, borderColor: '#F0EBE1' },
-  barChartContainer: { flexDirection: 'row', height: 120, alignItems: 'flex-end', justifyContent: 'space-around', marginBottom: 25, borderBottomWidth: 1.5, borderBottomColor: '#E7E5E4' },
-  barGroup: { flexDirection: 'row', alignItems: 'flex-end', width: 44, justifyContent: 'space-between' },
-  bar: { width: 18, borderTopLeftRadius: 6, borderTopRightRadius: 6 },
-  barPlan: { backgroundColor: '#D1FAE5', opacity: 0.7 },
-  barDelivered: { backgroundColor: '#10B981', position: 'relative' },
-  barLabel: { position: 'absolute', top: -22, left: -4, fontSize: 13, fontWeight: '900', color: '#064E3B' },
-  
-  nutrientRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 18 },
-  nutrientLabel: { width: 45, fontSize: 14, fontWeight: '900', color: '#44403C' },
-  sliderTrack: { flex: 1, height: 8, backgroundColor: '#F0FDF4', borderRadius: 4, position: 'relative', marginHorizontal: 12 },
-  sliderThumb: { position: 'absolute', width: 18, height: 18, borderRadius: 9, top: -5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3, elevation: 2 },
-  nutrientValues: { width: 65, alignItems: 'flex-end' },
-  nutrientValMain: { fontSize: 15, fontWeight: '900', color: '#164E63' },
-  nutrientValSub: { fontSize: 11, color: '#78716C', marginTop: 2 },
-  
-  chartFootnote: { fontSize: 12, color: '#A8A29E', marginVertical: 20, fontStyle: 'italic' },
-  uploadButton: { borderWidth: 1.5, borderColor: '#10B981', borderRadius: 25, paddingVertical: 14, alignItems: 'center', flexDirection: 'row', justifyContent: 'center' },
-  uploadButtonText: { color: '#10B981', fontWeight: 'bold', fontSize: 15, marginLeft: 8 },
-  
-  timelineCard: { backgroundColor: '#FFF', marginHorizontal: 15, borderRadius: 16, padding: 20, paddingBottom: 10, shadowColor: '#8C7C61', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 8, borderWidth: 1, borderColor: '#F0EBE1' },
-  timelineItem: { flexDirection: 'row', paddingBottom: 25, borderLeftWidth: 2.5, borderLeftColor: '#E7E5E4', marginLeft: 8 },
-  timelineDot: { width: 14, height: 14, borderRadius: 7, backgroundColor: '#10B981', marginLeft: -8, marginTop: 2, borderWidth: 3, borderColor: '#ECFDF5' },
-  timelineContent: { marginLeft: 18, flex: 1 },
-  timelineTitle: { fontSize: 15, color: '#164E63', fontWeight: '700', lineHeight: 20 },
-  timelineSub: { fontSize: 13, color: '#78716C', marginTop: 6 },
-
-  pendingBadge: { backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, marginLeft: 10, borderWidth: 1, borderColor: '#F59E0B' },
-  pendingText: { fontSize: 10, fontWeight: 'bold', color: '#D97706' },
-
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  addRanchContainer: { backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
-  addRanchHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  addRanchTitle: { fontSize: 20, fontWeight: 'bold', color: '#164E63' },
-  modalSub: { fontSize: 13, color: '#6B7280', marginBottom: 20 },
-  inputLabel: { fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6 },
-  modalInput: { backgroundColor: '#F3F4F6', borderRadius: 8, paddingHorizontal: 15, paddingVertical: 12, marginBottom: 16, fontSize: 15, color: '#111827' },
-  submitBtn: { backgroundColor: '#10B981', paddingVertical: 14, borderRadius: 30, alignItems: 'center', marginTop: 10 },
-  submitBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
+  container: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  scrollContent: {
+    paddingBottom: 120,
+    paddingHorizontal: 20,
+  },
+  header: {
+    paddingTop: 60,
+    paddingBottom: 16,
+  },
+  title: {
+    color: '#0F172A',
+    fontWeight: 'bold',
+  },
+  subtitle: {
+    color: '#64748B',
+    marginTop: 2,
+    fontSize: 14,
+  },
+  topActionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 14,
+  },
+  topBtn: {
+    borderRadius: 8,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    marginTop: 80,
+  },
+  emptyText: {
+    color: '#64748B',
+    fontSize: 16,
+    marginTop: 12,
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  cardHidden: {
+    opacity: 0.65,
+    borderColor: '#FCA5A5',
+  },
+  cardCover: {
+    height: 140,
+    width: '100%',
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 12,
+  },
+  mapHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 60,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  backBtn: {
+    padding: 6,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 8,
+  },
+  mapTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#0F172A',
+  },
+  mapSubTitle: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  canvasInstruction: {
+    color: '#64748B',
+    fontSize: 13,
+    marginTop: 16,
+    marginBottom: 10,
+  },
+  canvasWrapper: {
+    height: 260,
+    borderRadius: 16,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: '#0F172A',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  canvasImage: {
+    width: '100%',
+    height: '100%',
+  },
+  pinMarker: {
+    position: 'absolute',
+    transform: [{ translateX: -16 }, { translateY: -16 }],
+    backgroundColor: '#2E5D36',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  pinMarkerActive: {
+    backgroundColor: '#10B981',
+    transform: [{ translateX: -18 }, { translateY: -18 }],
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 3,
+  },
+  pinCallout: {
+    position: 'absolute',
+    top: 34,
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  pinCalloutText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  telemetryCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  telemetryGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  telemetryItem: {
+    alignItems: 'center',
+  },
+  tLabel: {
+    fontSize: 11,
+    color: '#64748B',
+    marginBottom: 4,
+  },
+  tVal: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#0F172A',
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#0F172A',
+  },
+  tankListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    maxHeight: '90%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#0F172A',
+  },
+  input: {
+    backgroundColor: '#FFF',
+    marginBottom: 14,
+  },
+  imagePickerBox: {
+    height: 140,
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: '#F1F5F9',
+  },
+  imagePreview: {
+    width: '100%',
+    height: '100%',
+  },
+  imagePickerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(15, 23, 42, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });

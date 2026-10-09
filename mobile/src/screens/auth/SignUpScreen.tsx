@@ -8,6 +8,7 @@ export const SignUpScreen = ({ navigation }: any) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [harvestStages, setHarvestStages] = useState<string[]>(['Pre Harvest', 'Harvest']);
   const [otpCode, setOtpCode] = useState('');
   const [isOtpSent, setIsOtpSent] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -64,7 +65,7 @@ export const SignUpScreen = ({ navigation }: any) => {
       const res = await fetch(`${BACKEND_URL}/api/auth/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, otp: otpCode, password, name })
+        body: JSON.stringify({ email, otp: otpCode, password, name, harvestStages })
       });
       
       const data = await res.json().catch(() => null);
@@ -160,6 +161,34 @@ export const SignUpScreen = ({ navigation }: any) => {
                   textColor="#333333"
                   theme={{ colors: { background: '#FFFFFF', onSurfaceVariant: '#2E5D36' } }}
                 />
+
+                {/* Crop / Harvest Operational Stages */}
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#1E293B', marginTop: 6, marginBottom: 8 }}>
+                  Active Operational Phases:
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+                  {['Pre Harvest', 'Harvest', 'Post Harvest'].map(stage => {
+                    const selected = harvestStages.includes(stage);
+                    return (
+                      <Button
+                        key={stage}
+                        mode={selected ? 'contained' : 'outlined'}
+                        buttonColor={selected ? '#2E5D36' : undefined}
+                        textColor={selected ? '#FFFFFF' : '#2E5D36'}
+                        onPress={() => {
+                          if (selected) setHarvestStages(harvestStages.filter(s => s !== stage));
+                          else setHarvestStages([...harvestStages, stage]);
+                        }}
+                        style={{ flex: 1, borderRadius: 8, borderColor: '#2E5D36' }}
+                        labelStyle={{ fontSize: 11, marginHorizontal: 2 }}
+                        compact
+                      >
+                        {stage}
+                      </Button>
+                    );
+                  })}
+                </View>
+
                 <Button 
                   mode="contained" 
                   onPress={handleSignUp} 
