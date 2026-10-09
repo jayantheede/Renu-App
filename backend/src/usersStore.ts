@@ -353,21 +353,23 @@ export async function updateCustomerDetails(id: string, updates: {
     return found;
   }
 
-  try {
-    const data: any = {};
-    if (updates.name) data.name = updates.name.trim();
-    if (updates.email) data.email = updates.email.trim().toLowerCase();
-    if (updates.role) data.role = updates.role;
-    if (updates.password) {
-      data.passwordHash = await bcrypt.hash(updates.password, 10);
+  if (!id.startsWith('mock-')) {
+    try {
+      const data: any = {};
+      if (updates.name) data.name = updates.name.trim();
+      if (updates.email) data.email = updates.email.trim().toLowerCase();
+      if (updates.role) data.role = updates.role;
+      if (updates.password) {
+        data.passwordHash = await bcrypt.hash(updates.password, 10);
+      }
+      const updatedDb = await prisma.user.update({
+        where: { id },
+        data
+      });
+      return updatedDb;
+    } catch (err: any) {
+      console.warn('[DB Error] updateCustomerDetails fallback:', err.message);
     }
-    const updatedDb = await prisma.user.update({
-      where: { id },
-      data
-    });
-    return updatedDb;
-  } catch (err: any) {
-    console.warn('[DB Error] updateCustomerDetails fallback:', err.message);
   }
 
   return null;
@@ -422,3 +424,20 @@ export async function getAllCustomersList() {
 
   return Array.from(usersMap.values());
 }
+
+export interface ProductItem {
+  id: string;
+  name: string;
+  description?: string;
+  price: number;
+  imageUrl?: string;
+  createdAt?: string;
+}
+
+export const mockProducts: ProductItem[] = [
+  { id: 'prod-1', name: 'Biome Care', description: 'Advanced bio-stimulant promoting beneficial fungal and microbial root flora.', price: 124.00, imageUrl: 'https://images.unsplash.com/photo-1574943320219-553eb213f72d?w=300' },
+  { id: 'prod-2', name: 'N-CARE', description: 'Green nitrification inhibitor that extends nitrogen shelf life and reduces leaching.', price: 250.00, imageUrl: 'https://images.unsplash.com/photo-1592417817098-8f3d6910985c?w=300' },
+  { id: 'prod-3', name: 'K-RUSH', description: 'Specialized formula for frost prevention and enhancing fruit quality.', price: 180.00, imageUrl: 'https://images.unsplash.com/photo-1628352081506-83c43123ed6d?w=300' },
+  { id: 'prod-4', name: 'Bee Bloom', description: 'Pheromone blend to promote bee health and optimize pollination.', price: 85.00, imageUrl: 'https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=300' }
+];
+

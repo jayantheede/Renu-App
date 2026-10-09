@@ -83,6 +83,7 @@ export const approveRanch = (id: string, status: string) => apiClient(`/app/admi
 export const approveTank = (id: string, status: string) => apiClient(`/app/admin/approvals/tank/${id}`, { method: 'POST', body: JSON.stringify({ status }) });
 export const acceptAdminOrder = (id: string) => apiClient(`/app/admin/orders/${id}/accept`, { method: 'POST' });
 export const submitProduct = (data: any) => apiClient('/app/admin/products', { method: 'POST', body: JSON.stringify(data) });
+export const deleteProduct = (id: string) => apiClient(`/app/admin/products/${id}`, { method: 'DELETE' });
 export const fetchPlatformSettings = () => apiClient('/app/admin/settings');
 export const savePlatformSettings = (settings: any) => apiClient('/app/admin/settings', { method: 'POST', body: JSON.stringify(settings) });
 export const fetchAuditLogs = () => apiClient('/app/admin/audit-logs');

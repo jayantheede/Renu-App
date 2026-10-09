@@ -30,7 +30,8 @@ import {
   mockTanks,
   mockPlatformSettings,
   mockAuditLogs,
-  addAuditLog
+  addAuditLog,
+  mockProducts
 } from './usersStore';
 
 import helmet from 'helmet';
@@ -469,6 +470,66 @@ app.post(['/api/admin/reset-cache', '/api/app/admin/reset-cache'], async (req, r
   });
   res.json({ success: true, message: 'System cache cleared and synchronized' });
 });
+
+app.get(['/api/admin/products', '/api/app/admin/products', '/api/products', '/api/app/products'], async (req, res) => {
+  try {
+    const dbProds = await prisma.product.findMany();
+    if (dbProds && dbProds.length > 0) {
+      const combined = [...mockProducts];
+      for (const p of dbProds) {
+        if (!combined.some(item => item.id === p.id)) combined.push(p as any);
+      }
+      return res.json(combined);
+    }
+  } catch (e) {}
+  res.json(mockProducts);
+});
+
+app.post(['/api/admin/products', '/api/app/admin/products'], async (req, res) => {
+  try {
+    const { name, description, price, imageUrl } = req.body;
+    const newProd = {
+      id: `prod-${Date.now()}`,
+      name,
+      description: description || '',
+      price: parseFloat(price) || 0,
+      imageUrl: imageUrl || '',
+      createdAt: new Date().toISOString()
+    };
+    mockProducts.unshift(newProd);
+
+    try {
+      await prisma.product.create({
+        data: { name, description, price: parseFloat(price) || 0, imageUrl }
+      });
+    } catch (dbErr) {
+      console.warn('[DB Warning] Product create fallback to mock:', (dbErr as any).message);
+    }
+
+    addAuditLog({
+      action: 'PRODUCT_CREATED',
+      details: `New product added: ${name} ($${price})`,
+      actor: 'admin@renu.com',
+      category: 'SYSTEM'
+    });
+
+    res.json(newProd);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to add product' });
+  }
+});
+
+app.delete(['/api/admin/products/:id', '/api/app/admin/products/:id'], async (req, res) => {
+  const idx = mockProducts.findIndex(p => p.id === req.params.id);
+  if (idx !== -1) {
+    mockProducts.splice(idx, 1);
+  }
+  try {
+    await prisma.product.delete({ where: { id: req.params.id as string } });
+  } catch (e) {}
+  res.json({ success: true, message: 'Product deleted' });
+});
+
 
 
 // Only listen if not running on Vercel Serverless
