@@ -17,7 +17,7 @@ router.get('/profile', async (req: AuthenticatedRequest, res) => {
 });
 
 import { mockAvatars } from './index';
-import { mockRanches, mockTanks, mockUsers, mockOrdersList, updateCustomerApprovalStatus } from './usersStore';
+import { mockRanches, mockTanks, mockUsers, mockOrdersList, updateCustomerApprovalStatus, mockPlatformSettings, mockAuditLogs, addAuditLog } from './usersStore';
 
 router.put('/profile', async (req: AuthenticatedRequest, res) => {
   try {
@@ -243,6 +243,39 @@ router.post('/admin/products', async (req: AuthenticatedRequest, res) => {
     });
     res.json(product);
   } catch (error) { res.status(500).json({ error: 'Failed to add product' }); }
+});
+
+router.get('/admin/settings', async (req: AuthenticatedRequest, res) => {
+  res.json(mockPlatformSettings);
+});
+
+router.post('/admin/settings', async (req: AuthenticatedRequest, res) => {
+  try {
+    Object.assign(mockPlatformSettings, req.body);
+    addAuditLog({
+      action: 'SETTINGS_UPDATED',
+      details: `Global platform settings modified (Maintenance: ${mockPlatformSettings.maintenanceMode ? 'ON' : 'OFF'}, 2FA: ${mockPlatformSettings.require2FAForAdmin ? 'ON' : 'OFF'})`,
+      actor: req.user?.email || 'admin@renu.com',
+      category: 'SYSTEM'
+    });
+    res.json({ success: true, settings: mockPlatformSettings });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update platform settings' });
+  }
+});
+
+router.get('/admin/audit-logs', async (req: AuthenticatedRequest, res) => {
+  res.json(mockAuditLogs);
+});
+
+router.post('/admin/reset-cache', async (req: AuthenticatedRequest, res) => {
+  addAuditLog({
+    action: 'CACHE_PURGED',
+    details: 'System memory cache cleared and re-synced',
+    actor: req.user?.email || 'admin@renu.com',
+    category: 'SYSTEM'
+  });
+  res.json({ success: true, message: 'System cache cleared and synchronized' });
 });
 
 export default router;

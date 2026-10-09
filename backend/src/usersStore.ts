@@ -138,6 +138,87 @@ export const mockOrdersList = [
   { id: 'ord-3', orderId: 'ORD-1097', customerEmail: 'sarah@farms.com', product: 'K-RUSH', qty: '5 Gal', amt: 900, status: 'PENDING', date: '2026-10-06' },
 ];
 
+export interface PlatformSettings {
+  maintenanceMode: boolean;
+  emailNotifications: boolean;
+  orderAutoApprove: boolean;
+  autoApproveLimit: number;
+  lowTankAlertLevel: number;
+  require2FAForAdmin: boolean;
+  systemVersion: string;
+}
+
+export const mockPlatformSettings: PlatformSettings = {
+  maintenanceMode: false,
+  emailNotifications: true,
+  orderAutoApprove: false,
+  autoApproveLimit: 500,
+  lowTankAlertLevel: 15,
+  require2FAForAdmin: true,
+  systemVersion: 'v2.4.0-production'
+};
+
+export interface AuditLogEntry {
+  id: string;
+  action: string;
+  details: string;
+  actor: string;
+  category: 'SECURITY' | 'ORDERS' | 'RANCHES' | 'USERS' | 'SYSTEM';
+  timestamp: string;
+}
+
+export const mockAuditLogs: AuditLogEntry[] = [
+  {
+    id: 'log-1',
+    action: 'ORDER_ACCEPTED',
+    details: 'Order #ORD-1098 ($6,250) approved and scheduled for delivery',
+    actor: 'admin@renu.com',
+    category: 'ORDERS',
+    timestamp: '2026-10-09T18:24:00Z'
+  },
+  {
+    id: 'log-2',
+    action: 'USER_REGISTERED',
+    details: 'New Grower account verified for customer@renu.com',
+    actor: 'system',
+    category: 'USERS',
+    timestamp: '2026-10-09T16:12:00Z'
+  },
+  {
+    id: 'log-3',
+    action: 'RANCH_SUBMITTED',
+    details: 'Sierra Foothills Ranch (85 ac) submitted for approval',
+    actor: 'customer@renu.com',
+    category: 'RANCHES',
+    timestamp: '2026-10-09T14:45:00Z'
+  },
+  {
+    id: 'log-4',
+    action: 'SECURITY_CHECK',
+    details: 'Admin session authenticated via SHA256 token verification',
+    actor: 'admin@renu.com',
+    category: 'SECURITY',
+    timestamp: '2026-10-09T12:00:00Z'
+  },
+  {
+    id: 'log-5',
+    action: 'DATABASE_BACKUP',
+    details: 'Automated snapshot backup completed successfully (24 records)',
+    actor: 'system',
+    category: 'SYSTEM',
+    timestamp: '2026-10-09T08:00:00Z'
+  }
+];
+
+export function addAuditLog(entry: Omit<AuditLogEntry, 'id' | 'timestamp'>) {
+  mockAuditLogs.unshift({
+    id: `log-${Date.now()}`,
+    timestamp: new Date().toISOString(),
+    ...entry
+  });
+}
+
+
 export async function findUserByEmail(email: string): Promise<AppUser | null> {
   const normalized = email.trim().toLowerCase();
   const mock = mockUsers.find(u => u.email.toLowerCase() === normalized);

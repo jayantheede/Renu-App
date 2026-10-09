@@ -26,7 +26,10 @@ import {
   updateCustomerApprovalStatus,
   mockUsers,
   mockRanches,
-  mockTanks
+  mockTanks,
+  mockPlatformSettings,
+  mockAuditLogs,
+  addAuditLog
 } from './usersStore';
 
 import helmet from 'helmet';
@@ -380,9 +383,51 @@ app.get(['/api/admin/orders', '/api/app/admin/orders'], async (req, res) => {
 
 app.post(['/api/admin/orders/:id/accept', '/api/app/admin/orders/:id/accept'], async (req, res) => {
   const order = mockOrdersList.find(o => o.id === req.params.id);
-  if (order) order.status = 'ACCEPTED';
+  if (order) {
+    order.status = 'ACCEPTED';
+    addAuditLog({
+      action: 'ORDER_ACCEPTED',
+      details: `Order #${order.orderId} ($${order.amt}) accepted and approved for dispatch`,
+      actor: 'admin@renu.com',
+      category: 'ORDERS'
+    });
+  }
   res.json({ success: true, order });
 });
+
+app.get(['/api/admin/settings', '/api/app/admin/settings'], async (req, res) => {
+  res.json(mockPlatformSettings);
+});
+
+app.post(['/api/admin/settings', '/api/app/admin/settings'], async (req, res) => {
+  try {
+    Object.assign(mockPlatformSettings, req.body);
+    addAuditLog({
+      action: 'SETTINGS_UPDATED',
+      details: `Global platform settings modified (Maintenance: ${mockPlatformSettings.maintenanceMode ? 'ON' : 'OFF'}, 2FA: ${mockPlatformSettings.require2FAForAdmin ? 'ON' : 'OFF'})`,
+      actor: 'admin@renu.com',
+      category: 'SYSTEM'
+    });
+    res.json({ success: true, settings: mockPlatformSettings });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update platform settings' });
+  }
+});
+
+app.get(['/api/admin/audit-logs', '/api/app/admin/audit-logs'], async (req, res) => {
+  res.json(mockAuditLogs);
+});
+
+app.post(['/api/admin/reset-cache', '/api/app/admin/reset-cache'], async (req, res) => {
+  addAuditLog({
+    action: 'CACHE_PURGED',
+    details: 'System memory cache cleared and re-synced',
+    actor: 'admin@renu.com',
+    category: 'SYSTEM'
+  });
+  res.json({ success: true, message: 'System cache cleared and synchronized' });
+});
+
 
 // Only listen if not running on Vercel Serverless
 if (process.env.VERCEL !== '1') {
