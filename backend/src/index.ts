@@ -249,6 +249,11 @@ app.get('/api/portal/ranches', async (req, res) => {
 import appRoutes from './routes';
 app.use('/api/app', appRoutes);
 
-app.listen(Number(PORT), '0.0.0.0', () => {
-  console.log(`Backend server running on port ${PORT}`);
-});
+// Only listen if not running on Vercel Serverless
+if (process.env.VERCEL !== '1') {
+  app.listen(Number(PORT), '0.0.0.0', () => {
+    console.log(`Backend server running on port ${PORT}`);
+  });
+}
+
+export default app;
