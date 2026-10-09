@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, Alert } from 'react-native';
 import { Text, TextInput, Button } from 'react-native-paper';
-import { GlassCard } from '../../components/GlassCard';
 import { submitProduct } from '../../api/client';
 
 export const ManageProductsScreen = () => {
@@ -24,7 +23,7 @@ export const ManageProductsScreen = () => {
         description: desc,
         imageUrl: imageUrl || undefined 
       });
-      Alert.alert('Success', 'Product added to shop!');
+      Alert.alert('Success', 'Product added to storefront successfully!');
       setName('');
       setPrice('');
       setDesc('');
@@ -38,119 +37,118 @@ export const ManageProductsScreen = () => {
   };
 
   return (
-    <View style={styles.background}>
-      <View style={styles.overlay}>
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          
-          <View style={styles.header}>
-            <Text variant="headlineMedium" style={styles.title}>
-              Manage Products
-            </Text>
-            <Text variant="bodyMedium" style={styles.subtitle}>
-              Add items to the storefront
-            </Text>
-          </View>
+    <View style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.header}>
+          <Text variant="headlineMedium" style={styles.title}>
+            Manage Products
+          </Text>
+          <Text variant="bodyMedium" style={styles.subtitle}>
+            Add and manage items available on the storefront
+          </Text>
+        </View>
 
-          <GlassCard style={styles.formCard}>
-            <TextInput
-              label="Product Name"
-              value={name}
-              onChangeText={setName}
-              style={styles.input}
-              mode="outlined"
-              outlineColor="rgba(255,255,255,0.3)"
-              activeOutlineColor="#FFFFFF"
-              textColor="#FFFFFF"
-              theme={{ colors: { onSurfaceVariant: 'rgba(255,255,255,0.7)' } }}
-            />
-            <TextInput
-              label="Price ($)"
-              value={price}
-              onChangeText={setPrice}
-              keyboardType="decimal-pad"
-              style={styles.input}
-              mode="outlined"
-              outlineColor="rgba(255,255,255,0.3)"
-              activeOutlineColor="#FFFFFF"
-              textColor="#FFFFFF"
-              theme={{ colors: { onSurfaceVariant: 'rgba(255,255,255,0.7)' } }}
-            />
-            <TextInput
-              label="Description"
-              value={desc}
-              onChangeText={setDesc}
-              multiline
-              numberOfLines={3}
-              style={styles.input}
-              mode="outlined"
-              outlineColor="rgba(255,255,255,0.3)"
-              activeOutlineColor="#FFFFFF"
-              textColor="#FFFFFF"
-              theme={{ colors: { onSurfaceVariant: 'rgba(255,255,255,0.7)' } }}
-            />
-            <TextInput
-              label="Image URL (Optional)"
-              value={imageUrl}
-              onChangeText={setImageUrl}
-              style={styles.input}
-              mode="outlined"
-              outlineColor="rgba(255,255,255,0.3)"
-              activeOutlineColor="#FFFFFF"
-              textColor="#FFFFFF"
-              theme={{ colors: { onSurfaceVariant: 'rgba(255,255,255,0.7)' } }}
-            />
+        <View style={styles.formCard}>
+          <TextInput
+            label="Product Name"
+            value={name}
+            onChangeText={setName}
+            style={styles.input}
+            mode="outlined"
+            outlineColor="#CBD5E1"
+            activeOutlineColor="#2E5D36"
+            textColor="#0F172A"
+          />
+          <TextInput
+            label="Price ($)"
+            value={price}
+            onChangeText={setPrice}
+            keyboardType="decimal-pad"
+            style={styles.input}
+            mode="outlined"
+            outlineColor="#CBD5E1"
+            activeOutlineColor="#2E5D36"
+            textColor="#0F172A"
+          />
+          <TextInput
+            label="Description"
+            value={desc}
+            onChangeText={setDesc}
+            multiline
+            numberOfLines={3}
+            style={styles.input}
+            mode="outlined"
+            outlineColor="#CBD5E1"
+            activeOutlineColor="#2E5D36"
+            textColor="#0F172A"
+          />
+          <TextInput
+            label="Image URL (Optional)"
+            value={imageUrl}
+            onChangeText={setImageUrl}
+            style={styles.input}
+            mode="outlined"
+            outlineColor="#CBD5E1"
+            activeOutlineColor="#2E5D36"
+            textColor="#0F172A"
+          />
 
-            <Button 
-              mode="contained" 
-              onPress={handleAddProduct} 
-              loading={loading}
-              style={styles.button}
-              textColor="#000"
-              buttonColor="#FFF"
-            >
-              Add Product
-            </Button>
-          </GlassCard>
-          
-        </ScrollView>
-      </View>
+          <Button 
+            mode="contained" 
+            onPress={handleAddProduct} 
+            loading={loading}
+            style={styles.button}
+            textColor="#FFF"
+            buttonColor="#2E5D36"
+          >
+            Add Product
+          </Button>
+        </View>
+      </ScrollView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  background: {
+  container: {
     flex: 1,
-    backgroundColor: 'transparent',
-  },
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    backgroundColor: '#F8FAFC',
   },
   scrollContent: {
     paddingBottom: 120,
     paddingHorizontal: 20,
   },
   header: {
-    paddingTop: 80,
+    paddingTop: 60,
     paddingBottom: 20,
   },
   title: {
-    color: '#FFF',
+    color: '#0F172A',
     fontWeight: 'bold',
   },
   subtitle: {
-    color: 'rgba(255,255,255,0.7)',
+    color: '#64748B',
+    marginTop: 2,
   },
   formCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
     padding: 24,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
   input: {
     marginBottom: 16,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: '#FFFFFF',
   },
   button: {
     marginTop: 8,
     paddingVertical: 6,
+    borderRadius: 10,
   }
 });

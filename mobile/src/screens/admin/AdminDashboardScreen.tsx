@@ -5,20 +5,20 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
 
-const StatCard = ({ title, value, icon, color, subtitle }: any) => (
-  <View style={styles.statCard}>
+const StatCard = ({ title, value, icon, color, subtitle, onPress }: any) => (
+  <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={styles.statCard}>
     <View style={[styles.iconContainer, { backgroundColor: color + '1A' }]}>
       <MaterialCommunityIcons name={icon} size={28} color={color} />
     </View>
     <Text style={styles.statValue}>{value}</Text>
     <Text style={styles.statTitle}>{title}</Text>
     {subtitle && <Text style={styles.statSubtitle}>{subtitle}</Text>}
-  </View>
+  </TouchableOpacity>
 );
 
 import { useAuthStore } from '../../store/useAuthStore';
 
-export const AdminDashboardScreen = () => {
+export const AdminDashboardScreen = ({ navigation }: any) => {
   const user = useAuthStore(state => state.user);
 
   return (
@@ -30,7 +30,7 @@ export const AdminDashboardScreen = () => {
           <Text style={styles.greeting}>Good Morning,</Text>
           <Text style={styles.title}>{user?.name || 'Admin Portal'}</Text>
         </View>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={() => navigation?.navigate('AdminProfile')}>
           {user?.avatarUrl ? (
             <Avatar.Image size={50} source={{ uri: user.avatarUrl }} style={styles.avatar} />
           ) : (
@@ -48,12 +48,14 @@ export const AdminDashboardScreen = () => {
             icon="cash-multiple" 
             color="#10B981" 
             subtitle="+14% this week"
+            onPress={() => navigation?.navigate('AdminOrders')}
           />
           <StatCard 
             title="Active Ranches" 
             value="12" 
             icon="sprout" 
             color="#8B5CF6" 
+            onPress={() => navigation?.navigate('AdminApprovals')}
           />
         </View>
         <View style={styles.gridColumn}>
@@ -63,12 +65,15 @@ export const AdminDashboardScreen = () => {
             icon="truck-fast" 
             color="#F59E0B" 
             subtitle="Needs action"
+            onPress={() => navigation?.navigate('AdminOrders')}
           />
           <StatCard 
             title="Total Users" 
             value="24" 
             icon="account-group" 
             color="#3B82F6" 
+            subtitle="View Customers"
+            onPress={() => navigation?.navigate('AdminCustomers')}
           />
         </View>
       </View>

@@ -47,7 +47,7 @@ const TabBarIcon = ({ name, isFocused, label }: { name: string, isFocused: boole
 const CustomTabBar = ({ state, descriptors, navigation }: any) => {
   return (
     <View style={styles.tabBarWrapper}>
-      <BlurView intensity={60} tint="dark" style={styles.glassTabBar}>
+      <View style={styles.glassTabBar}>
         {state.routes.map((route: any, index: number) => {
           const { options } = descriptors[route.key];
           const label = options.title !== undefined ? options.title : route.name;
@@ -85,7 +85,7 @@ const CustomTabBar = ({ state, descriptors, navigation }: any) => {
             </TouchableOpacity>
           );
         })}
-      </BlurView>
+      </View>
     </View>
   );
 };
@@ -100,11 +100,8 @@ export const AdminTabNavigator = () => {
     <Tab.Navigator
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
-        headerShown: true,
-        headerTransparent: true,
-        headerTitleStyle: { color: '#FFF' },
-        headerTintColor: '#FFF',
-        sceneStyle: { backgroundColor: 'transparent' },
+        headerShown: false,
+        sceneStyle: { backgroundColor: '#F8FAFC' },
       }}
     >
       <Tab.Screen name="AdminDashboard" component={AdminDashboardScreen} options={{ title: 'Overview' }} />
@@ -120,11 +117,12 @@ export const AdminTabNavigator = () => {
 const styles = StyleSheet.create({
   tabBarWrapper: {
     position: 'absolute',
-    bottom: 30,
-    left: 20,
-    right: 20,
+    bottom: 20,
+    left: 16,
+    right: 16,
     borderRadius: 30,
     overflow: 'hidden',
+    zIndex: 999,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.3,
@@ -137,6 +135,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-around',
     paddingHorizontal: 10,
+    backgroundColor: '#1E293B',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
   },
@@ -144,6 +143,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    cursor: 'pointer' as any,
   },
   iconContainer: {
     alignItems: 'center',

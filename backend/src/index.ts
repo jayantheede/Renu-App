@@ -343,7 +343,8 @@ app.post(['/api/admin/customers', '/api/app/admin/customers'], async (req, res) 
   }
 });
 
-app.get(['/api/admin/approvals'], async (req, res) => {
+app.get(['/api/admin/approvals', '/api/app/admin/approvals'], async (req, res) => {
+  const pendingOrders = mockOrdersList.filter(o => o.status === 'PENDING');
   const pendingCustomers = mockUsers.filter(u => u.approvalStatus === 'PENDING').map(u => ({
     id: u.id,
     name: u.name,
@@ -354,7 +355,7 @@ app.get(['/api/admin/approvals'], async (req, res) => {
   }));
   const pendingRanches = mockRanches.filter(r => r.approvalStatus === 'PENDING').map(r => ({ ...r, entity: r.entity || { name: 'Demo Entity' } }));
   const pendingTanks = mockTanks.filter(t => t.approvalStatus === 'PENDING').map(t => ({ ...t, ranch: mockRanches.find(r => r.id === t.ranchId) || { name: 'Demo Ranch' } }));
-  res.json({ customers: pendingCustomers, ranches: pendingRanches, tanks: pendingTanks });
+  res.json({ orders: pendingOrders, customers: pendingCustomers, ranches: pendingRanches, tanks: pendingTanks });
 });
 
 app.post(['/api/admin/approvals/customer/:id'], async (req, res) => {

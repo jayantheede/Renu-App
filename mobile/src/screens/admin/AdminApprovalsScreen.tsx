@@ -1,10 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
-import { Text, ActivityIndicator, Button } from 'react-native-paper';
-import { fetchAdminApprovals, approveCustomer, approveRanch, approveTank } from '../../api/client';
+import { Text, ActivityIndicator, Button, Chip } from 'react-native-paper';
+import { fetchAdminApprovals, approveCustomer, approveRanch, approveTank, acceptAdminOrder } from '../../api/client';
 
 export const AdminApprovalsScreen = () => {
-  const [data, setData] = useState<{ customers?: any[]; ranches: any[]; tanks: any[] }>({
+  const [data, setData] = useState<{
+    orders?: any[];
+    customers?: any[];
+    ranches: any[];
+    tanks: any[];
+  }>({
+    orders: [],
     customers: [],
     ranches: [],
     tanks: []
@@ -16,6 +22,7 @@ export const AdminApprovalsScreen = () => {
     fetchAdminApprovals()
       .then(res => {
         setData({
+          orders: res.orders || [],
           customers: res.customers || [],
           ranches: res.ranches || [],
           tanks: res.tanks || []
@@ -34,11 +41,17 @@ export const AdminApprovalsScreen = () => {
     loadData();
   }, []);
 
-  const handleAction = async (type: 'customer' | 'ranch' | 'tank', id: string, status: string) => {
+  const handleAction = async (type: 'order' | 'customer' | 'ranch' | 'tank', id: string, status: string) => {
     try {
-      if (type === 'customer') await approveCustomer(id, status);
-      else if (type === 'ranch') await approveRanch(id, status);
-      else await approveTank(id, status);
+      if (type === 'order') {
+        await acceptAdminOrder(id);
+      } else if (type === 'customer') {
+        await approveCustomer(id, status);
+      } else if (type === 'ranch') {
+        await approveRanch(id, status);
+      } else {
+        await approveTank(id, status);
+      }
 
       Alert.alert('Success', `${type.toUpperCase()} ${status}`);
       loadData();
@@ -48,112 +61,225 @@ export const AdminApprovalsScreen = () => {
   };
 
   const hasAnyPending =
+    (data.orders?.length || 0) > 0 ||
     (data.customers?.length || 0) > 0 ||
     (data.ranches?.length || 0) > 0 ||
     (data.tanks?.length || 0) > 0;
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Approvals</Text>
-      </View>
-
-      {loading ? (
-        <ActivityIndicator style={{ marginTop: 40 }} />
-      ) : (
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} />
-          }
-        >
-          {/* Pending Customers Section */}
-          {(data.customers?.length || 0) > 0 && (
-            <>
-              <Text style={styles.sectionTitle}>Pending Customer Registrations ({data.customers?.length})</Text>
-              {data.customers?.map(customer => (
-                <View key={customer.id} style={styles.card}>
-                  <View>
-                    <Text style={styles.cardTitle}>{customer.name || 'New Customer'}</Text>
-                    <Text style={styles.cardSubtitle}>
-                      {customer.email} • Role: {customer.role || 'Grower'}
-                    </Text>
-                    {customer.createdAt && (
-                      <Text style={[styles.cardSubtitle, { fontSize: 12, marginTop: 2 }]}>
-                        Registered: {new Date(customer.createdAt).toLocaleDateString()}
-                      </Text>
-                    )}
-                  </View>
-                  <View style={styles.actionRow}>
-                    <Button
-                      mode="text"
-                      textColor="#B71C1C"
-                      onPress={() => handleAction('customer', customer.id, 'REJECTED')}
-                    >
-                      Reject
-                    </Button>
-                    <Button
-                      mode="contained"
-                      buttonColor="#2E5D36"
-                      onPress={() => handleAction('customer', customer.id, 'APPROVED')}
-                    >
-                      Approve
-                    </Button>
-                  </View>
-                </View>
-              ))}
-            </>
-          )}
-
-          {/* Pending Ranches Section */}
-          <Text style={[styles.sectionTitle, (data.customers?.length || 0) > 0 ? { marginTop: 24 } : {}]}>
-            Pending Ranches ({data.ranches?.length || 0})
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor="#2E5D36" />
+        }
+      >
+        <View style={styles.header}>
+          <Text variant="headlineMedium" style={styles.headerTitle}>Approvals</Text>
+          <Text variant="bodyMedium" style={styles.headerSubtitle}>
+            Review and approve pending ranches, orders, tanks, and accounts
           </Text>
-          {data.ranches?.map(ranch => (
-            <View key={ranch.id} style={styles.card}>
-              <View>
-                <Text style={styles.cardTitle}>{ranch.name}</Text>
-                <Text style={styles.cardSubtitle}>{ranch.county} • {ranch.ac} acres</Text>
-              </View>
-              <View style={styles.actionRow}>
-                <Button mode="text" textColor="#B71C1C" onPress={() => handleAction('ranch', ranch.id, 'REJECTED')}>Reject</Button>
-                <Button mode="contained" buttonColor="#2E5D36" onPress={() => handleAction('ranch', ranch.id, 'APPROVED')}>Approve</Button>
-              </View>
-            </View>
-          ))}
+        </View>
 
-          {/* Pending Tanks Section */}
-          <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Pending Tank Setups ({data.tanks?.length || 0})</Text>
-          {data.tanks?.map(tank => (
-            <View key={tank.id} style={styles.card}>
-              <View>
-                <Text style={styles.cardTitle}>{tank.capacity} Gal at {tank.location}</Text>
-                <Text style={styles.cardSubtitle}>Ranch: {tank.ranch?.name || tank.ranchId}</Text>
+        {loading ? (
+          <ActivityIndicator color="#2E5D36" style={{ marginTop: 40 }} />
+        ) : (
+          <>
+            {/* Pending Ranches Section */}
+            {(data.ranches?.length || 0) > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Pending Ranches ({data.ranches?.length})</Text>
+                {data.ranches?.map(ranch => (
+                  <View key={ranch.id} style={styles.card}>
+                    <View style={styles.cardHeader}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.cardTitle}>{ranch.name}</Text>
+                        <Text style={styles.cardSubtitle}>{ranch.county} • {ranch.ac} acres</Text>
+                        {ranch.entity?.name && (
+                          <Text style={styles.entityName}>Entity: {ranch.entity.name}</Text>
+                        )}
+                      </View>
+                      <Chip compact style={styles.pendingChip} textStyle={styles.pendingChipText}>PENDING</Chip>
+                    </View>
+                    <View style={styles.actionRow}>
+                      <Button mode="outlined" textColor="#DC2626" style={styles.btn} onPress={() => handleAction('ranch', ranch.id, 'REJECTED')}>Reject</Button>
+                      <Button mode="contained" buttonColor="#2E5D36" style={styles.btn} onPress={() => handleAction('ranch', ranch.id, 'APPROVED')}>Approve</Button>
+                    </View>
+                  </View>
+                ))}
               </View>
-              <View style={styles.actionRow}>
-                <Button mode="text" textColor="#B71C1C" onPress={() => handleAction('tank', tank.id, 'REJECTED')}>Reject</Button>
-                <Button mode="contained" buttonColor="#2E5D36" onPress={() => handleAction('tank', tank.id, 'APPROVED')}>Approve</Button>
-              </View>
-            </View>
-          ))}
+            )}
 
-          {!hasAnyPending && (
-            <Text style={{ textAlign: 'center', marginTop: 40, color: '#6B7280' }}>No pending approvals.</Text>
-          )}
-        </ScrollView>
-      )}
+            {/* Pending Orders Section */}
+            {(data.orders?.length || 0) > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Pending Orders ({data.orders?.length})</Text>
+                {data.orders?.map(order => (
+                  <View key={order.id} style={styles.card}>
+                    <View style={styles.cardHeader}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.cardTitle}>Order #{order.orderId}</Text>
+                        <Text style={styles.cardSubtitle}>{order.product} • {order.qty} • ${order.amt?.toLocaleString()}</Text>
+                        <Text style={styles.entityName}>Customer: {order.customerEmail || 'Unknown'}</Text>
+                      </View>
+                      <Chip compact style={styles.pendingChip} textStyle={styles.pendingChipText}>PENDING</Chip>
+                    </View>
+                    <View style={styles.actionRow}>
+                      <Button mode="contained" buttonColor="#2E5D36" style={styles.btn} onPress={() => handleAction('order', order.id, 'ACCEPTED')}>Accept Order</Button>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Pending Tank Setups Section */}
+            {(data.tanks?.length || 0) > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Pending Tank Setups ({data.tanks?.length})</Text>
+                {data.tanks?.map(tank => (
+                  <View key={tank.id} style={styles.card}>
+                    <View style={styles.cardHeader}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.cardTitle}>{tank.capacity} Gal Fertilizer Tank</Text>
+                        <Text style={styles.cardSubtitle}>Location: {tank.location || 'Main Station'}</Text>
+                        <Text style={styles.entityName}>Ranch: {tank.ranch?.name || tank.ranchId}</Text>
+                      </View>
+                      <Chip compact style={styles.pendingChip} textStyle={styles.pendingChipText}>PENDING</Chip>
+                    </View>
+                    <View style={styles.actionRow}>
+                      <Button mode="outlined" textColor="#DC2626" style={styles.btn} onPress={() => handleAction('tank', tank.id, 'REJECTED')}>Reject</Button>
+                      <Button mode="contained" buttonColor="#2E5D36" style={styles.btn} onPress={() => handleAction('tank', tank.id, 'APPROVED')}>Approve</Button>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Pending Customer Registrations Section */}
+            {(data.customers?.length || 0) > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Pending Customer Accounts ({data.customers?.length})</Text>
+                {data.customers?.map(customer => (
+                  <View key={customer.id} style={styles.card}>
+                    <View style={styles.cardHeader}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.cardTitle}>{customer.name || 'New Customer'}</Text>
+                        <Text style={styles.cardSubtitle}>{customer.email} • Role: {customer.role || 'Grower'}</Text>
+                      </View>
+                      <Chip compact style={styles.pendingChip} textStyle={styles.pendingChipText}>PENDING</Chip>
+                    </View>
+                    <View style={styles.actionRow}>
+                      <Button mode="outlined" textColor="#DC2626" style={styles.btn} onPress={() => handleAction('customer', customer.id, 'REJECTED')}>Reject</Button>
+                      <Button mode="contained" buttonColor="#2E5D36" style={styles.btn} onPress={() => handleAction('customer', customer.id, 'APPROVED')}>Approve</Button>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {!hasAnyPending && (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>All items reviewed! No pending approvals.</Text>
+              </View>
+            )}
+          </>
+        )}
+      </ScrollView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F4F7F4' },
-  header: { paddingTop: 60, paddingBottom: 20, paddingHorizontal: 20, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
-  headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#111827' },
-  scrollContent: { padding: 20, paddingBottom: 100 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 12, color: '#374151' },
-  card: { backgroundColor: '#FFF', borderRadius: 12, padding: 16, marginBottom: 12, elevation: 1 },
-  cardTitle: { fontSize: 16, fontWeight: '600' },
-  cardSubtitle: { fontSize: 14, color: '#6B7280', marginTop: 4 },
-  actionRow: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12, gap: 8 }
+  container: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  scrollContent: {
+    paddingBottom: 120,
+    paddingHorizontal: 20,
+  },
+  header: {
+    paddingTop: 60,
+    paddingBottom: 20,
+  },
+  headerTitle: {
+    color: '#0F172A',
+    fontWeight: 'bold',
+  },
+  headerSubtitle: {
+    color: '#64748B',
+    marginTop: 2,
+  },
+  section: {
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    color: '#334155',
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#0F172A',
+  },
+  cardSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 3,
+  },
+  entityName: {
+    fontSize: 12,
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  pendingChip: {
+    backgroundColor: '#FEF3C7',
+    height: 24,
+  },
+  pendingChipText: {
+    color: '#B45309',
+    fontWeight: 'bold',
+    fontSize: 11,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 14,
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingTop: 12,
+  },
+  btn: {
+    borderRadius: 8,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    marginTop: 50,
+  },
+  emptyText: {
+    color: '#64748B',
+    fontSize: 15,
+  },
 });

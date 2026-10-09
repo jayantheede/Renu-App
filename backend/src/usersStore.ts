@@ -72,6 +72,28 @@ export const mockUsers: AppUser[] = [
 
 export const mockRanches: RanchItem[] = [
   {
+    id: 'mock-ranch-p1',
+    entId: 'mock-entity-1',
+    name: 'Sierra Foothills Ranch',
+    county: 'Fresno',
+    ac: 85,
+    approvalStatus: 'PENDING',
+    customerId: 'mock-cust-1',
+    customerEmail: 'customer@renu.com',
+    entity: { name: 'Sierra Agri Group' }
+  },
+  {
+    id: 'mock-ranch-p2',
+    entId: 'mock-entity-2',
+    name: 'Central Valley Almonds',
+    county: 'Kern',
+    ac: 140,
+    approvalStatus: 'PENDING',
+    customerId: 'mock-cust-2',
+    customerEmail: 'john@grower.com',
+    entity: { name: 'Valley Farm Co.' }
+  },
+  {
     id: 'mock-ranch-1',
     entId: 'mock-entity-1',
     name: 'Valley Green Ranch',
@@ -86,12 +108,34 @@ export const mockRanches: RanchItem[] = [
 
 export const mockTanks: TankItem[] = [
   {
+    id: 'mock-tank-p1',
+    ranchId: 'mock-ranch-p1',
+    capacity: 1000,
+    location: 'North Field Injection Station',
+    approvalStatus: 'PENDING',
+    ranch: { name: 'Sierra Foothills Ranch' }
+  },
+  {
+    id: 'mock-tank-p2',
+    ranchId: 'mock-ranch-p2',
+    capacity: 500,
+    location: 'South Orchard Pump 2',
+    approvalStatus: 'PENDING',
+    ranch: { name: 'Central Valley Almonds' }
+  },
+  {
     id: 'mock-tank-1',
     ranchId: 'mock-ranch-1',
     capacity: 500,
     location: 'North Field Sector 3',
     approvalStatus: 'APPROVED'
   }
+];
+
+export const mockOrdersList = [
+  { id: 'ord-1', orderId: 'ORD-1099', customerEmail: 'customer@renu.com', product: 'Biome Care', qty: '10 Gal', amt: 1240, status: 'PENDING', date: '2026-10-08' },
+  { id: 'ord-2', orderId: 'ORD-1098', customerEmail: 'john@grower.com', product: 'N-CARE', qty: '25 Gal', amt: 6250, status: 'ACCEPTED', date: '2026-10-07' },
+  { id: 'ord-3', orderId: 'ORD-1097', customerEmail: 'sarah@farms.com', product: 'K-RUSH', qty: '5 Gal', amt: 900, status: 'PENDING', date: '2026-10-06' },
 ];
 
 export async function findUserByEmail(email: string): Promise<AppUser | null> {

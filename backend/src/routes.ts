@@ -17,7 +17,7 @@ router.get('/profile', async (req: AuthenticatedRequest, res) => {
 });
 
 import { mockAvatars } from './index';
-import { mockRanches, mockTanks, mockUsers, updateCustomerApprovalStatus } from './usersStore';
+import { mockRanches, mockTanks, mockUsers, mockOrdersList, updateCustomerApprovalStatus } from './usersStore';
 
 router.put('/profile', async (req: AuthenticatedRequest, res) => {
   try {
@@ -162,6 +162,7 @@ router.get('/products', async (req: AuthenticatedRequest, res) => {
 // Admin Approvals Routes
 // ---------------------------------
 router.get('/admin/approvals', async (req: AuthenticatedRequest, res) => {
+  const pendingOrders = mockOrdersList.filter(o => o.status === 'PENDING');
   const pendingCustomers = mockUsers.filter(u => u.approvalStatus === 'PENDING').map(u => ({
     id: u.id,
     name: u.name,
@@ -171,20 +172,23 @@ router.get('/admin/approvals', async (req: AuthenticatedRequest, res) => {
     createdAt: u.createdAt
   }));
 
-  if (req.user!.id.startsWith('mock-')) {
-    const pendingRanches = mockRanches.filter(r => r.approvalStatus === 'PENDING').map(r => ({ ...r, entity: r.entity || { name: 'Demo Entity' } }));
-    const pendingTanks = mockTanks.filter(t => t.approvalStatus === 'PENDING').map(t => ({ ...t, ranch: mockRanches.find(r => r.id === t.ranchId) || { name: 'Demo Ranch' } }));
-    return res.json({ customers: pendingCustomers, ranches: pendingRanches, tanks: pendingTanks });
-  }
+  const pendingRanches = mockRanches.filter(r => r.approvalStatus === 'PENDING').map(r => ({ ...r, entity: r.entity || { name: 'Demo Entity' } }));
+  const pendingTanks = mockTanks.filter(t => t.approvalStatus === 'PENDING').map(t => ({ ...t, ranch: mockRanches.find(r => r.id === t.ranchId) || { name: 'Demo Ranch' } }));
+
   try {
-    const pendingRanches = await prisma.ranch.findMany({ where: { approvalStatus: 'PENDING' }, include: { entity: true } });
-    const pendingTanks = await prisma.tankSetup.findMany({ where: { approvalStatus: 'PENDING' }, include: { ranch: true } });
-    res.json({ customers: pendingCustomers, ranches: pendingRanches, tanks: pendingTanks });
+    const dbRanches = await prisma.ranch.findMany({ where: { approvalStatus: 'PENDING' }, include: { entity: true } });
+    const dbTanks = await prisma.tankSetup.findMany({ where: { approvalStatus: 'PENDING' }, include: { ranch: true } });
+    const combinedRanches = [...pendingRanches];
+    for (const r of dbRanches) {
+      if (!combinedRanches.some(item => item.id === r.id)) combinedRanches.push(r as any);
+    }
+    const combinedTanks = [...pendingTanks];
+    for (const t of dbTanks) {
+      if (!combinedTanks.some(item => item.id === t.id)) combinedTanks.push(t as any);
+    }
+    res.json({ orders: pendingOrders, customers: pendingCustomers, ranches: combinedRanches, tanks: combinedTanks });
   } catch (error) { 
-    // Fallback to in-memory on DB errors
-    const pendingRanches = mockRanches.filter(r => r.approvalStatus === 'PENDING').map(r => ({ ...r, entity: r.entity || { name: 'Demo Entity' } }));
-    const pendingTanks = mockTanks.filter(t => t.approvalStatus === 'PENDING').map(t => ({ ...t, ranch: mockRanches.find(r => r.id === t.ranchId) || { name: 'Demo Ranch' } }));
-    res.json({ customers: pendingCustomers, ranches: pendingRanches, tanks: pendingTanks }); 
+    res.json({ orders: pendingOrders, customers: pendingCustomers, ranches: pendingRanches, tanks: pendingTanks }); 
   }
 });
 

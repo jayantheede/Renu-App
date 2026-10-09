@@ -115,7 +115,7 @@ export const SignInScreen = ({ navigation }: any) => {
             
             <Button 
               mode="contained" 
-              onPress={handleSignIn} 
+              onPress={() => handleSignIn()} 
               loading={loading}
               style={styles.button}
               contentStyle={styles.buttonContent}

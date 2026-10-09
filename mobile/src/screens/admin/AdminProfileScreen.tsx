@@ -123,10 +123,10 @@ export const AdminProfileScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
   header: {
     paddingHorizontal: 24,
-    paddingTop: 80,
+    paddingTop: 60,
     paddingBottom: 24,
     backgroundColor: '#FFFFFF',
     borderBottomLeftRadius: 30,
