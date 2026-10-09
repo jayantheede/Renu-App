@@ -23,6 +23,11 @@ export const AdminProfileScreen = () => {
   const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl || '');
   const [saving, setSaving] = useState(false);
 
+  useEffect(() => {
+    if (user?.name) setName(user.name);
+    if (user?.avatarUrl) setAvatarUrl(user.avatarUrl);
+  }, [user?.name, user?.avatarUrl]);
+
   // Platform Settings State
   const [settingsModalVisible, setSettingsModalVisible] = useState(false);
   const [loadingSettings, setLoadingSettings] = useState(false);
@@ -62,8 +67,8 @@ export const AdminProfileScreen = () => {
   const handleSaveProfile = async () => {
     setSaving(true);
     try {
-      await updateProfile({ name, avatarUrl: avatarUrl || undefined });
-      await updateUser({ name, avatarUrl });
+      const res = await updateProfile({ name, avatarUrl: avatarUrl || undefined });
+      await updateUser({ name: res?.name || name, avatarUrl: res?.avatarUrl || avatarUrl });
       setIsEditing(false);
       Alert.alert('Success', 'Profile updated successfully');
     } catch (error) {

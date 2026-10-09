@@ -40,6 +40,7 @@ import {
   acceptOrderAndSendPaymentEmail,
   payOrderAndGenerateInvoice,
   updateOrderTracking,
+  cancelOrderWithRefund,
   createEmployeeTask,
   updateTaskStatus,
   addLabResult,
@@ -318,7 +319,7 @@ app.get('/api/portal/ranches', async (req, res) => {
 // Legacy routes removed to fix TS compilation errors with new schema
 
 import appRoutes from './routes';
-app.use('/api/app', appRoutes);
+app.use(['/api/app', '/api'], appRoutes);
 
 // Admin & Customer Management Top-Level Routes (direct access)
 app.get(['/api/admin/customers', '/api/app/admin/customers'], async (req, res) => {
@@ -565,6 +566,55 @@ app.post(['/api/orders/:id/pay', '/api/app/orders/:id/pay'], async (req, res) =>
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to process payment' });
+  }
+});
+
+app.post(['/api/orders/:id/cancel', '/api/app/orders/:id/cancel', '/api/admin/orders/:id/cancel', '/api/app/admin/orders/:id/cancel'], async (req, res) => {
+  try {
+    const { reason } = req.body;
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({ error: 'Cancellation reason is required' });
+    }
+    const result = cancelOrderWithRefund(req.params.id as string, reason.trim());
+    if (!result) return res.status(404).json({ error: 'Order not found' });
+
+    const { order, refunded, refundAmount } = result;
+
+    // Send cancellation email if configured
+    if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+      try {
+        await transporter.sendMail({
+          from: `"Renu Biome" <${process.env.SMTP_USER}>`,
+          to: order.customerEmail,
+          subject: `Order #${order.orderId} Cancelled${refunded ? ' — Refund Initiated' : ''}`,
+          html: `
+            <div style="font-family: sans-serif; padding: 24px; color: #1E293B;">
+              <h2 style="color: #DC2626;">Order #${order.orderId} Cancelled</h2>
+              <p>Your order for <strong>${order.product}</strong> (${order.qty}) has been cancelled by our team.</p>
+              <div style="background: #FEF2F2; border: 1px solid #FECACA; border-radius: 8px; padding: 16px; margin: 16px 0;">
+                <p style="margin: 0 0 6px 0;"><strong>Cancellation Reason:</strong> ${reason}</p>
+                ${refunded ? `<p style="margin: 0; color: #15803D;"><strong>Refund of $${refundAmount.toLocaleString()} has been initiated</strong> and will reflect within 3-5 business days.</p>` : '<p style="margin: 0;">No payment was collected, so no refund is required.</p>'}
+              </div>
+              <p>If you have questions, please contact your Renu Biome agronomist.</p>
+            </div>
+          `
+        });
+      } catch (mailErr: any) {
+        console.warn('[Mail Warning] Could not send cancellation email:', mailErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: refunded
+        ? `Order cancelled and refund of $${refundAmount.toLocaleString()} initiated`
+        : 'Order cancelled. No payment was made so no refund is required.',
+      order,
+      refunded,
+      refundAmount
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to cancel order' });
   }
 });
 

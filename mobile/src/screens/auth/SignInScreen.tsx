@@ -5,6 +5,7 @@ import { Text, TextInput, Button, useTheme, Divider } from 'react-native-paper';
 // Supabase removed
 import { GlassCard } from '../../components/GlassCard';
 import { useAuthStore } from '../../store/useAuthStore';
+import { login } from '../../api/client';
 
 export const SignInScreen = ({ navigation }: any) => {
   const [email, setEmail] = useState('');
@@ -33,16 +34,7 @@ export const SignInScreen = ({ navigation }: any) => {
     }
 
     try {
-      const BACKEND_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-      const res = await fetch(`${BACKEND_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: loginEmail, password: loginPassword })
-      });
-      const data = await res.json();
-      
-      if (!res.ok) throw new Error(data.error || 'Failed to sign in');
-      
+      const data = await login(loginEmail, loginPassword);
       setSession(data.user, data.token);
     } catch (error: any) {
       const errorMessage = error.message === 'Failed to fetch' 

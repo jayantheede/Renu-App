@@ -17,23 +17,59 @@ router.get('/profile', async (req: AuthenticatedRequest, res) => {
 });
 
 import { mockAvatars } from './index';
-import { mockRanches, mockTanks, mockUsers, mockOrdersList, mockInvoices, updateCustomerApprovalStatus, updateCustomerDetails, mockPlatformSettings, mockAuditLogs, addAuditLog, mockProducts, mockMessages, saveStore, syncStoreFromDB } from './usersStore';
+import { mockRanches, mockTanks, mockUsers, mockOrdersList, mockInvoices, updateCustomerApprovalStatus, updateCustomerDetails, mockPlatformSettings, mockAuditLogs, addAuditLog, mockProducts, mockMessages, saveStore, syncStoreFromDB, updateUserProfile } from './usersStore';
 
 router.put('/profile', async (req: AuthenticatedRequest, res) => {
   try {
-    const { name, avatarUrl } = req.body;
-    if (req.user!.id.startsWith('mock-')) {
-      if (avatarUrl) {
-        mockAvatars[req.user!.id] = avatarUrl;
-      }
-      return res.json({ id: req.user!.id, email: req.user!.email, role: req.user!.role, name, avatarUrl });
+    const { name, avatarUrl, phone, address } = req.body;
+    const userEmail = req.user!.email;
+    const userId = req.user!.id;
+
+    // Update in-memory mockUsers and save to data_store.json
+    const updated = updateUserProfile(userEmail || userId, { name, avatarUrl, phone, address });
+
+    if (avatarUrl && userId) {
+      mockAvatars[userId] = avatarUrl;
     }
-    const updated = await prisma.user.update({
-      where: { id: req.user!.id },
-      data: { name, avatarUrl }
+
+    // Also update Prisma DB if online and non-mock ID
+    try {
+      if (userId && !userId.startsWith('mock-')) {
+        await prisma.user.update({
+          where: { id: userId },
+          data: { name: name || undefined, avatarUrl: avatarUrl || undefined }
+        });
+      }
+    } catch (e: any) {
+      // Non-fatal if DB not reachable
+    }
+
+    addAuditLog({
+      action: 'PROFILE_UPDATED',
+      details: `Profile updated for ${userEmail}: name="${name || updated?.name}"`,
+      actor: userEmail,
+      category: 'USERS'
     });
-    res.json(updated);
-  } catch (error) { res.status(500).json({ error: 'Failed to update profile' }); }
+
+    res.json({
+      id: updated?.id || userId,
+      email: userEmail,
+      role: req.user!.role,
+      name: updated?.name || name || req.user!.name,
+      avatarUrl: updated?.avatarUrl || avatarUrl || '',
+      approvalStatus: (req.user as any)?.approvalStatus || 'APPROVED',
+      phone: (updated as any)?.phone || phone,
+      address: (updated as any)?.address || address,
+      user_metadata: {
+        full_name: updated?.name || name || req.user!.name,
+        role: req.user!.role,
+        approvalStatus: (req.user as any)?.approvalStatus || 'APPROVED'
+      }
+    });
+  } catch (error: any) {
+    console.error('Failed to update profile:', error);
+    res.status(500).json({ error: error.message || 'Failed to update profile' });
+  }
 });
 router.get('/settings', (req, res) => res.json({ message: 'Settings details' }));
 router.get('/notifications', (req, res) => res.json({ message: 'Notifications' }));

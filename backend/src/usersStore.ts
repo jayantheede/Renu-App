@@ -164,12 +164,15 @@ export interface OrderItem {
   product: string;
   qty: string;
   amt: number;
-  status: 'PENDING' | 'ACCEPTED' | 'AWAITING_PAYMENT' | 'PAID' | 'DISPATCHED' | 'DELIVERED';
+  status: 'PENDING' | 'ACCEPTED' | 'AWAITING_PAYMENT' | 'PAID' | 'DISPATCHED' | 'DELIVERED' | 'CANCELLED';
   date: string;
   paymentEmailSent?: boolean;
-  trackingStep?: number; // 1: Order Placed, 2: Accepted & Payment Link Sent, 3: Paid & Blending, 4: In Transit, 5: Delivered
+  trackingStep?: number;
   trackingTimeline?: Array<{ title: string; desc: string; date: string; done: boolean }>;
   invoiceId?: string;
+  cancelReason?: string;
+  refundAmount?: number;
+  cancelledAt?: string;
 }
 
 export interface InvoiceItem {
@@ -254,10 +257,18 @@ export const mockUsers: AppUser[] = [
     createdAt: new Date('2026-01-03T00:00:00Z').toISOString(),
   },
 ];
-// Restore persisted users (keep seed mock-* accounts, merge in persisted extras)
+// Restore persisted users (merge profile changes into seed users, add new users)
 if (_persistedStore.users && Array.isArray(_persistedStore.users)) {
   for (const u of _persistedStore.users) {
-    if (!mockUsers.some(m => m.email.toLowerCase() === u.email.toLowerCase())) {
+    const existing = mockUsers.find(m => m.email.toLowerCase() === u.email.toLowerCase() || m.id === u.id);
+    if (existing) {
+      if (u.name) existing.name = u.name;
+      if (u.avatarUrl !== undefined) existing.avatarUrl = u.avatarUrl;
+      if (u.password) existing.password = u.password;
+      if (u.approvalStatus) existing.approvalStatus = u.approvalStatus;
+      if ((u as any).phone) (existing as any).phone = (u as any).phone;
+      if ((u as any).address) (existing as any).address = (u as any).address;
+    } else {
       mockUsers.push(u);
     }
   }
@@ -664,6 +675,20 @@ export async function findUserByEmail(email: string): Promise<AppUser | null> {
   return null;
 }
 
+export function updateUserProfile(idOrEmail: string, updates: { name?: string; avatarUrl?: string; phone?: string; address?: string }) {
+  const normalized = idOrEmail.toLowerCase().trim();
+  const u = mockUsers.find(user => user.id.toLowerCase() === normalized || user.email.toLowerCase() === normalized);
+  if (u) {
+    if (updates.name !== undefined && updates.name.trim()) u.name = updates.name.trim();
+    if (updates.avatarUrl !== undefined) u.avatarUrl = updates.avatarUrl;
+    if (updates.phone !== undefined) (u as any).phone = updates.phone;
+    if (updates.address !== undefined) (u as any).address = updates.address;
+    saveStore();
+    return u;
+  }
+  return null;
+}
+
 export async function createNewUser(params: {
   email: string;
   password?: string;
@@ -918,6 +943,46 @@ export function updateOrderTracking(orderId: string, status: OrderItem['status']
 
   saveStore();
   return order;
+}
+
+export function cancelOrderWithRefund(orderId: string, reason: string) {
+  const order = mockOrdersList.find(o => o.id === orderId || o.orderId === orderId);
+  if (!order) return null;
+
+  // Refund only if payment was made
+  const wasRefunded = order.status === 'PAID' || order.status === 'DISPATCHED';
+  const refundAmount = wasRefunded ? order.amt : 0;
+
+  order.status = 'CANCELLED' as any;
+  order.cancelReason = reason;
+  order.refundAmount = refundAmount;
+  order.cancelledAt = new Date().toISOString();
+
+  if (order.trackingTimeline) {
+    // Mark all future steps as cancelled
+    order.trackingTimeline.push({
+      title: 'Order Cancelled',
+      desc: `Cancelled by admin. Reason: ${reason}${wasRefunded ? `. Refund of $${refundAmount.toLocaleString()} initiated.` : ''}`,
+      date: new Date().toISOString().replace('T', ' ').substring(0, 16),
+      done: true
+    });
+  }
+
+  addAdminNotification({
+    title: 'Order Cancelled',
+    message: `Order #${order.orderId} for ${order.customerEmail} has been cancelled. ${wasRefunded ? `Refund of $${refundAmount.toLocaleString()} initiated.` : 'No payment was made — no refund needed.'}`,
+    type: 'ORDER'
+  });
+
+  addAuditLog({
+    action: 'ORDER_CANCELLED',
+    details: `Order #${order.orderId} cancelled. Reason: "${reason}". ${wasRefunded ? `Refund: $${refundAmount.toLocaleString()}` : 'No refund (not paid)'}`,
+    actor: 'admin@renu.com',
+    category: 'ORDERS'
+  });
+
+  saveStore();
+  return { order, refunded: wasRefunded, refundAmount };
 }
 
 // Task & Employee Helpers

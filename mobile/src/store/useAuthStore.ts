@@ -37,11 +37,26 @@ export const useAuthStore = create<AuthState>((set) => ({
   isLoggedIn: false,
 
   setSession: async (user, token) => {
-    // Ensure user_metadata exists for legacy screen access
+    let finalName = user.name;
+    let finalAvatar = user.avatarUrl;
+    if (user.email) {
+      try {
+        const savedProfileStr = await AsyncStorage.getItem(`@saved_profile_${user.email.toLowerCase()}`);
+        if (savedProfileStr) {
+          const saved = JSON.parse(savedProfileStr);
+          if (saved.name) finalName = saved.name;
+          if (saved.avatarUrl !== undefined) finalAvatar = saved.avatarUrl;
+        }
+      } catch (e) {}
+    }
+
     const enrichedUser: User = {
       ...user,
-      user_metadata: user.user_metadata || {
-        full_name: user.name,
+      name: finalName,
+      avatarUrl: finalAvatar,
+      user_metadata: {
+        ...user.user_metadata,
+        full_name: finalName,
         role: user.role,
         approvalStatus: user.approvalStatus
       }
@@ -62,8 +77,26 @@ export const useAuthStore = create<AuthState>((set) => ({
   updateUser: async (updates) => {
     set((state) => {
       if (!state.user) return state;
-      const newUser = { ...state.user, ...updates };
-      AsyncStorage.setItem('@auth_user', JSON.stringify(newUser)).catch(console.error);
+      const newUser = {
+        ...state.user,
+        ...updates,
+        user_metadata: {
+          ...state.user.user_metadata,
+          full_name: updates.name || state.user.name,
+          role: updates.role || state.user.role,
+          approvalStatus: updates.approvalStatus || state.user.approvalStatus
+        }
+      };
+
+      if (newUser.email) {
+        AsyncStorage.multiSet([
+          ['@auth_user', JSON.stringify(newUser)],
+          [`@saved_profile_${newUser.email.toLowerCase()}`, JSON.stringify({ name: newUser.name, avatarUrl: newUser.avatarUrl })]
+        ]).catch(console.error);
+      } else {
+        AsyncStorage.setItem('@auth_user', JSON.stringify(newUser)).catch(console.error);
+      }
+
       return { user: newUser, session: { user: newUser } };
     });
   },

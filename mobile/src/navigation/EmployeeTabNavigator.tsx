@@ -10,13 +10,15 @@ const { width } = Dimensions.get('window');
 
 import { EmployeeDashboardScreen } from '../screens/employee/EmployeeDashboardScreen';
 import { EmployeeTasksScreen } from '../screens/employee/EmployeeTasksScreen';
+import { RanchesScreen } from '../screens/RanchesScreen';
+import { MessagesScreen } from '../screens/MessagesScreen';
 
 const TabBarIcon = ({ name, isFocused, label }: { name: string, isFocused: boolean, label: string }) => {
   return (
     <View style={[styles.iconWrapper, isFocused && styles.activeIconWrapper]}>
       <MaterialCommunityIcons 
         name={name as any} 
-        size={24} 
+        size={22} 
         color={isFocused ? '#1F4E34' : '#6B7280'} 
       />
       <Text style={[styles.iconLabel, isFocused && styles.activeIconLabel]}>
@@ -50,6 +52,8 @@ const CustomTabBar = ({ state, descriptors, navigation }: any) => {
           let iconName = 'leaf';
           if (route.name === 'EmployeeHome') iconName = 'view-dashboard';
           if (route.name === 'Tasks') iconName = 'clipboard-check-outline';
+          if (route.name === 'Ranches') iconName = 'sprout';
+          if (route.name === 'Messages') iconName = 'message-outline';
           if (route.name === 'Profile') iconName = 'account-outline';
 
           return (
@@ -79,6 +83,8 @@ export const EmployeeTabNavigator = () => {
     >
       <Tab.Screen name="EmployeeHome" component={EmployeeDashboardScreen} options={{ title: 'Overview' }} />
       <Tab.Screen name="Tasks" component={EmployeeTasksScreen} options={{ title: 'Tasks' }} />
+      <Tab.Screen name="Ranches" component={RanchesScreen} options={{ title: 'Ranches' }} />
+      <Tab.Screen name="Messages" component={MessagesScreen} options={{ title: 'Messages' }} />
       <Tab.Screen name="Profile" component={AdminProfileScreen} options={{ title: 'Profile' }} />
     </Tab.Navigator>
   );

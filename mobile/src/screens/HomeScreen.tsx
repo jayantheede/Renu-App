@@ -7,7 +7,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { fetchGrowerDashboard } from '../api/client';
 import { ActivityIndicator } from 'react-native-paper';
 
-export const HomeScreen = () => {
+export const HomeScreen = ({ navigation }: any) => {
   const user = useAuthStore((state) => state.user);
   const session = useAuthStore((state) => state.session);
   const fullName = user?.name || session?.user?.name || session?.user?.user_metadata?.full_name || 'Grower';
@@ -248,16 +248,28 @@ export const HomeScreen = () => {
           {/* Quick Actions */}
           <Text style={styles.sectionTitle}>Quick actions</Text>
           <View style={styles.quickActionsContainer}>
-            <TouchableOpacity style={styles.quickActionButton}>
+            <TouchableOpacity
+              style={styles.quickActionButton}
+              activeOpacity={0.7}
+              onPress={() => navigation?.navigate('Orders')}
+            >
               <Text style={styles.quickActionText}>Reorder last delivery</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.quickActionButton}>
+            <TouchableOpacity
+              style={styles.quickActionButton}
+              activeOpacity={0.7}
+              onPress={() => navigation?.navigate('Shop')}
+            >
               <Text style={styles.quickActionText}>Request an order</Text>
             </TouchableOpacity>
           </View>
 
           {/* Message Us Button */}
-          <TouchableOpacity style={styles.messageUsButton}>
+          <TouchableOpacity
+            style={styles.messageUsButton}
+            activeOpacity={0.7}
+            onPress={() => navigation?.navigate('Messages')}
+          >
             <Text style={styles.messageUsText}>Message us</Text>
           </TouchableOpacity>
 

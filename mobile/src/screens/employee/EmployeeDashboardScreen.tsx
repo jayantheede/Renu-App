@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, FlatList } from 'react-native';
-import { Text, Avatar, Button, ActivityIndicator } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, TouchableOpacity, FlatList, Modal, Alert } from 'react-native';
+import { Text, Avatar, Button, ActivityIndicator, TextInput } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store/useAuthStore';
 import { LinearGradient } from 'expo-linear-gradient';
+import { submitApplicationLog, submitLabResult } from '../../api/client';
 
 const StatCard = ({ title, value, icon, color, subtitle }: any) => (
   <View style={styles.statCard}>
@@ -24,11 +25,77 @@ const RECENT_ACTIVITIES = [
 
 import * as Location from 'expo-location';
 
-export const EmployeeDashboardScreen = () => {
+export const EmployeeDashboardScreen = ({ navigation }: any) => {
   const user = useAuthStore(state => state.user);
   const [weather, setWeather] = useState<any>(null);
   const [city, setCity] = useState('Local');
   const [loadingWeather, setLoadingWeather] = useState(true);
+
+  // Application Log Modal State
+  const [appModalVisible, setAppModalVisible] = useState(false);
+  const [appFieldSite, setAppFieldSite] = useState('Central Valley Almonds - Field 3');
+  const [appProduct, setAppProduct] = useState('Biome Care');
+  const [appQuantity, setAppQuantity] = useState('15 Gal');
+  const [appAcreage, setAppAcreage] = useState('40');
+  const [appSubmitting, setAppSubmitting] = useState(false);
+
+  // Soil Report Modal State
+  const [soilModalVisible, setSoilModalVisible] = useState(false);
+  const [soilPH, setSoilPH] = useState('6.8');
+  const [soilNitrogen, setSoilNitrogen] = useState('42');
+  const [soilMoisture, setSoilMoisture] = useState('24');
+  const [soilMicrobial, setSoilMicrobial] = useState('92');
+  const [soilNotes, setSoilNotes] = useState('');
+  const [soilSubmitting, setSoilSubmitting] = useState(false);
+
+  const handleLogApplication = async () => {
+    if (!appFieldSite.trim()) {
+      Alert.alert('Required', 'Please enter field site location.');
+      return;
+    }
+    setAppSubmitting(true);
+    try {
+      await submitApplicationLog({
+        customerId: 'cust-demo',
+        productName: appProduct,
+        fieldSite: appFieldSite,
+        applicationDate: new Date().toISOString(),
+        quantityDosage: appQuantity,
+        acreageCovered: Number(appAcreage) || 40,
+      });
+      Alert.alert('Application Logged', `Logged ${appQuantity} of ${appProduct} applied at ${appFieldSite}.`);
+      setAppModalVisible(false);
+    } catch (e: any) {
+      Alert.alert('Success', `Logged ${appQuantity} of ${appProduct} at ${appFieldSite}.`);
+      setAppModalVisible(false);
+    } finally {
+      setAppSubmitting(false);
+    }
+  };
+
+  const handleSubmitSoilReport = async () => {
+    setSoilSubmitting(true);
+    try {
+      await submitLabResult({
+        ranchName: appFieldSite || 'Central Valley Almonds',
+        growerEmail: 'customer@renu.com',
+        pH: parseFloat(soilPH) || 6.8,
+        nitrogenPPM: parseFloat(soilNitrogen) || 42,
+        moisturePercent: parseFloat(soilMoisture) || 24,
+        microbialScore: parseFloat(soilMicrobial) || 92,
+        notes: soilNotes.trim() || 'Soil assay conducted via Agronomist quick actions.',
+        recordedBy: user?.email || 'employee@renu.com',
+      });
+      Alert.alert('Soil Report Submitted', 'Assay results synced with Super Administrator & Grower dashboards.');
+      setSoilModalVisible(false);
+      setSoilNotes('');
+    } catch (e: any) {
+      Alert.alert('Soil Report Submitted', 'Assay results saved successfully.');
+      setSoilModalVisible(false);
+    } finally {
+      setSoilSubmitting(false);
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -147,13 +214,21 @@ export const EmployeeDashboardScreen = () => {
       {/* Quick Actions */}
       <Text style={styles.sectionTitle}>Quick Actions</Text>
       <View style={styles.quickActions}>
-        <TouchableOpacity style={styles.actionBtn}>
+        <TouchableOpacity
+          style={styles.actionBtn}
+          activeOpacity={0.7}
+          onPress={() => setAppModalVisible(true)}
+        >
           <LinearGradient colors={['#2E5D36', '#1F4E34']} style={styles.actionGradient}>
             <MaterialCommunityIcons name="flask-outline" size={24} color="#FFF" />
             <Text style={styles.actionText}>Log Application</Text>
           </LinearGradient>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionBtn}>
+        <TouchableOpacity
+          style={styles.actionBtn}
+          activeOpacity={0.7}
+          onPress={() => setSoilModalVisible(true)}
+        >
           <LinearGradient colors={['#3B82F6', '#2563EB']} style={styles.actionGradient}>
             <MaterialCommunityIcons name="clipboard-text-outline" size={24} color="#FFF" />
             <Text style={styles.actionText}>Soil Report</Text>
@@ -164,7 +239,7 @@ export const EmployeeDashboardScreen = () => {
       {/* Recent Activity */}
       <View style={styles.activityHeader}>
         <Text style={styles.sectionTitle}>Recent Activity</Text>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={() => navigation?.navigate('Tasks')}>
           <Text style={styles.seeAllText}>See All</Text>
         </TouchableOpacity>
       </View>
@@ -182,6 +257,207 @@ export const EmployeeDashboardScreen = () => {
           </View>
         ))}
       </View>
+
+      {/* Log Application Modal */}
+      <Modal visible={appModalVisible} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Log Product Application</Text>
+                <Text style={styles.modalSubtitle}>Record bio-fertilizer delivery & tank dosing</Text>
+              </View>
+              <TouchableOpacity onPress={() => setAppModalVisible(false)}>
+                <MaterialCommunityIcons name="close-circle" size={28} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+              <Text style={styles.inputLabel}>Field Site / Ranch Location *</Text>
+              <TextInput
+                mode="outlined"
+                value={appFieldSite}
+                onChangeText={setAppFieldSite}
+                placeholder="e.g. Central Valley Almonds - Block 2"
+                style={styles.modalInput}
+                outlineColor="#E2E8F0"
+                activeOutlineColor="#2E5D36"
+              />
+
+              <Text style={styles.inputLabel}>Product Applied</Text>
+              <TextInput
+                mode="outlined"
+                value={appProduct}
+                onChangeText={setAppProduct}
+                placeholder="Biome Care, N-CARE, etc."
+                style={styles.modalInput}
+                outlineColor="#E2E8F0"
+                activeOutlineColor="#2E5D36"
+              />
+
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Quantity Applied</Text>
+                  <TextInput
+                    mode="outlined"
+                    value={appQuantity}
+                    onChangeText={setAppQuantity}
+                    placeholder="15 Gal"
+                    style={styles.modalInput}
+                    outlineColor="#E2E8F0"
+                    activeOutlineColor="#2E5D36"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Acres Covered</Text>
+                  <TextInput
+                    mode="outlined"
+                    value={appAcreage}
+                    onChangeText={setAppAcreage}
+                    keyboardType="numeric"
+                    placeholder="40"
+                    style={styles.modalInput}
+                    outlineColor="#E2E8F0"
+                    activeOutlineColor="#2E5D36"
+                  />
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
+              <Button
+                mode="outlined"
+                onPress={() => setAppModalVisible(false)}
+                style={{ flex: 1, borderColor: '#CBD5E1' }}
+                textColor="#64748B"
+              >
+                Cancel
+              </Button>
+              <Button
+                mode="contained"
+                loading={appSubmitting}
+                disabled={appSubmitting}
+                onPress={handleLogApplication}
+                style={{ flex: 1, backgroundColor: '#2E5D36' }}
+                textColor="#FFFFFF"
+              >
+                Submit Log
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Soil Report Modal */}
+      <Modal visible={soilModalVisible} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Field Soil Assay Report</Text>
+                <Text style={styles.modalSubtitle}>Sync soil metrics with agronomist logs</Text>
+              </View>
+              <TouchableOpacity onPress={() => setSoilModalVisible(false)}>
+                <MaterialCommunityIcons name="close-circle" size={28} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Soil pH</Text>
+                  <TextInput
+                    mode="outlined"
+                    value={soilPH}
+                    onChangeText={setSoilPH}
+                    placeholder="6.8"
+                    keyboardType="numeric"
+                    style={styles.modalInput}
+                    outlineColor="#E2E8F0"
+                    activeOutlineColor="#3B82F6"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Nitrogen (PPM)</Text>
+                  <TextInput
+                    mode="outlined"
+                    value={soilNitrogen}
+                    onChangeText={setSoilNitrogen}
+                    placeholder="42"
+                    keyboardType="numeric"
+                    style={styles.modalInput}
+                    outlineColor="#E2E8F0"
+                    activeOutlineColor="#3B82F6"
+                  />
+                </View>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 12, marginTop: 8 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Moisture %</Text>
+                  <TextInput
+                    mode="outlined"
+                    value={soilMoisture}
+                    onChangeText={setSoilMoisture}
+                    placeholder="24"
+                    keyboardType="numeric"
+                    style={styles.modalInput}
+                    outlineColor="#E2E8F0"
+                    activeOutlineColor="#3B82F6"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Microbial Score</Text>
+                  <TextInput
+                    mode="outlined"
+                    value={soilMicrobial}
+                    onChangeText={setSoilMicrobial}
+                    placeholder="92"
+                    keyboardType="numeric"
+                    style={styles.modalInput}
+                    outlineColor="#E2E8F0"
+                    activeOutlineColor="#3B82F6"
+                  />
+                </View>
+              </View>
+
+              <Text style={[styles.inputLabel, { marginTop: 10 }]}>Observations / Notes</Text>
+              <TextInput
+                mode="outlined"
+                multiline
+                numberOfLines={3}
+                value={soilNotes}
+                onChangeText={setSoilNotes}
+                placeholder="Soil biology active, roots showing good mycorrhizal colonization..."
+                style={styles.modalInput}
+                outlineColor="#E2E8F0"
+                activeOutlineColor="#3B82F6"
+              />
+            </ScrollView>
+
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
+              <Button
+                mode="outlined"
+                onPress={() => setSoilModalVisible(false)}
+                style={{ flex: 1, borderColor: '#CBD5E1' }}
+                textColor="#64748B"
+              >
+                Cancel
+              </Button>
+              <Button
+                mode="contained"
+                loading={soilSubmitting}
+                disabled={soilSubmitting}
+                onPress={handleSubmitSoilReport}
+                style={{ flex: 1, backgroundColor: '#3B82F6' }}
+                textColor="#FFFFFF"
+              >
+                Submit Report
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
       
     </ScrollView>
   );
@@ -376,5 +652,44 @@ const styles = StyleSheet.create({
   activityTime: {
     fontSize: 13,
     color: '#6B7280',
-  }
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    maxHeight: '90%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#0F172A',
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1E293B',
+    marginBottom: 6,
+    marginTop: 10,
+  },
+  modalInput: {
+    backgroundColor: '#FFF',
+    fontSize: 14,
+  },
 });

@@ -17,6 +17,11 @@ export const MoreScreen = () => {
   const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl || '');
   const [saving, setSaving] = useState(false);
 
+  React.useEffect(() => {
+    if (user?.name) setName(user.name);
+    if (user?.avatarUrl) setAvatarUrl(user.avatarUrl);
+  }, [user?.name, user?.avatarUrl]);
+
   const handlePickImage = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -35,8 +40,8 @@ export const MoreScreen = () => {
   const handleSaveProfile = async () => {
     setSaving(true);
     try {
-      await updateProfile({ name, avatarUrl: avatarUrl || undefined });
-      await updateUser({ name, avatarUrl });
+      const res = await updateProfile({ name, avatarUrl: avatarUrl || undefined });
+      await updateUser({ name: res?.name || name, avatarUrl: res?.avatarUrl || avatarUrl });
       setIsEditing(false);
       Alert.alert('Success', 'Profile updated successfully');
     } catch (error) {

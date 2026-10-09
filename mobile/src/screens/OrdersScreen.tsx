@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, ActivityIndicator, Modal, TouchableOpacity, Alert, Share, Platform } from 'react-native';
+import { View, StyleSheet, FlatList, ActivityIndicator, Modal, TouchableOpacity, Alert, Share, Platform, ScrollView } from 'react-native';
 import { Text, Card, Button, Chip, TextInput } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { fetchOrders as fetchOrdersApi, payOrder, exportData, importData } from '../api/client';
+import { fetchOrders as fetchOrdersApi, payOrder, cancelOrder, exportData, importData } from '../api/client';
 
 export const OrdersScreen = () => {
   const [orders, setOrders] = useState<any[]>([]);
@@ -12,6 +12,12 @@ export const OrdersScreen = () => {
   // Tracking Modal State
   const [trackingModalVisible, setTrackingModalVisible] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
+
+  // Cancel Modal State
+  const [cancelModalVisible, setCancelModalVisible] = useState(false);
+  const [orderToCancel, setOrderToCancel] = useState<any>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelLoading, setCancelLoading] = useState(false);
 
   // Import Modal State
   const [importModalVisible, setImportModalVisible] = useState(false);
@@ -59,6 +65,38 @@ export const OrdersScreen = () => {
   const openTrackingModal = (order: any) => {
     setSelectedOrder(order);
     setTrackingModalVisible(true);
+  };
+
+  const openCancelModal = (order: any) => {
+    setOrderToCancel(order);
+    setCancelReason('');
+    setCancelModalVisible(true);
+  };
+
+  const handleCancelOrder = async () => {
+    if (!orderToCancel) return;
+    if (!cancelReason.trim()) {
+      Alert.alert('Comment Required', 'Please enter a cancellation reason or comment before proceeding.');
+      return;
+    }
+    setCancelLoading(true);
+    try {
+      const res = await cancelOrder(orderToCancel.id, cancelReason.trim());
+      Alert.alert(
+        'Order Cancelled',
+        res.refunded
+          ? `Order #${orderToCancel.orderId} cancelled. Refund of $${res.refundAmount?.toLocaleString()} initiated successfully.`
+          : `Order #${orderToCancel.orderId} has been cancelled.`
+      );
+      setCancelModalVisible(false);
+      setOrderToCancel(null);
+      setCancelReason('');
+      fetchOrders();
+    } catch (e: any) {
+      Alert.alert('Cancellation Error', e.message || 'Failed to cancel order');
+    } finally {
+      setCancelLoading(false);
+    }
   };
 
   const handleDuplicate = (order: any) => {
@@ -141,6 +179,8 @@ export const OrdersScreen = () => {
         return { bg: '#F3E8FF', color: '#7E22CE', label: 'Dispatched' };
       case 'DELIVERED':
         return { bg: '#E0F2FE', color: '#0369A1', label: 'Delivered' };
+      case 'CANCELLED':
+        return { bg: '#FEE2E2', color: '#DC2626', label: 'Order Cancelled' };
       default:
         return { bg: '#F1F5F9', color: '#475569', label: status };
     }
@@ -184,6 +224,29 @@ export const OrdersScreen = () => {
             </Text>
           </View>
 
+          {/* Cancellation Info Box */}
+          {item.status === 'CANCELLED' && (
+            <View style={styles.cancelledBox}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                <MaterialCommunityIcons name="cancel" size={18} color="#DC2626" style={{ marginRight: 6 }} />
+                <Text style={{ fontWeight: 'bold', color: '#DC2626', fontSize: 13 }}>Order Cancelled</Text>
+              </View>
+              {item.cancelReason && (
+                <Text style={{ fontSize: 13, color: '#334155', marginBottom: 4 }}>
+                  <Text style={{ fontWeight: '600' }}>Reason: </Text>
+                  {item.cancelReason}
+                </Text>
+              )}
+              {item.refundAmount !== undefined && (
+                <Text style={{ fontSize: 13, color: item.refundAmount > 0 ? '#15803D' : '#64748B', fontWeight: '600' }}>
+                  {item.refundAmount > 0
+                    ? `✓ Refund of $${item.refundAmount.toLocaleString()} Processed`
+                    : 'No payment collected (No refund needed)'}
+                </Text>
+              )}
+            </View>
+          )}
+
           {/* Pay Invoice Button if Order Accepted */}
           {isAwaitingPay && (
             <Button
@@ -218,6 +281,17 @@ export const OrdersScreen = () => {
             >
               Reorder
             </Button>
+            {item.status !== 'CANCELLED' && item.status !== 'DELIVERED' && (
+              <Button
+                mode="outlined"
+                icon="close-circle-outline"
+                onPress={() => openCancelModal(item)}
+                textColor="#DC2626"
+                style={styles.cancelBtn}
+              >
+                Cancel
+              </Button>
+            )}
           </View>
         </Card.Content>
       </Card>
@@ -427,6 +501,88 @@ export const OrdersScreen = () => {
               </Button>
               <Button mode="contained" onPress={handleImportOrders} style={{ flex: 1, backgroundColor: '#2E5D36' }}>
                 Import
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Cancel Order Modal with Reason and Refund Confirmation */}
+      <Modal visible={cancelModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalSheetTitle}>Cancel Order</Text>
+                <Text style={styles.modalSubtitle}>Order #{orderToCancel?.orderId || orderToCancel?.orderNumber} • {orderToCancel?.product}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setCancelModalVisible(false)}>
+                <MaterialCommunityIcons name="close-circle" size={28} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+              {/* Refund Notice Box */}
+              {orderToCancel?.status === 'PAID' || orderToCancel?.status === 'DISPATCHED' ? (
+                <View style={[styles.infoBanner, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}>
+                  <MaterialCommunityIcons name="cash-refund" size={22} color="#15803D" style={{ marginRight: 8 }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontWeight: 'bold', color: '#15803D', fontSize: 14 }}>
+                      Automatic Refund of ${(orderToCancel?.amt || orderToCancel?.totalAmount)?.toLocaleString()}
+                    </Text>
+                    <Text style={{ color: '#166534', fontSize: 12, marginTop: 2 }}>
+                      Payment was completed for this order. Cancelling will automatically process a refund back to your payment method.
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <View style={[styles.infoBanner, { backgroundColor: '#F1F5F9', borderColor: '#CBD5E1' }]}>
+                  <MaterialCommunityIcons name="information" size={22} color="#475569" style={{ marginRight: 8 }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontWeight: 'bold', color: '#334155', fontSize: 14 }}>
+                      No Payment Collected
+                    </Text>
+                    <Text style={{ color: '#64748B', fontSize: 12, marginTop: 2 }}>
+                      This order has not been paid yet. Cancelling will close the order with no charges or refund required.
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              <Text style={{ fontSize: 14, fontWeight: '600', color: '#1E293B', marginTop: 16, marginBottom: 6 }}>
+                Cancellation Reason / Comment *
+              </Text>
+              <TextInput
+                mode="outlined"
+                multiline
+                numberOfLines={3}
+                placeholder="Reason for cancellation (e.g. Changed application schedule, ordered wrong item)..."
+                value={cancelReason}
+                onChangeText={setCancelReason}
+                outlineColor="#CBD5E1"
+                activeOutlineColor="#DC2626"
+                style={{ backgroundColor: '#FFF', fontSize: 14 }}
+              />
+            </ScrollView>
+
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 20 }}>
+              <Button
+                mode="outlined"
+                onPress={() => setCancelModalVisible(false)}
+                style={{ flex: 1, borderColor: '#CBD5E1' }}
+                textColor="#64748B"
+              >
+                Keep Order
+              </Button>
+              <Button
+                mode="contained"
+                loading={cancelLoading}
+                disabled={cancelLoading}
+                onPress={handleCancelOrder}
+                style={{ flex: 1, backgroundColor: '#DC2626' }}
+                textColor="#FFFFFF"
+              >
+                Confirm Cancel
               </Button>
             </View>
           </View>
@@ -667,5 +823,29 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 10,
     marginTop: 10,
+  },
+  cancelledBox: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  cancelBtn: {
+    flex: 0.8,
+    borderRadius: 8,
+    borderColor: '#DC2626',
+    borderWidth: 1.5,
+    backgroundColor: '#FEF2F2',
+  },
+  infoBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 8,
   },
 });

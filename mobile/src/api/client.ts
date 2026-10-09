@@ -125,6 +125,9 @@ export const acceptAdminOrder = (id: string) => apiClient(`/app/admin/orders/${i
 export const acceptOrderAndEmail = (id: string) => apiClient(`/app/admin/orders/${id}/accept-and-email`, { method: 'POST' });
 export const payOrder = (id: string) => apiClient(`/app/orders/${id}/pay`, { method: 'POST' });
 export const updateOrderTracking = (id: string, status: string, step: number) => apiClient(`/app/admin/orders/${id}/tracking`, { method: 'PUT', body: JSON.stringify({ status, step }) });
+export const fetchAdminOrders = () => apiClient('/app/admin/orders');
+export const cancelOrder = (id: string, reason: string) => apiClient(`/app/orders/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) });
+export const submitApplicationLog = (data: any) => apiClient('/app/utilization', { method: 'POST', body: JSON.stringify(data) });
 
 export const submitProduct = (data: any) => apiClient('/app/admin/products', { method: 'POST', body: JSON.stringify(data) });
 export const updateProduct = (id: string, data: any) => apiClient(`/app/admin/products/${id}`, { method: 'PUT', body: JSON.stringify(data) });
