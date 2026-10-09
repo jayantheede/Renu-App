@@ -1,0 +1,4 @@
+
+> mobile@1.0.0 test
+> jest __tests__/App.test.tsx
+
