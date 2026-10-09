@@ -6,6 +6,7 @@ import { useAuthStore } from '../../store/useAuthStore';
 
 export const SignUpScreen = ({ navigation }: any) => {
   const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [harvestStages, setHarvestStages] = useState<string[]>(['Pre Harvest', 'Harvest']);
@@ -17,8 +18,8 @@ export const SignUpScreen = ({ navigation }: any) => {
   const BACKEND_URL = (process.env.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
 
   const handleSignUp = async () => {
-    if (!name || !email || !password) {
-      Alert.alert('Missing Fields', 'Please fill out all fields before signing up.');
+    if (!name || !username || !email || !password) {
+      Alert.alert('Missing Fields', 'Please fill out all fields including your username before signing up.');
       return;
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -65,7 +66,7 @@ export const SignUpScreen = ({ navigation }: any) => {
       const res = await fetch(`${BACKEND_URL}/api/auth/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, otp: otpCode, password, name, harvestStages })
+        body: JSON.stringify({ email, otp: otpCode, password, name, username, harvestStages })
       });
       
       const data = await res.json().catch(() => null);
@@ -134,6 +135,19 @@ export const SignUpScreen = ({ navigation }: any) => {
                   outlineColor="#2E5D36"
                   activeOutlineColor="#2E5D36"
                   textColor="#333333"
+                  theme={{ colors: { background: '#FFFFFF', onSurfaceVariant: '#2E5D36' } }}
+                />
+                <TextInput
+                  label="Username"
+                  value={username}
+                  onChangeText={setUsername}
+                  autoCapitalize="none"
+                  style={styles.input}
+                  mode="outlined"
+                  outlineColor="#2E5D36"
+                  activeOutlineColor="#2E5D36"
+                  textColor="#333333"
+                  left={<TextInput.Affix text="@" />}
                   theme={{ colors: { background: '#FFFFFF', onSurfaceVariant: '#2E5D36' } }}
                 />
                 <TextInput

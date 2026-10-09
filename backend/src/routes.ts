@@ -17,7 +17,7 @@ router.get('/profile', async (req: AuthenticatedRequest, res) => {
 });
 
 import { mockAvatars } from './index';
-import { mockRanches, mockTanks, mockUsers, mockOrdersList, mockInvoices, updateCustomerApprovalStatus, updateCustomerDetails, mockPlatformSettings, mockAuditLogs, addAuditLog, mockProducts, saveStore, syncStoreFromDB } from './usersStore';
+import { mockRanches, mockTanks, mockUsers, mockOrdersList, mockInvoices, updateCustomerApprovalStatus, updateCustomerDetails, mockPlatformSettings, mockAuditLogs, addAuditLog, mockProducts, mockMessages, saveStore, syncStoreFromDB } from './usersStore';
 
 router.put('/profile', async (req: AuthenticatedRequest, res) => {
   try {
@@ -71,8 +71,14 @@ router.get('/admin/dashboard', async (req, res) => res.json({ role: 'Super Admin
 
 router.get('/ranches', async (req: AuthenticatedRequest, res) => {
   await syncStoreFromDB();
-  if (req.user!.id.startsWith('mock-')) {
-    return res.json(mockRanches.map(r => ({ ...r, tankSetups: mockTanks.filter(t => t.ranchId === r.id) })));
+  const user = req.user!;
+  if (user.id.startsWith('mock-')) {
+    let ranches = mockRanches.map(r => ({ ...r, tankSetups: mockTanks.filter(t => t.ranchId === r.id) }));
+    // Employees only see ranches assigned to them
+    if (user.role === 'employee') {
+      ranches = ranches.filter(r => r.assignedEmpEmail === user.email || !r.assignedEmpEmail);
+    }
+    return res.json(ranches);
   }
   try {
     const ranches = await prisma.ranch.findMany({ include: { tankSetups: true } });
@@ -106,17 +112,33 @@ router.post('/ranches', async (req: AuthenticatedRequest, res) => {
 
 router.post('/tank-setups', async (req: AuthenticatedRequest, res) => {
   try {
-    const { ranchId, capacity, location } = req.body;
+    const { ranchId, capacity, location, pinX, pinY } = req.body;
     
     if (req.user!.id.startsWith('mock-')) {
-      const newTank = { id: `mock-tank-${Date.now()}`, ranchId, capacity, location, approvalStatus: 'PENDING' };
+      const newTank = {
+        id: `mock-tank-${Date.now()}`,
+        ranchId,
+        capacity: parseInt(capacity) || 1000,
+        location: location || 'Field Station',
+        approvalStatus: 'APPROVED',
+        pinX: pinX !== undefined ? pinX : 50,
+        pinY: pinY !== undefined ? pinY : 50,
+        level: '82%',
+        pressure: '45 PSI'
+      };
       mockTanks.push(newTank);
+      // Also update the ranch's tankSetups in mockRanches
+      const ranchIdx = mockRanches.findIndex(r => r.id === ranchId);
+      if (ranchIdx >= 0) {
+        if (!mockRanches[ranchIdx].tankSetups) mockRanches[ranchIdx].tankSetups = [];
+        mockRanches[ranchIdx].tankSetups!.push(newTank);
+      }
       saveStore();
       return res.json(newTank);
     }
 
     const tank = await prisma.tankSetup.create({
-      data: { ranchId, capacity, location, approvalStatus: 'PENDING' }
+      data: { ranchId, capacity: parseInt(capacity) || 1000, location, approvalStatus: 'APPROVED' }
     });
     res.json(tank);
   } catch(e) { res.status(500).json({ error: 'Failed to create tank setup' }); }
@@ -184,11 +206,37 @@ router.get('/invoices', async (req: AuthenticatedRequest, res) => {
 });
 
 router.get('/messages', async (req: AuthenticatedRequest, res) => {
-  if (req.user!.id.startsWith('mock-')) return res.json([]);
+  // Always return mock messages (real DB integration pending)
   try {
-    const messages = await prisma.message.findMany();
-    res.json(messages);
-  } catch (error) { res.status(500).json({ error: 'Failed' }); }
+    const dbMessages = await prisma.message.findMany({ orderBy: { createdAt: 'desc' } });
+    if (dbMessages && dbMessages.length > 0) {
+      return res.json(dbMessages);
+    }
+  } catch (error) {
+    // Fall through to mock data
+  }
+  res.json(mockMessages);
+});
+
+router.post('/messages', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { title, body, toEmail } = req.body;
+    if (!title || !body) return res.status(400).json({ error: 'Title and body are required' });
+    const newMsg = {
+      id: `msg-${Date.now()}`,
+      title: title.trim(),
+      sub: body.trim(),
+      when: 'Just now',
+      dot: 'true',
+      fromEmail: req.user?.email || 'user@renu.com',
+      toEmail: toEmail || 'admin@renu.com',
+      type: 'USER'
+    };
+    mockMessages.unshift(newMsg as any);
+    res.json({ success: true, message: newMsg });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to send message' });
+  }
 });
 
 router.get('/products', async (req: AuthenticatedRequest, res) => {

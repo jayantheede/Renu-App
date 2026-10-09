@@ -112,6 +112,8 @@ export const fetchOrders = () => apiClient('/app/orders');
 export const submitOrder = (data: any) => apiClient('/app/orders', { method: 'POST', body: JSON.stringify(data) });
 
 export const fetchMessages = () => apiClient('/app/messages');
+export const sendMessage = (data: { title: string; body: string; toEmail?: string }) =>
+  apiClient('/app/messages', { method: 'POST', body: JSON.stringify(data) });
 export const fetchProducts = () => apiClient('/app/products');
 
 // Admin Methods

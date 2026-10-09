@@ -496,6 +496,65 @@ export function addAdminNotification(notif: Omit<AdminNotification, 'id' | 'time
   saveStore();
 }
 
+export interface AppMessage {
+  id: string;
+  title: string;
+  sub: string;
+  when: string;
+  dot: string;
+  fromEmail?: string;
+  toEmail?: string;
+  type?: string;
+}
+
+export const mockMessages: AppMessage[] = [
+  {
+    id: 'msg-1',
+    title: 'Soil Health Report Ready',
+    sub: 'Your Q4 microbial analysis for Sierra Foothills Ranch is ready for review.',
+    when: '2h ago',
+    dot: 'true',
+    fromEmail: 'employee@renu.com',
+    type: 'REPORT'
+  },
+  {
+    id: 'msg-2',
+    title: 'Order #ORD-1099 Accepted',
+    sub: 'Your Biome Care order has been reviewed. Payment link sent to your email.',
+    when: '5h ago',
+    dot: 'true',
+    fromEmail: 'admin@renu.com',
+    type: 'ORDER'
+  },
+  {
+    id: 'msg-3',
+    title: 'Tank Telemetry Alert',
+    sub: 'North Injection Valve (Valley Green Ranch) fill level dropped to 18%. Schedule refill.',
+    when: '1d ago',
+    dot: 'false',
+    fromEmail: 'system@renu.com',
+    type: 'ALERT'
+  },
+  {
+    id: 'msg-4',
+    title: 'Application Schedule Reminder',
+    sub: 'Scheduled Biome Care application at Central Valley Almonds — tomorrow at 7AM.',
+    when: '2d ago',
+    dot: 'false',
+    fromEmail: 'employee@renu.com',
+    type: 'REMINDER'
+  },
+  {
+    id: 'msg-5',
+    title: 'Invoice #INV-2026-001 Generated',
+    sub: 'Your invoice for N-CARE (25 Gal) is available. Total: $6,250.',
+    when: '3d ago',
+    dot: 'false',
+    fromEmail: 'admin@renu.com',
+    type: 'INVOICE'
+  }
+];
+
 
 export interface PlatformSettings {
   maintenanceMode: boolean;

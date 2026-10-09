@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -10,7 +10,9 @@ import {
   Image,
   Share,
   Platform,
-  Switch
+  Switch,
+  PanResponder,
+  Animated,
 } from 'react-native';
 import { Text, TextInput, Button, Chip, Card, Divider, ActivityIndicator } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -19,12 +21,91 @@ import { fetchRanches as fetchRanchesApi, submitRanch, submitTankSetup, toggleRa
 import { useAuthStore } from '../store/useAuthStore';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
+const MAP_HEIGHT = 280;
+const MAP_WIDTH = SCREEN_WIDTH - 40;
 
 const DEFAULT_RANCH_IMAGES = [
   'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800&auto=format&fit=crop',
   'https://images.unsplash.com/photo-1592417817098-8f3d6910985c?w=800&auto=format&fit=crop',
   'https://images.unsplash.com/photo-1574943320219-553eb213f72d?w=800&auto=format&fit=crop'
 ];
+
+// ---- Draggable Tank Pin Component ----
+const DraggableTankPin = ({
+  tank,
+  index,
+  isSelected,
+  onSelect,
+  onDragEnd,
+  mapWidth,
+  mapHeight,
+}: {
+  tank: any;
+  index: number;
+  isSelected: boolean;
+  onSelect: () => void;
+  onDragEnd: (x: number, y: number) => void;
+  mapWidth: number;
+  mapHeight: number;
+}) => {
+  const pinX = ((tank.pinX || (30 + index * 35)) / 100) * mapWidth;
+  const pinY = ((tank.pinY || (40 + index * 25)) / 100) * mapHeight;
+
+  const pan = useRef(new Animated.ValueXY({ x: pinX - 16, y: pinY - 16 })).current;
+  const isDragging = useRef(false);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        pan.setOffset({ x: (pan.x as any)._value, y: (pan.y as any)._value });
+        pan.setValue({ x: 0, y: 0 });
+        isDragging.current = false;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (Math.abs(gestureState.dx) > 4 || Math.abs(gestureState.dy) > 4) {
+          isDragging.current = true;
+        }
+        Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false })(_, gestureState);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        pan.flattenOffset();
+        const rawX = (pan.x as any)._value + 16;
+        const rawY = (pan.y as any)._value + 16;
+        const clampedX = Math.max(0, Math.min(mapWidth, rawX));
+        const clampedY = Math.max(0, Math.min(mapHeight, rawY));
+
+        if (isDragging.current) {
+          const pctX = Math.round((clampedX / mapWidth) * 100);
+          const pctY = Math.round((clampedY / mapHeight) * 100);
+          onDragEnd(pctX, pctY);
+        } else {
+          onSelect();
+        }
+        isDragging.current = false;
+      },
+    })
+  ).current;
+
+  return (
+    <Animated.View
+      {...panResponder.panHandlers}
+      style={[
+        styles.pinMarker,
+        isSelected && styles.pinMarkerActive,
+        { transform: [{ translateX: pan.x }, { translateY: pan.y }] },
+      ]}
+    >
+      <MaterialCommunityIcons name="water-pump" size={18} color="#FFFFFF" />
+      <View style={styles.pinCallout}>
+        <Text style={styles.pinCalloutText} numberOfLines={1}>
+          {tank.location ? tank.location.substring(0, 14) : `Tank ${index + 1}`}
+        </Text>
+      </View>
+    </Animated.View>
+  );
+};
 
 export const RanchesScreen = () => {
   const user = useAuthStore(state => state.user);
@@ -48,13 +129,20 @@ export const RanchesScreen = () => {
   const [tankCapacity, setTankCapacity] = useState('1000');
   const [tankLocationName, setTankLocationName] = useState('North Station');
   const [pendingPinCoords, setPendingPinCoords] = useState<{ x: number; y: number } | null>(null);
+  const [addingTank, setAddingTank] = useState(false);
 
   // Selected Pin Telemetry Drawer State
   const [selectedPinTank, setSelectedPinTank] = useState<any>(null);
 
+  // Drag hint state
+  const [dragHintVisible, setDragHintVisible] = useState(true);
+
   // Import Modal State
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [importJsonText, setImportJsonText] = useState('');
+
+  // Local tank positions for drag state (keyed by tank id)
+  const [tankPositions, setTankPositions] = useState<Record<string, { x: number; y: number }>>({});
 
   const loadRanches = async () => {
     setLoading(true);
@@ -158,17 +246,17 @@ export const RanchesScreen = () => {
 
   const handleMapPress = (evt: any) => {
     const { locationX, locationY } = evt.nativeEvent;
-    // Map container height is 260
-    const xPct = Math.round((locationX / (SCREEN_WIDTH - 40)) * 100);
-    const yPct = Math.round((locationY / 260) * 100);
+    const xPct = Math.round((locationX / MAP_WIDTH) * 100);
+    const yPct = Math.round((locationY / MAP_HEIGHT) * 100);
     setPendingPinCoords({ x: Math.max(5, Math.min(95, xPct)), y: Math.max(5, Math.min(95, yPct)) });
     setAddTankModalVisible(true);
   };
 
   const handleAddTankPin = async () => {
     if (!selectedRanch) return;
+    setAddingTank(true);
     try {
-      await submitTankSetup({
+      const newTank = await submitTankSetup({
         ranchId: selectedRanch.id,
         capacity: parseInt(tankCapacity) || 1000,
         location: tankLocationName.trim() || 'Field Station',
@@ -176,13 +264,27 @@ export const RanchesScreen = () => {
         pinY: pendingPinCoords?.y || 50
       });
 
-      Alert.alert('Tank Pinned', `Tank setup mapped at coordinates (${pendingPinCoords?.x}%, ${pendingPinCoords?.y}%)`);
+      Alert.alert('Tank Added ✓', `"${tankLocationName}" pinned to the map successfully.`);
       setAddTankModalVisible(false);
       setPendingPinCoords(null);
+      setTankCapacity('1000');
+      setTankLocationName('North Station');
       await loadRanches();
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to save tank pin');
+    } finally {
+      setAddingTank(false);
     }
+  };
+
+  const handleTankDragEnd = (tank: any, xPct: number, yPct: number) => {
+    // Update local position state for immediate feedback
+    setTankPositions(prev => ({ ...prev, [tank.id]: { x: xPct, y: yPct } }));
+    Alert.alert(
+      'Tank Relocated',
+      `"${tank.location || 'Tank'}" moved to position (${xPct}%, ${yPct}%).\n\nDrag to reposition anytime.`,
+      [{ text: 'OK' }]
+    );
   };
 
   const handleExportRanches = async () => {
@@ -224,15 +326,24 @@ export const RanchesScreen = () => {
   // ---------------------------------
   if (viewMode === 'map' && selectedRanch) {
     const ranchImage = selectedRanch.imageUrl || DEFAULT_RANCH_IMAGES[0];
-    const tanks = selectedRanch.tankSetups || [
-      { id: 't1', capacity: 1000, location: 'North Injection Valve', pinX: 30, pinY: 40, level: '82%', pressure: '45 PSI' },
-      { id: 't2', capacity: 500, location: 'South Field Tank 2', pinX: 70, pinY: 65, level: '64%', pressure: '38 PSI' }
-    ];
+    const tanks: any[] = selectedRanch.tankSetups && selectedRanch.tankSetups.length > 0
+      ? selectedRanch.tankSetups
+      : [
+        { id: 't1', capacity: 1000, location: 'North Injection Valve', pinX: 30, pinY: 40, level: '82%', pressure: '45 PSI' },
+        { id: 't2', capacity: 500, location: 'South Field Tank 2', pinX: 70, pinY: 65, level: '64%', pressure: '38 PSI' }
+      ];
+
+    // Merge drag overrides
+    const resolvedTanks = tanks.map(t => ({
+      ...t,
+      pinX: tankPositions[t.id]?.x ?? t.pinX,
+      pinY: tankPositions[t.id]?.y ?? t.pinY,
+    }));
 
     return (
       <View style={styles.container}>
         <View style={styles.mapHeader}>
-          <TouchableOpacity onPress={() => setViewMode('list')} style={styles.backBtn}>
+          <TouchableOpacity onPress={() => { setViewMode('list'); setDragHintVisible(true); }} style={styles.backBtn}>
             <MaterialCommunityIcons name="arrow-left" size={24} color="#0F172A" />
           </TouchableOpacity>
           <View style={{ flex: 1, marginLeft: 12 }}>
@@ -254,42 +365,48 @@ export const RanchesScreen = () => {
         </View>
 
         <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
-          {/* Interactive Ranch Canvas Container */}
+          {/* Drag hint banner */}
+          {dragHintVisible && (
+            <TouchableOpacity
+              onPress={() => setDragHintVisible(false)}
+              style={styles.dragHintBanner}
+            >
+              <MaterialCommunityIcons name="gesture-tap-hold" size={18} color="#7C3AED" />
+              <Text style={styles.dragHintText}>💡 Tap the aerial map to drop a tank pin. Drag existing pins to reposition them.</Text>
+              <MaterialCommunityIcons name="close" size={16} color="#7C3AED" />
+            </TouchableOpacity>
+          )}
+
           <Text style={styles.canvasInstruction}>
-            Tap anywhere on the aerial photo to drop or relocate tank injection pins:
+            Tap map to add tank • Drag pin markers to reposition:
           </Text>
 
-          <TouchableOpacity
-            activeOpacity={0.95}
-            onPress={handleMapPress}
-            style={styles.canvasWrapper}
-          >
-            <Image source={{ uri: ranchImage }} style={styles.canvasImage} resizeMode="cover" />
+          {/* Interactive Ranch Canvas Container */}
+          <View style={styles.canvasWrapper}>
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={handleMapPress}
+              style={{ width: '100%', height: '100%' }}
+            >
+              <Image source={{ uri: ranchImage }} style={styles.canvasImage} resizeMode="cover" />
+              {/* Semi-transparent grid overlay */}
+              <View style={styles.canvasGridOverlay} />
+            </TouchableOpacity>
 
-            {/* Render Mapped Tank Pins */}
-            {tanks.map((tank: any, index: number) => {
-              const posX = `${tank.pinX || (30 + index * 35)}%` as any;
-              const posY = `${tank.pinY || (40 + index * 25)}%` as any;
-              const isSelected = selectedPinTank?.id === tank.id;
-
-              return (
-                <TouchableOpacity
-                  key={tank.id || index}
-                  onPress={() => setSelectedPinTank(tank)}
-                  style={[
-                    styles.pinMarker,
-                    { left: posX, top: posY },
-                    isSelected && styles.pinMarkerActive
-                  ]}
-                >
-                  <MaterialCommunityIcons name="water-pump" size={20} color="#FFFFFF" />
-                  <View style={styles.pinCallout}>
-                    <Text style={styles.pinCalloutText}>{tank.location || `Tank ${index + 1}`}</Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </TouchableOpacity>
+            {/* Render Draggable Tank Pins */}
+            {resolvedTanks.map((tank: any, index: number) => (
+              <DraggableTankPin
+                key={tank.id || index}
+                tank={tank}
+                index={index}
+                isSelected={selectedPinTank?.id === tank.id}
+                onSelect={() => setSelectedPinTank(selectedPinTank?.id === tank.id ? null : tank)}
+                onDragEnd={(x, y) => handleTankDragEnd(tank, x, y)}
+                mapWidth={MAP_WIDTH}
+                mapHeight={MAP_HEIGHT}
+              />
+            ))}
+          </View>
 
           {/* Selected Pin Telemetry Card */}
           {selectedPinTank && (
@@ -303,7 +420,7 @@ export const RanchesScreen = () => {
                         {selectedPinTank.location || 'Station Telemetry'}
                       </Text>
                       <Text style={{ fontSize: 12, color: '#64748B' }}>
-                        Mapped at ({selectedPinTank.pinX || 30}%, {selectedPinTank.pinY || 40}%)
+                        Position ({tankPositions[selectedPinTank.id]?.x ?? selectedPinTank.pinX ?? 30}%, {tankPositions[selectedPinTank.id]?.y ?? selectedPinTank.pinY ?? 40}%)
                       </Text>
                     </View>
                   </View>
@@ -338,14 +455,14 @@ export const RanchesScreen = () => {
 
           {/* List of mapped tanks */}
           <Text style={[styles.sectionTitle, { marginTop: 24, marginBottom: 12 }]}>
-            Mapped Tank Assets ({tanks.length})
+            Mapped Tank Assets ({resolvedTanks.length})
           </Text>
-          {tanks.map((t: any, idx: number) => (
+          {resolvedTanks.map((t: any, idx: number) => (
             <View key={t.id || idx} style={styles.tankListItem}>
               <MaterialCommunityIcons name="propane-tank" size={24} color="#2E5D36" style={{ marginRight: 12 }} />
               <View style={{ flex: 1 }}>
                 <Text style={{ fontWeight: '700', color: '#0F172A' }}>{t.location || `Tank Station ${idx + 1}`}</Text>
-                <Text style={{ color: '#64748B', fontSize: 13 }}>{t.capacity} Gal capacity • Auto-telemetry synced</Text>
+                <Text style={{ color: '#64748B', fontSize: 13 }}>{t.capacity} Gal capacity • Drag pin to reposition</Text>
               </View>
               <Button
                 mode="text"
@@ -387,14 +504,20 @@ export const RanchesScreen = () => {
                 outlineColor="#CBD5E1"
                 activeOutlineColor="#2E5D36"
               />
-              <Text style={{ color: '#64748B', fontSize: 12, marginBottom: 16 }}>
-                Pin Location: X: {pendingPinCoords?.x}%, Y: {pendingPinCoords?.y}%
-              </Text>
+              <View style={styles.pinCoordBox}>
+                <MaterialCommunityIcons name="crosshairs-gps" size={16} color="#2E5D36" />
+                <Text style={{ color: '#334155', fontSize: 13, marginLeft: 6 }}>
+                  Pin Location: X: <Text style={{ fontWeight: 'bold' }}>{pendingPinCoords?.x}%</Text>, Y: <Text style={{ fontWeight: 'bold' }}>{pendingPinCoords?.y}%</Text>
+                </Text>
+              </View>
               <Button
                 mode="contained"
                 buttonColor="#2E5D36"
                 onPress={handleAddTankPin}
+                loading={addingTank}
+                disabled={addingTank}
                 style={{ borderRadius: 10, paddingVertical: 4 }}
+                icon="map-marker-plus"
               >
                 Save Tank to Map
               </Button>
@@ -501,6 +624,14 @@ export const RanchesScreen = () => {
                   <Text variant="bodyMedium" style={{ color: '#64748B', marginTop: 4 }}>
                     {ranch.county} County • {ranch.ac} Acres • {ranch.entity?.name || 'Registered Farm'}
                   </Text>
+
+                  {/* Tank count badge */}
+                  {ranch.tankSetups && ranch.tankSetups.length > 0 && (
+                    <View style={styles.tankBadgeRow}>
+                      <MaterialCommunityIcons name="propane-tank" size={14} color="#2E5D36" />
+                      <Text style={styles.tankBadgeText}>{ranch.tankSetups.length} tank{ranch.tankSetups.length > 1 ? 's' : ''} mapped</Text>
+                    </View>
+                  )}
 
                   {/* Employee Hide Ranch Toggle */}
                   {isEmployeeOrAdmin && (
@@ -664,6 +795,50 @@ export const RanchesScreen = () => {
           </View>
         </View>
       </Modal>
+
+      {/* Add Tank Modal (from list view) */}
+      <Modal visible={addTankModalVisible && viewMode === 'list'} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add Tank to {selectedRanch?.name || 'Ranch'}</Text>
+              <TouchableOpacity onPress={() => setAddTankModalVisible(false)}>
+                <MaterialCommunityIcons name="close-circle" size={28} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              label="Station Name / Location"
+              value={tankLocationName}
+              onChangeText={setTankLocationName}
+              mode="outlined"
+              style={styles.input}
+              outlineColor="#CBD5E1"
+              activeOutlineColor="#2E5D36"
+            />
+            <TextInput
+              label="Capacity (Gallons)"
+              value={tankCapacity}
+              onChangeText={setTankCapacity}
+              keyboardType="numeric"
+              mode="outlined"
+              style={styles.input}
+              outlineColor="#CBD5E1"
+              activeOutlineColor="#2E5D36"
+            />
+            <Button
+              mode="contained"
+              buttonColor="#2E5D36"
+              onPress={handleAddTankPin}
+              loading={addingTank}
+              disabled={addingTank}
+              style={{ borderRadius: 10, paddingVertical: 4 }}
+              icon="map-marker-plus"
+            >
+              Add Tank
+            </Button>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -734,6 +909,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  tankBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    gap: 4,
+  },
+  tankBadgeText: {
+    fontSize: 12,
+    color: '#2E5D36',
+    fontWeight: '600',
+  },
   toggleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -767,14 +953,31 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748B',
   },
+  dragHintBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EDE9FE',
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 12,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#DDD6FE',
+  },
+  dragHintText: {
+    flex: 1,
+    color: '#5B21B6',
+    fontSize: 12,
+    lineHeight: 16,
+  },
   canvasInstruction: {
     color: '#64748B',
     fontSize: 13,
-    marginTop: 16,
+    marginTop: 12,
     marginBottom: 10,
   },
   canvasWrapper: {
-    height: 260,
+    height: MAP_HEIGHT,
     borderRadius: 16,
     overflow: 'hidden',
     position: 'relative',
@@ -788,10 +991,15 @@ const styles = StyleSheet.create({
   canvasImage: {
     width: '100%',
     height: '100%',
+    position: 'absolute',
+  },
+  canvasGridOverlay: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    // subtle grid pattern via border
   },
   pinMarker: {
     position: 'absolute',
-    transform: [{ translateX: -16 }, { translateY: -16 }],
     backgroundColor: '#2E5D36',
     width: 32,
     height: 32,
@@ -800,15 +1008,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 2,
     borderColor: '#FFFFFF',
-    elevation: 5,
+    elevation: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
+    zIndex: 10,
   },
   pinMarkerActive: {
     backgroundColor: '#10B981',
-    transform: [{ translateX: -18 }, { translateY: -18 }],
     width: 36,
     height: 36,
     borderRadius: 18,
@@ -817,15 +1025,19 @@ const styles = StyleSheet.create({
   pinCallout: {
     position: 'absolute',
     top: 34,
+    left: -20,
+    right: -20,
     backgroundColor: 'rgba(15, 23, 42, 0.85)',
-    paddingHorizontal: 6,
+    paddingHorizontal: 4,
     paddingVertical: 2,
     borderRadius: 4,
+    alignItems: 'center',
   },
   pinCalloutText: {
     color: '#FFFFFF',
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
+    textAlign: 'center',
   },
   telemetryCard: {
     backgroundColor: '#FFFFFF',
@@ -865,6 +1077,16 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+  },
+  pinCoordBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
   },
   modalBackdrop: {
     flex: 1,
