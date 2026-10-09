@@ -815,6 +815,54 @@ app.delete(['/api/admin/products/:id', '/api/app/admin/products/:id'], async (re
   res.json({ success: true, message: 'Product deleted' });
 });
 
+app.put(['/api/admin/products/:id', '/api/app/admin/products/:id'], async (req, res) => {
+  try {
+    const { price, name, description, imageUrl } = req.body;
+    const id = req.params.id as string;
+    const idx = mockProducts.findIndex(p => p.id === id);
+    if (idx === -1) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    const oldPrice = mockProducts[idx].price;
+    if (price !== undefined) {
+      const parsedPrice = parseFloat(price);
+      if (isNaN(parsedPrice) || parsedPrice < 0) {
+        return res.status(400).json({ error: 'Valid positive price is required' });
+      }
+      mockProducts[idx].price = parsedPrice;
+    }
+    if (name !== undefined && name.trim()) mockProducts[idx].name = name.trim();
+    if (description !== undefined) mockProducts[idx].description = description.trim();
+    if (imageUrl !== undefined) mockProducts[idx].imageUrl = imageUrl;
+
+    saveStore();
+
+    try {
+      await prisma.product.update({
+        where: { id },
+        data: {
+          price: mockProducts[idx].price,
+          name: mockProducts[idx].name,
+          description: mockProducts[idx].description,
+          imageUrl: mockProducts[idx].imageUrl
+        }
+      });
+    } catch (e) {}
+
+    addAuditLog({
+      action: 'PRODUCT_PRICE_UPDATED',
+      details: `Product "${mockProducts[idx].name}" price updated from $${oldPrice} to $${mockProducts[idx].price}`,
+      actor: 'admin@renu.com',
+      category: 'SYSTEM'
+    });
+
+    res.json({ success: true, product: mockProducts[idx] });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update product price' });
+  }
+});
+
 
 
 // Only listen if not running on Vercel Serverless

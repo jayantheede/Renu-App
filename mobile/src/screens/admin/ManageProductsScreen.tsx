@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Alert, TouchableOpacity, Image } from 'react-native';
+import { View, StyleSheet, ScrollView, Alert, TouchableOpacity, Image, Modal } from 'react-native';
 import { Text, TextInput, Button, Chip, Divider, ActivityIndicator } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { submitProduct, fetchProducts, deleteProduct } from '../../api/client';
+import { submitProduct, fetchProducts, deleteProduct, updateProduct, updateProductPrice } from '../../api/client';
 
 export const ManageProductsScreen = () => {
   const [name, setName] = useState('');
@@ -15,6 +15,14 @@ export const ManageProductsScreen = () => {
   const [loading, setLoading] = useState(false);
   const [products, setProducts] = useState<any[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
+
+  // Edit Price / Product Modal State
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [editPrice, setEditPrice] = useState('');
+  const [editName, setEditName] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [updatingPrice, setUpdatingPrice] = useState(false);
 
   const loadProducts = async () => {
     setLoadingProducts(true);
@@ -115,6 +123,41 @@ export const ManageProductsScreen = () => {
       ]
     );
   };
+
+  const handleOpenEditModal = (prod: any) => {
+    setEditingProduct(prod);
+    setEditPrice(prod.price !== undefined ? String(prod.price) : '');
+    setEditName(prod.name || '');
+    setEditDesc(prod.description || '');
+    setEditModalVisible(true);
+  };
+
+  const handleSavePrice = async () => {
+    if (!editingProduct) return;
+    const parsed = parseFloat(editPrice);
+    if (isNaN(parsed) || parsed < 0) {
+      Alert.alert('Invalid Price', 'Please enter a valid price (greater than or equal to 0).');
+      return;
+    }
+
+    setUpdatingPrice(true);
+    try {
+      await updateProduct(editingProduct.id, {
+        price: parsed,
+        name: editName.trim() || editingProduct.name,
+        description: editDesc.trim(),
+      });
+      Alert.alert('Price Updated', `Price for "${editingProduct.name}" set to $${parsed.toFixed(2)}.`);
+      setEditModalVisible(false);
+      setEditingProduct(null);
+      loadProducts();
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Failed to update product price');
+    } finally {
+      setUpdatingPrice(false);
+    }
+  };
+
 
   return (
     <View style={styles.container}>
@@ -278,23 +321,135 @@ export const ManageProductsScreen = () => {
                 )}
                 <View style={styles.productInfo}>
                   <Text style={styles.prodName}>{prod.name}</Text>
-                  <Text style={styles.prodPrice}>${Number(prod.price).toLocaleString()}</Text>
+                  
+                  {/* Clickable Price Tag with Edit Indicator */}
+                  <TouchableOpacity 
+                    style={styles.priceEditRow} 
+                    onPress={() => handleOpenEditModal(prod)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.prodPrice}>${Number(prod.price).toFixed(2)}</Text>
+                    <View style={styles.editPricePill}>
+                      <Ionicons name="pencil" size={11} color="#2E5D36" />
+                      <Text style={styles.editPricePillText}>Edit</Text>
+                    </View>
+                  </TouchableOpacity>
+
                   {prod.description ? (
                     <Text numberOfLines={2} style={styles.prodDesc}>{prod.description}</Text>
                   ) : null}
                 </View>
-                <TouchableOpacity 
-                  onPress={() => handleDeleteProduct(prod.id, prod.name)} 
-                  style={styles.deleteProdBtn}
-                >
-                  <Ionicons name="trash-outline" size={18} color="#DC2626" />
-                </TouchableOpacity>
+
+                {/* Actions column */}
+                <View style={styles.cardActionsColumn}>
+                  <TouchableOpacity 
+                    onPress={() => handleOpenEditModal(prod)} 
+                    style={styles.editProdBtn}
+                  >
+                    <Ionicons name="pencil-outline" size={17} color="#2E5D36" />
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    onPress={() => handleDeleteProduct(prod.id, prod.name)} 
+                    style={styles.deleteProdBtn}
+                  >
+                    <Ionicons name="trash-outline" size={17} color="#DC2626" />
+                  </TouchableOpacity>
+                </View>
               </View>
             ))
           )}
         </View>
 
       </ScrollView>
+
+      {/* Edit Product Price Modal */}
+      <Modal visible={editModalVisible} animationType="fade" transparent onRequestClose={() => setEditModalVisible(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Edit Product Price</Text>
+                <Text style={styles.modalSubtitle} numberOfLines={1}>{editingProduct?.name || 'Selected Item'}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setEditModalVisible(false)} style={styles.modalCloseBtn}>
+                <Ionicons name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 380 }}>
+              <View style={styles.currentPriceBanner}>
+                <View style={styles.currentPriceBannerLeft}>
+                  <Text style={styles.currentPriceLabel}>CURRENT LIST PRICE</Text>
+                  <Text style={styles.currentPriceValue}>
+                    ${editingProduct ? Number(editingProduct.price).toFixed(2) : '0.00'}
+                  </Text>
+                </View>
+                <View style={styles.priceIconBubble}>
+                  <Ionicons name="pricetag" size={20} color="#2E5D36" />
+                </View>
+              </View>
+
+              <TextInput
+                label="New Price ($) *"
+                value={editPrice}
+                onChangeText={setEditPrice}
+                keyboardType="decimal-pad"
+                style={styles.modalInput}
+                mode="outlined"
+                outlineColor="#CBD5E1"
+                activeOutlineColor="#2E5D36"
+                textColor="#0F172A"
+                left={<TextInput.Affix text="$ " />}
+              />
+
+              <TextInput
+                label="Product Name"
+                value={editName}
+                onChangeText={setEditName}
+                style={styles.modalInput}
+                mode="outlined"
+                outlineColor="#CBD5E1"
+                activeOutlineColor="#2E5D36"
+                textColor="#0F172A"
+              />
+
+              <TextInput
+                label="Description"
+                value={editDesc}
+                onChangeText={setEditDesc}
+                multiline
+                numberOfLines={2}
+                style={styles.modalInput}
+                mode="outlined"
+                outlineColor="#CBD5E1"
+                activeOutlineColor="#2E5D36"
+                textColor="#0F172A"
+              />
+            </ScrollView>
+
+            <View style={styles.modalActions}>
+              <Button
+                mode="outlined"
+                onPress={() => setEditModalVisible(false)}
+                textColor="#64748B"
+                style={styles.modalCancelBtn}
+              >
+                Cancel
+              </Button>
+              <Button
+                mode="contained"
+                onPress={handleSavePrice}
+                loading={updatingPrice}
+                disabled={updatingPrice}
+                buttonColor="#2E5D36"
+                style={styles.modalSaveBtn}
+              >
+                Update Price
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -538,19 +693,150 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   prodPrice: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
     color: '#2E5D36',
-    marginTop: 2,
+  },
+  priceEditRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 3,
+  },
+  editPricePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  editPricePillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#166534',
   },
   prodDesc: {
-    fontSize: 11,
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 3,
+  },
+  cardActionsColumn: {
+    flexDirection: 'column',
+    gap: 8,
+    alignItems: 'center',
+    marginLeft: 4,
+  },
+  editProdBtn: {
+    padding: 7,
+    borderRadius: 8,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  deleteProdBtn: {
+    padding: 7,
+    borderRadius: 8,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+
+  /* Modal Styles */
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 480,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#0F172A',
+  },
+  modalSubtitle: {
+    fontSize: 13,
     color: '#64748B',
     marginTop: 2,
   },
-  deleteProdBtn: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: '#FEF2F2',
+  modalCloseBtn: {
+    padding: 4,
+  },
+  currentPriceBanner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 16,
+  },
+  currentPriceBannerLeft: {},
+  currentPriceLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#166534',
+    letterSpacing: 0.5,
+  },
+  currentPriceValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#15803D',
+    marginTop: 2,
+  },
+  priceIconBubble: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalInput: {
+    marginBottom: 12,
+    backgroundColor: '#FFFFFF',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  modalCancelBtn: {
+    flex: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+  },
+  modalSaveBtn: {
+    flex: 1,
+    borderRadius: 10,
   },
 });

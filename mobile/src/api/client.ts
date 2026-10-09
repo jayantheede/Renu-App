@@ -125,6 +125,8 @@ export const payOrder = (id: string) => apiClient(`/app/orders/${id}/pay`, { met
 export const updateOrderTracking = (id: string, status: string, step: number) => apiClient(`/app/admin/orders/${id}/tracking`, { method: 'PUT', body: JSON.stringify({ status, step }) });
 
 export const submitProduct = (data: any) => apiClient('/app/admin/products', { method: 'POST', body: JSON.stringify(data) });
+export const updateProduct = (id: string, data: any) => apiClient(`/app/admin/products/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+export const updateProductPrice = (id: string, price: number) => apiClient(`/app/admin/products/${id}`, { method: 'PUT', body: JSON.stringify({ price }) });
 export const deleteProduct = (id: string) => apiClient(`/app/admin/products/${id}`, { method: 'DELETE' });
 export const fetchPlatformSettings = () => apiClient('/app/admin/settings');
 export const savePlatformSettings = (settings: any) => apiClient('/app/admin/settings', { method: 'POST', body: JSON.stringify(settings) });
