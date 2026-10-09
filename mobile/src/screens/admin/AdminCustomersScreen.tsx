@@ -218,7 +218,7 @@ export const AdminCustomersScreen = () => {
         }
       >
         <View style={styles.header}>
-          <View style={{ flex: 1 }}>
+          <View style={styles.titleContainer}>
             <Text variant="headlineMedium" style={styles.title}>Customers</Text>
             <Text variant="bodyMedium" style={styles.subtitle}>All registered clients and growers</Text>
           </View>
@@ -701,11 +701,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   header: {
-    paddingTop: 60,
-    paddingBottom: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    paddingTop: 50,
+    paddingBottom: 16,
+  },
+  titleContainer: {
+    marginBottom: 12,
   },
   title: {
     color: '#0F172A',
@@ -719,6 +719,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flexWrap: 'wrap',
   },
   iconBtn: {
     padding: 8,

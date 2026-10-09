@@ -12,11 +12,15 @@ import {
 } from '../../api/client';
 import * as ImagePicker from 'expo-image-picker';
 
+import { useNavigation } from '@react-navigation/native';
+
 export const AdminProfileScreen = () => {
   const theme = useTheme();
+  const navigation = useNavigation<any>();
   const user = useAuthStore(state => state.user);
   const logout = useAuthStore(state => state.logout);
   const updateUser = useAuthStore(state => state.updateUser);
+  const isEmployee = user?.role?.toLowerCase() === 'employee';
 
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(user?.name || '');
@@ -155,17 +159,21 @@ export const AdminProfileScreen = () => {
       
       {/* Premium Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Admin Settings</Text>
-        <Text style={styles.subtitle}>Manage your account and platform configurations</Text>
+        <Text style={styles.title}>
+          {isEmployee ? 'Field Staff Profile' : 'Admin Settings'}
+        </Text>
+        <Text style={styles.subtitle}>
+          {isEmployee ? 'Manage your credentials and field operations' : 'Manage your account and platform configurations'}
+        </Text>
       </View>
 
-      {/* Admin Profile Details */}
+      {/* Profile Details */}
       <View style={styles.profileSection}>
         <View style={styles.avatarContainer}>
           {avatarUrl || user?.avatarUrl ? (
             <Avatar.Image size={80} source={{ uri: avatarUrl || user?.avatarUrl! }} style={styles.avatar} />
           ) : (
-            <Avatar.Text size={80} label={user?.name?.substring(0, 2) || 'A'} style={styles.avatar} />
+            <Avatar.Text size={80} label={user?.name?.substring(0, 2) || (isEmployee ? 'EM' : 'AD')} style={styles.avatar} />
           )}
         </View>
 
@@ -198,52 +206,100 @@ export const AdminProfileScreen = () => {
         )}
       </View>
 
-      {/* System Administration Section */}
-      <View style={styles.listSection}>
-        <Text style={styles.sectionTitle}>System Administration</Text>
-        
-        <List.Item
-          title="Platform Settings"
-          description="Configure global app behavior, notifications & rules"
-          left={props => <List.Icon {...props} icon="cog-outline" color="#2E5D36" />}
-          right={props => <List.Icon {...props} icon="chevron-right" color="#94A3B8" />}
-          onPress={openPlatformSettings}
-          style={styles.clickableItem}
-        />
-        
-        <Divider style={styles.divider} />
+      {/* Sections based on role */}
+      {isEmployee ? (
+        <View style={styles.listSection}>
+          <Text style={styles.sectionTitle}>Field Operations</Text>
+          
+          <List.Item
+            title="My Tasks & Schedules"
+            description="Daily application logs, soil reports & work orders"
+            left={props => <List.Icon {...props} icon="clipboard-check-outline" color="#2E5D36" />}
+            right={props => <List.Icon {...props} icon="chevron-right" color="#94A3B8" />}
+            onPress={() => navigation?.navigate('Tasks')}
+            style={styles.clickableItem}
+          />
+          
+          <Divider style={styles.divider} />
 
-        <List.Item
-          title="Security & Audits"
-          description="Review compliance, login logs & system activities"
-          left={props => <List.Icon {...props} icon="shield-check-outline" color="#2563EB" />}
-          right={props => <List.Icon {...props} icon="chevron-right" color="#94A3B8" />}
-          onPress={openAuditLogs}
-          style={styles.clickableItem}
-        />
+          <List.Item
+            title="Assigned Ranches"
+            description="Inspect grower sites, tank locations & levels"
+            left={props => <List.Icon {...props} icon="sprout" color="#2563EB" />}
+            right={props => <List.Icon {...props} icon="chevron-right" color="#94A3B8" />}
+            onPress={() => navigation?.navigate('Ranches')}
+            style={styles.clickableItem}
+          />
 
-        <Divider style={styles.divider} />
+          <Divider style={styles.divider} />
 
-        <List.Item
-          title="Clear & Re-sync Cache"
-          description="Purge application memory & synchronize active state"
-          left={props => <List.Icon {...props} icon="refresh-circle-outline" color="#F59E0B" />}
-          right={props => purgingCache ? <ActivityIndicator size="small" color="#F59E0B" /> : <List.Icon {...props} icon="chevron-right" color="#94A3B8" />}
-          onPress={handlePurgeCache}
-          style={styles.clickableItem}
-        />
-        
-        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Account Session</Text>
-        
-        <List.Item
-          title="Sign Out"
-          description="End your admin session safely"
-          onPress={logout}
-          titleStyle={{ color: '#DC2626', fontWeight: 'bold' }}
-          left={props => <List.Icon {...props} icon="logout" color="#DC2626" />}
-          style={styles.logoutItem}
-        />
-      </View>
+          <List.Item
+            title="Field Messages"
+            description="Live communications with clients and agronomists"
+            left={props => <List.Icon {...props} icon="message-outline" color="#F59E0B" />}
+            right={props => <List.Icon {...props} icon="chevron-right" color="#94A3B8" />}
+            onPress={() => navigation?.navigate('Messages')}
+            style={styles.clickableItem}
+          />
+          
+          <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Account Session</Text>
+          
+          <List.Item
+            title="Sign Out"
+            description="End your field staff session safely"
+            onPress={logout}
+            titleStyle={{ color: '#DC2626', fontWeight: 'bold' }}
+            left={props => <List.Icon {...props} icon="logout" color="#DC2626" />}
+            style={styles.logoutItem}
+          />
+        </View>
+      ) : (
+        <View style={styles.listSection}>
+          <Text style={styles.sectionTitle}>System Administration</Text>
+          
+          <List.Item
+            title="Platform Settings"
+            description="Configure global app behavior, notifications & rules"
+            left={props => <List.Icon {...props} icon="cog-outline" color="#2E5D36" />}
+            right={props => <List.Icon {...props} icon="chevron-right" color="#94A3B8" />}
+            onPress={openPlatformSettings}
+            style={styles.clickableItem}
+          />
+          
+          <Divider style={styles.divider} />
+
+          <List.Item
+            title="Security & Audits"
+            description="Review compliance, login logs & system activities"
+            left={props => <List.Icon {...props} icon="shield-check-outline" color="#2563EB" />}
+            right={props => <List.Icon {...props} icon="chevron-right" color="#94A3B8" />}
+            onPress={openAuditLogs}
+            style={styles.clickableItem}
+          />
+
+          <Divider style={styles.divider} />
+
+          <List.Item
+            title="Clear & Re-sync Cache"
+            description="Purge application memory & synchronize active state"
+            left={props => <List.Icon {...props} icon="refresh-circle-outline" color="#F59E0B" />}
+            right={props => purgingCache ? <ActivityIndicator size="small" color="#F59E0B" /> : <List.Icon {...props} icon="chevron-right" color="#94A3B8" />}
+            onPress={handlePurgeCache}
+            style={styles.clickableItem}
+          />
+          
+          <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Account Session</Text>
+          
+          <List.Item
+            title="Sign Out"
+            description="End your admin session safely"
+            onPress={logout}
+            titleStyle={{ color: '#DC2626', fontWeight: 'bold' }}
+            left={props => <List.Icon {...props} icon="logout" color="#DC2626" />}
+            style={styles.logoutItem}
+          />
+        </View>
+      )}
 
       {/* ---------------- PLATFORM SETTINGS MODAL ---------------- */}
       <Modal visible={settingsModalVisible} animationType="slide" transparent>
