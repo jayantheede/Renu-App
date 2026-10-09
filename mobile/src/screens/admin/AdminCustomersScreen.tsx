@@ -1,17 +1,31 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity, Alert, Modal } from 'react-native';
-import { Text, TextInput, Button, Chip } from 'react-native-paper';
+import { Text, TextInput, Button, Chip, Divider } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
+import { updateCustomer } from '../../api/client';
 
 export const AdminCustomersScreen = () => {
   const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Create Modal State
   const [modalVisible, setModalVisible] = useState(false);
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [newRole, setNewRole] = useState('Grower');
   const [creating, setCreating] = useState(false);
+
+  // Edit Modal State
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editRole, setEditRole] = useState('Grower');
+  const [editStatus, setEditStatus] = useState<'APPROVED' | 'PENDING' | 'REJECTED'>('APPROVED');
+  const [editPassword, setEditPassword] = useState('');
+  const [updating, setUpdating] = useState(false);
 
   const BACKEND_URL = (process.env.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
 
@@ -69,7 +83,7 @@ export const AdminCustomersScreen = () => {
           name: newName.trim(),
           email: newEmail.trim(),
           password: newPassword.trim() || 'Customer123!',
-          role: 'Grower'
+          role: newRole
         })
       });
       const data = await res.json();
@@ -78,6 +92,7 @@ export const AdminCustomersScreen = () => {
         setNewName('');
         setNewEmail('');
         setNewPassword('');
+        setNewRole('Grower');
         setModalVisible(false);
         fetchCustomers();
       } else {
@@ -87,6 +102,47 @@ export const AdminCustomersScreen = () => {
       Alert.alert('Error', e.message || 'Network request failed');
     } finally {
       setCreating(false);
+    }
+  };
+
+  const openEditModal = (c: any) => {
+    setSelectedCustomerId(c.id);
+    setEditName(c.name || c.user_metadata?.full_name || '');
+    setEditEmail(c.email || '');
+    setEditRole(c.role || c.user_metadata?.role || 'Grower');
+    setEditStatus(c.approvalStatus || c.user_metadata?.approvalStatus || 'APPROVED');
+    setEditPassword('');
+    setEditModalVisible(true);
+  };
+
+  const handleSaveCustomerEdit = async () => {
+    if (!selectedCustomerId) return;
+    if (!editEmail.trim()) {
+      Alert.alert('Error', 'Email address is required');
+      return;
+    }
+
+    setUpdating(true);
+    try {
+      const payload: any = {
+        name: editName.trim(),
+        email: editEmail.trim(),
+        role: editRole,
+        approvalStatus: editStatus,
+      };
+      if (editPassword.trim()) {
+        payload.password = editPassword.trim();
+      }
+
+      await updateCustomer(selectedCustomerId, payload);
+      Alert.alert('Success', 'Customer profile updated successfully!');
+      setEditModalVisible(false);
+      fetchCustomers();
+    } catch (e: any) {
+      console.error(e);
+      Alert.alert('Error', e.message || 'Failed to update customer');
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -139,29 +195,38 @@ export const AdminCustomersScreen = () => {
                     <Text style={styles.name}>{displayName}</Text>
                     <Text style={styles.email}>{c.email}</Text>
                   </View>
-                  <Chip
-                    compact
-                    style={[
-                      styles.chip,
-                      isPending ? styles.pendingChip : styles.approvedChip
-                    ]}
-                    textStyle={{
-                      color: isPending ? '#B45309' : '#15803D',
-                      fontSize: 11,
-                      fontWeight: 'bold'
-                    }}
-                  >
-                    {status.toUpperCase()}
-                  </Chip>
+                  <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                    <Chip
+                      compact
+                      style={[
+                        styles.chip,
+                        isPending ? styles.pendingChip : styles.approvedChip
+                      ]}
+                      textStyle={{
+                        color: isPending ? '#B45309' : '#15803D',
+                        fontSize: 11,
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      {status.toUpperCase()}
+                    </Chip>
+                  </View>
                 </View>
 
                 <View style={styles.metaRow}>
-                  <Text style={styles.role}>Role: {displayRole}</Text>
-                  {c.createdAt && (
-                    <Text style={styles.date}>
-                      Joined: {new Date(c.createdAt).toLocaleDateString()}
-                    </Text>
-                  )}
+                  <View>
+                    <Text style={styles.role}>Role: {displayRole}</Text>
+                    {c.createdAt && (
+                      <Text style={styles.date}>
+                        Joined: {new Date(c.createdAt).toLocaleDateString()}
+                      </Text>
+                    )}
+                  </View>
+
+                  <TouchableOpacity onPress={() => openEditModal(c)} style={styles.editCardBtn}>
+                    <Ionicons name="pencil" size={14} color="#2E5D36" />
+                    <Text style={styles.editCardBtnText}>Edit</Text>
+                  </TouchableOpacity>
                 </View>
 
                 {isPending && (
@@ -190,7 +255,121 @@ export const AdminCustomersScreen = () => {
         )}
       </ScrollView>
 
-      {/* Create Customer Modal */}
+      {/* ---------------- EDIT CUSTOMER MODAL ---------------- */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={editModalVisible}
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeaderRow}>
+              <View>
+                <Text variant="titleLarge" style={styles.modalTitle}>Edit Customer</Text>
+                <Text variant="bodySmall" style={styles.modalSub}>Update client information & status</Text>
+              </View>
+              <TouchableOpacity onPress={() => setEditModalVisible(false)} style={styles.closeModalBtn}>
+                <Ionicons name="close" size={22} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 440 }}>
+              <TextInput
+                label="Full Name"
+                value={editName}
+                onChangeText={setEditName}
+                style={styles.input}
+                mode="outlined"
+                activeOutlineColor="#2E5D36"
+              />
+
+              <TextInput
+                label="Email Address"
+                value={editEmail}
+                onChangeText={setEditEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                style={styles.input}
+                mode="outlined"
+                activeOutlineColor="#2E5D36"
+              />
+
+              {/* Role Selection Chips */}
+              <Text style={styles.fieldSectionLabel}>Role</Text>
+              <View style={styles.chipsRow}>
+                {['Grower', 'Ranch Manager', 'Agronomist', 'Admin'].map(r => (
+                  <TouchableOpacity
+                    key={r}
+                    onPress={() => setEditRole(r)}
+                    style={[styles.roleSelectChip, editRole === r && styles.roleSelectChipActive]}
+                  >
+                    <Text style={[styles.roleSelectChipText, editRole === r && styles.roleSelectChipTextActive]}>
+                      {r}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Status Selection Chips */}
+              <Text style={[styles.fieldSectionLabel, { marginTop: 12 }]}>Approval Status</Text>
+              <View style={styles.chipsRow}>
+                {[
+                  { key: 'APPROVED', label: 'Approved', color: '#15803D' },
+                  { key: 'PENDING', label: 'Pending', color: '#B45309' },
+                  { key: 'REJECTED', label: 'Rejected', color: '#DC2626' }
+                ].map(s => (
+                  <TouchableOpacity
+                    key={s.key}
+                    onPress={() => setEditStatus(s.key as any)}
+                    style={[
+                      styles.statusSelectChip,
+                      editStatus === s.key && { backgroundColor: s.color, borderColor: s.color }
+                    ]}
+                  >
+                    <Text style={[styles.statusSelectChipText, editStatus === s.key && { color: '#FFF' }]}>
+                      {s.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <TextInput
+                label="Reset Password (leave empty to keep current)"
+                value={editPassword}
+                onChangeText={setEditPassword}
+                secureTextEntry
+                style={[styles.input, { marginTop: 14 }]}
+                mode="outlined"
+                activeOutlineColor="#2E5D36"
+              />
+            </ScrollView>
+
+            <View style={styles.modalBtnRow}>
+              <Button
+                mode="outlined"
+                onPress={() => setEditModalVisible(false)}
+                style={{ flex: 1, borderColor: '#CBD5E1' }}
+                textColor="#64748B"
+              >
+                Cancel
+              </Button>
+              <Button
+                mode="contained"
+                onPress={handleSaveCustomerEdit}
+                loading={updating}
+                disabled={updating}
+                buttonColor="#2E5D36"
+                style={{ flex: 1 }}
+              >
+                Save Changes
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ---------------- CREATE CUSTOMER MODAL ---------------- */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -199,8 +378,15 @@ export const AdminCustomersScreen = () => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text variant="titleLarge" style={styles.modalTitle}>Add New Customer</Text>
-            <Text variant="bodySmall" style={styles.modalSub}>Create a customer account directly</Text>
+            <View style={styles.modalHeaderRow}>
+              <View>
+                <Text variant="titleLarge" style={styles.modalTitle}>Add New Customer</Text>
+                <Text variant="bodySmall" style={styles.modalSub}>Create a customer account directly</Text>
+              </View>
+              <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeModalBtn}>
+                <Ionicons name="close" size={22} color="#64748B" />
+              </TouchableOpacity>
+            </View>
 
             <TextInput
               label="Full Name"
@@ -208,6 +394,7 @@ export const AdminCustomersScreen = () => {
               onChangeText={setNewName}
               style={styles.input}
               mode="outlined"
+              activeOutlineColor="#2E5D36"
             />
 
             <TextInput
@@ -218,6 +405,7 @@ export const AdminCustomersScreen = () => {
               autoCapitalize="none"
               style={styles.input}
               mode="outlined"
+              activeOutlineColor="#2E5D36"
             />
 
             <TextInput
@@ -227,7 +415,23 @@ export const AdminCustomersScreen = () => {
               secureTextEntry
               style={styles.input}
               mode="outlined"
+              activeOutlineColor="#2E5D36"
             />
+
+            <Text style={styles.fieldSectionLabel}>Role</Text>
+            <View style={styles.chipsRow}>
+              {['Grower', 'Ranch Manager', 'Agronomist'].map(r => (
+                <TouchableOpacity
+                  key={r}
+                  onPress={() => setNewRole(r)}
+                  style={[styles.roleSelectChip, newRole === r && styles.roleSelectChipActive]}
+                >
+                  <Text style={[styles.roleSelectChipText, newRole === r && styles.roleSelectChipTextActive]}>
+                    {r}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
             <View style={styles.modalBtnRow}>
               <Button
@@ -373,6 +577,23 @@ const styles = StyleSheet.create({
   date: {
     color: '#94A3B8',
     fontSize: 11,
+    marginTop: 2,
+  },
+  editCardBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#C8E6C9',
+  },
+  editCardBtnText: {
+    color: '#2E5D36',
+    fontWeight: '700',
+    fontSize: 12,
   },
   approvalActionRow: {
     flexDirection: 'row',
@@ -386,15 +607,26 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
     justifyContent: 'center',
     padding: 20,
   },
   modalCard: {
     backgroundColor: '#FFF',
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 24,
-    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 8,
+    maxHeight: '90%',
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 14,
   },
   modalTitle: {
     fontWeight: 'bold',
@@ -402,15 +634,63 @@ const styles = StyleSheet.create({
   },
   modalSub: {
     color: '#64748B',
-    marginBottom: 16,
+  },
+  closeModalBtn: {
+    padding: 4,
   },
   input: {
     marginBottom: 12,
     backgroundColor: '#FFF',
   },
+  fieldSectionLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+    marginBottom: 6,
+    marginTop: 4,
+  },
+  chipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 10,
+  },
+  roleSelectChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  roleSelectChipActive: {
+    backgroundColor: '#2E5D36',
+    borderColor: '#2E5D36',
+  },
+  roleSelectChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  roleSelectChipTextActive: {
+    color: '#FFF',
+  },
+  statusSelectChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  statusSelectChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
   modalBtnRow: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: 12,
+    marginTop: 18,
   },
 });

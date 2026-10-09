@@ -17,7 +17,7 @@ router.get('/profile', async (req: AuthenticatedRequest, res) => {
 });
 
 import { mockAvatars } from './index';
-import { mockRanches, mockTanks, mockUsers, mockOrdersList, updateCustomerApprovalStatus, mockPlatformSettings, mockAuditLogs, addAuditLog } from './usersStore';
+import { mockRanches, mockTanks, mockUsers, mockOrdersList, updateCustomerApprovalStatus, updateCustomerDetails, mockPlatformSettings, mockAuditLogs, addAuditLog } from './usersStore';
 
 router.put('/profile', async (req: AuthenticatedRequest, res) => {
   try {
@@ -201,6 +201,27 @@ router.post('/admin/approvals/customer/:id', async (req: AuthenticatedRequest, r
     res.status(500).json({ error: 'Failed to update customer approval' });
   }
 });
+
+router.put('/admin/customers/:id', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { name, email, role, approvalStatus, password } = req.body;
+    const updated = await updateCustomerDetails(req.params.id as string, { name, email, role, approvalStatus, password });
+    if (updated) {
+      addAuditLog({
+        action: 'CUSTOMER_UPDATED',
+        details: `Customer details modified for ${(name || updated.name)} (${(email || updated.email)})`,
+        actor: req.user?.email || 'admin@renu.com',
+        category: 'USERS'
+      });
+      res.json({ success: true, customer: updated });
+    } else {
+      res.status(404).json({ error: 'Customer not found' });
+    }
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to update customer' });
+  }
+});
+
 
 router.post('/admin/approvals/ranch/:id', async (req: AuthenticatedRequest, res) => {
   try {

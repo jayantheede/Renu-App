@@ -24,6 +24,7 @@ import {
   createNewUser,
   getAllCustomersList,
   updateCustomerApprovalStatus,
+  updateCustomerDetails,
   mockUsers,
   mockRanches,
   mockTanks,
@@ -345,6 +346,47 @@ app.post(['/api/admin/customers', '/api/app/admin/customers'], async (req, res) 
     res.status(500).json({ error: e.message || 'Failed to create customer' });
   }
 });
+
+app.put(['/api/admin/customers/:id', '/api/app/admin/customers/:id'], async (req, res) => {
+  try {
+    const { name, email, role, approvalStatus, password } = req.body;
+    const updated = await updateCustomerDetails(req.params.id as string, { name, email, role, approvalStatus, password });
+    if (updated) {
+      addAuditLog({
+        action: 'CUSTOMER_UPDATED',
+        details: `Customer details modified for ${(name || updated.name)} (${(email || updated.email)})`,
+        actor: 'admin@renu.com',
+        category: 'USERS'
+      });
+      res.json({ success: true, customer: updated });
+    } else {
+      res.status(404).json({ error: 'Customer not found' });
+    }
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Failed to update customer' });
+  }
+});
+
+app.post(['/api/admin/customers/:id/update', '/api/app/admin/customers/:id/update'], async (req, res) => {
+  try {
+    const { name, email, role, approvalStatus, password } = req.body;
+    const updated = await updateCustomerDetails(req.params.id as string, { name, email, role, approvalStatus, password });
+    if (updated) {
+      addAuditLog({
+        action: 'CUSTOMER_UPDATED',
+        details: `Customer details modified for ${(name || updated.name)} (${(email || updated.email)})`,
+        actor: 'admin@renu.com',
+        category: 'USERS'
+      });
+      res.json({ success: true, customer: updated });
+    } else {
+      res.status(404).json({ error: 'Customer not found' });
+    }
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Failed to update customer' });
+  }
+});
+
 
 app.get(['/api/admin/approvals', '/api/app/admin/approvals'], async (req, res) => {
   const pendingOrders = mockOrdersList.filter(o => o.status === 'PENDING');

@@ -333,6 +333,47 @@ export function updateCustomerApprovalStatus(id: string, status: 'APPROVED' | 'R
   return null;
 }
 
+export async function updateCustomerDetails(id: string, updates: {
+  name?: string;
+  email?: string;
+  role?: string;
+  approvalStatus?: 'PENDING' | 'APPROVED' | 'REJECTED';
+  password?: string;
+}) {
+  const normalizedEmail = updates.email ? updates.email.trim().toLowerCase() : undefined;
+  let found = mockUsers.find(u => u.id === id || (normalizedEmail && u.email.toLowerCase() === normalizedEmail));
+  if (found) {
+    if (updates.name) found.name = updates.name.trim();
+    if (updates.email) found.email = updates.email.trim().toLowerCase();
+    if (updates.role) found.role = updates.role;
+    if (updates.approvalStatus) found.approvalStatus = updates.approvalStatus;
+    if (updates.password) {
+      found.passwordHash = await bcrypt.hash(updates.password, 10);
+    }
+    return found;
+  }
+
+  try {
+    const data: any = {};
+    if (updates.name) data.name = updates.name.trim();
+    if (updates.email) data.email = updates.email.trim().toLowerCase();
+    if (updates.role) data.role = updates.role;
+    if (updates.password) {
+      data.passwordHash = await bcrypt.hash(updates.password, 10);
+    }
+    const updatedDb = await prisma.user.update({
+      where: { id },
+      data
+    });
+    return updatedDb;
+  } catch (err: any) {
+    console.warn('[DB Error] updateCustomerDetails fallback:', err.message);
+  }
+
+  return null;
+}
+
+
 export async function getAllCustomersList() {
   const usersMap = new Map<string, any>();
 

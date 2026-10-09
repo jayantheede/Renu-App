@@ -87,4 +87,6 @@ export const fetchPlatformSettings = () => apiClient('/app/admin/settings');
 export const savePlatformSettings = (settings: any) => apiClient('/app/admin/settings', { method: 'POST', body: JSON.stringify(settings) });
 export const fetchAuditLogs = () => apiClient('/app/admin/audit-logs');
 export const resetSystemCache = () => apiClient('/app/admin/reset-cache', { method: 'POST' });
+export const updateCustomer = (id: string, data: any) => apiClient(`/app/admin/customers/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+
 
