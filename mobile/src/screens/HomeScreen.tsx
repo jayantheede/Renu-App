@@ -8,9 +8,11 @@ import { fetchGrowerDashboard } from '../api/client';
 import { ActivityIndicator } from 'react-native-paper';
 
 export const HomeScreen = () => {
+  const user = useAuthStore((state) => state.user);
   const session = useAuthStore((state) => state.session);
-  const fullName = session?.user?.user_metadata?.full_name || 'Maria';
+  const fullName = user?.name || session?.user?.name || session?.user?.user_metadata?.full_name || 'Grower';
   const firstName = fullName.split(' ')[0];
+  const isPendingApproval = user?.approvalStatus === 'PENDING' || user?.user_metadata?.approvalStatus === 'PENDING';
 
   const [weatherText, setWeatherText] = useState('Detecting weather...');
   const [weatherIcon, setWeatherIcon] = useState('weather-cloudy');
@@ -127,6 +129,18 @@ export const HomeScreen = () => {
         {/* Content Section */}
         <View style={styles.content}>
           
+          {isPendingApproval && (
+            <View style={styles.pendingNoticeCard}>
+              <MaterialCommunityIcons name="clock-outline" size={22} color="#D97706" style={{ marginTop: 2 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.pendingNoticeTitle}>Account Submitted for Approval</Text>
+                <Text style={styles.pendingNoticeDesc}>
+                  Your customer account has been sent to the administrator for verification. You have full access to explore the catalog and set up ranches.
+                </Text>
+              </View>
+            </View>
+          )}
+
           {!homeData ? (
             <ActivityIndicator style={{ marginTop: 40 }} />
           ) : (
@@ -359,6 +373,33 @@ const styles = StyleSheet.create({
   content: {
     padding: 20,
     marginTop: -20, // Overlap the header slightly
+  },
+  pendingNoticeCard: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'flex-start',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  pendingNoticeTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#92400E',
+    marginBottom: 2,
+  },
+  pendingNoticeDesc: {
+    fontSize: 12,
+    color: '#B45309',
+    lineHeight: 17,
   },
   card: {
     backgroundColor: '#FFF',

@@ -13,7 +13,7 @@ export const SignUpScreen = ({ navigation }: any) => {
   const [loading, setLoading] = useState(false);
   const theme = useTheme();
 
-  const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3000';
+  const BACKEND_URL = (process.env.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
 
   const handleSignUp = async () => {
     if (!name || !email || !password) {
@@ -70,18 +70,29 @@ export const SignUpScreen = ({ navigation }: any) => {
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || 'Failed to verify OTP.');
 
-      // Automatically log in using the new credentials
-      const loginRes = await fetch(`${BACKEND_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-      const loginData = await loginRes.json();
-      
-      if (!loginRes.ok) throw new Error(loginData.error || 'Failed to auto-login');
+      let user = data?.user;
+      let token = data?.token;
 
-      await setSession(loginData.user, loginData.token);
-      Alert.alert('Success', 'Your email has been verified! Welcome aboard.');
+      // If token/user was not returned directly by verify-otp, perform auto-login
+      if (!user || !token) {
+        const loginRes = await fetch(`${BACKEND_URL}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const loginData = await loginRes.json().catch(() => null);
+        
+        if (!loginRes.ok) throw new Error(loginData?.error || 'Failed to auto-login');
+        user = loginData.user;
+        token = loginData.token;
+      }
+
+      await setSession(user, token);
+      if (Platform.OS === 'web') {
+        window.alert('Your email has been verified! Welcome to Agri Assistant.');
+      } else {
+        Alert.alert('Success', 'Your email has been verified! Welcome to Agri Assistant.');
+      }
     } catch (error: any) {
       Alert.alert('Verification Failed', error.message);
     } finally {

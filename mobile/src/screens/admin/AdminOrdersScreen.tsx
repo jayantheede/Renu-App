@@ -6,7 +6,7 @@ import { GlassCard } from '../../components/GlassCard';
 export const AdminOrdersScreen = () => {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const BACKEND_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+  const BACKEND_URL = (process.env.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
 
   const fetchOrders = () => {
     setLoading(true);

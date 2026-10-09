@@ -19,6 +19,16 @@ export const mockAvatars: Record<string, string> = {
   'mock-cust': ''
 };
 
+import {
+  findUserByEmail,
+  createNewUser,
+  getAllCustomersList,
+  updateCustomerApprovalStatus,
+  mockUsers,
+  mockRanches,
+  mockTanks
+} from './usersStore';
+
 import helmet from 'helmet';
 import compression from 'compression';
 
@@ -110,13 +120,44 @@ app.post('/api/auth/verify-otp', async (req, res) => {
       }
     }
 
-    // Mock User Creation
-    console.log(`[Mock] Verified OTP for ${email}. Bypassing MongoDB creation.`);
-    res.json({ success: true, message: 'User created successfully' });
+    // Create user in persistent store and try MongoDB insert
+    const newUser = await createNewUser({
+      email,
+      password,
+      name,
+      role: 'Grower',
+      approvalStatus: 'PENDING'
+    });
 
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to verify OTP' });
+    const token = jwt.sign(
+      { id: newUser.id, email: newUser.email, role: newUser.role, name: newUser.name, approvalStatus: newUser.approvalStatus },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    console.log(`[Auth] Verified OTP & created customer for: ${email}`);
+    res.json({
+      success: true,
+      message: 'User created successfully',
+      token,
+      user: {
+        id: newUser.id,
+        email: newUser.email,
+        name: newUser.name,
+        role: newUser.role,
+        approvalStatus: newUser.approvalStatus,
+        avatarUrl: newUser.avatarUrl || '',
+        user_metadata: {
+          full_name: newUser.name,
+          role: newUser.role,
+          approvalStatus: newUser.approvalStatus
+        }
+      }
+    });
+
+  } catch (error: any) {
+    console.error('Failed to verify OTP:', error);
+    res.status(500).json({ error: error.message || 'Failed to verify OTP' });
   }
 });
 
@@ -127,38 +168,47 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    // Bypass MongoDB completely due to Atlas connection errors
-    if (email === 'admin@renu.com' && password === 'admin') {
-      const token = jwt.sign({ id: 'mock-admin', email, role: 'admin', name: 'Admin Demo' }, JWT_SECRET, { expiresIn: '7d' });
-      return res.json({ token, user: { id: 'mock-admin', email, role: 'admin', name: 'Admin Demo', avatarUrl: mockAvatars['mock-admin'] } });
-    }
-    if (email === 'employee@renu.com' && password === 'employee') {
-      const token = jwt.sign({ id: 'mock-emp', email, role: 'employee', name: 'Employee Demo' }, JWT_SECRET, { expiresIn: '7d' });
-      return res.json({ token, user: { id: 'mock-emp', email, role: 'employee', name: 'Employee Demo', avatarUrl: mockAvatars['mock-emp'] } });
-    }
-    if (email === 'customer@renu.com' && password === 'customer') {
-      const token = jwt.sign({ id: 'mock-cust', email, role: 'Grower', name: 'Customer Demo' }, JWT_SECRET, { expiresIn: '7d' });
-      return res.json({ token, user: { id: 'mock-cust', email, role: 'Grower', name: 'Customer Demo', avatarUrl: mockAvatars['mock-cust'] } });
+    const user = await findUserByEmail(email);
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    try {
-      const user = await prisma.user.findUnique({ where: { email } });
-      if (!user) {
-        return res.status(401).json({ error: 'Invalid email or password' });
-      }
-      const isMatch = await bcrypt.compare(password, user.passwordHash);
-      if (!isMatch) {
-        return res.status(401).json({ error: 'Invalid email or password' });
-      }
-      const token = jwt.sign({ id: user.id, email: user.email, role: user.role, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
-      return res.json({ token, user });
-    } catch (dbError) {
-      console.error("MongoDB Error:", dbError);
-      return res.status(500).json({ error: 'Database connection failed. Please check MongoDB Atlas IP Whitelist.' });
+    let passwordMatch = false;
+    if (user.password && user.password === password) {
+      passwordMatch = true;
+    } else if (user.passwordHash) {
+      passwordMatch = await bcrypt.compare(password, user.passwordHash);
     }
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to login' });
+
+    if (!passwordMatch) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: user.role, name: user.name, approvalStatus: user.approvalStatus },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    return res.json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        name: user.name,
+        approvalStatus: user.approvalStatus,
+        avatarUrl: user.avatarUrl || mockAvatars[user.id] || '',
+        user_metadata: {
+          full_name: user.name,
+          role: user.role,
+          approvalStatus: user.approvalStatus
+        }
+      }
+    });
+  } catch (error: any) {
+    console.error('Failed to login:', error);
+    res.status(500).json({ error: error.message || 'Failed to login' });
   }
 });
 
@@ -248,6 +298,90 @@ app.get('/api/portal/ranches', async (req, res) => {
 
 import appRoutes from './routes';
 app.use('/api/app', appRoutes);
+
+// Admin & Customer Management Top-Level Routes (direct access)
+app.get(['/api/admin/customers', '/api/app/admin/customers'], async (req, res) => {
+  try {
+    const customers = await getAllCustomersList();
+    res.json(customers);
+  } catch (e: any) {
+    res.status(500).json({ error: 'Failed to fetch customers' });
+  }
+});
+
+app.post(['/api/admin/customers', '/api/app/admin/customers'], async (req, res) => {
+  try {
+    const { name, email, password, role } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+
+    const newCust = await createNewUser({
+      name,
+      email,
+      password: password || 'Customer123!',
+      role: role || 'Grower',
+      approvalStatus: 'APPROVED'
+    });
+
+    res.json({
+      success: true,
+      customer: {
+        id: newCust.id,
+        email: newCust.email,
+        name: newCust.name,
+        role: newCust.role,
+        approvalStatus: newCust.approvalStatus,
+        createdAt: newCust.createdAt,
+        user_metadata: {
+          full_name: newCust.name,
+          role: newCust.role,
+          approvalStatus: newCust.approvalStatus
+        }
+      }
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Failed to create customer' });
+  }
+});
+
+app.get(['/api/admin/approvals'], async (req, res) => {
+  const pendingCustomers = mockUsers.filter(u => u.approvalStatus === 'PENDING').map(u => ({
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    role: u.role,
+    approvalStatus: u.approvalStatus,
+    createdAt: u.createdAt
+  }));
+  const pendingRanches = mockRanches.filter(r => r.approvalStatus === 'PENDING').map(r => ({ ...r, entity: r.entity || { name: 'Demo Entity' } }));
+  const pendingTanks = mockTanks.filter(t => t.approvalStatus === 'PENDING').map(t => ({ ...t, ranch: mockRanches.find(r => r.id === t.ranchId) || { name: 'Demo Ranch' } }));
+  res.json({ customers: pendingCustomers, ranches: pendingRanches, tanks: pendingTanks });
+});
+
+app.post(['/api/admin/approvals/customer/:id'], async (req, res) => {
+  try {
+    const { status } = req.body;
+    const updated = updateCustomerApprovalStatus(req.params.id as string, status);
+    res.json({ success: true, customer: updated });
+  } catch (e: any) {
+    res.status(500).json({ error: 'Failed to update customer approval' });
+  }
+});
+
+const mockOrdersList = [
+  { id: 'ord-1', orderId: 'ORD-1099', customerEmail: 'customer@renu.com', product: 'Biome Care', qty: '10 Gal', amt: 1240, status: 'PENDING', date: '2026-10-08' },
+  { id: 'ord-2', orderId: 'ORD-1098', customerEmail: 'john@grower.com', product: 'N-CARE', qty: '25 Gal', amt: 6250, status: 'ACCEPTED', date: '2026-10-07' },
+  { id: 'ord-3', orderId: 'ORD-1097', customerEmail: 'sarah@farms.com', product: 'K-RUSH', qty: '5 Gal', amt: 900, status: 'PENDING', date: '2026-10-06' },
+];
+
+app.get(['/api/admin/orders', '/api/app/admin/orders'], async (req, res) => {
+  res.json(mockOrdersList);
+});
+
+app.post(['/api/admin/orders/:id/accept', '/api/app/admin/orders/:id/accept'], async (req, res) => {
+  const order = mockOrdersList.find(o => o.id === req.params.id);
+  if (order) order.status = 'ACCEPTED';
+  res.json({ success: true, order });
+});
 
 // Only listen if not running on Vercel Serverless
 if (process.env.VERCEL !== '1') {

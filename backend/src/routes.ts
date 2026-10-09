@@ -17,6 +17,7 @@ router.get('/profile', async (req: AuthenticatedRequest, res) => {
 });
 
 import { mockAvatars } from './index';
+import { mockRanches, mockTanks, mockUsers, updateCustomerApprovalStatus } from './usersStore';
 
 router.put('/profile', async (req: AuthenticatedRequest, res) => {
   try {
@@ -67,9 +68,6 @@ router.get('/admin/dashboard', async (req, res) => res.json({ role: 'Super Admin
 // ---------------------------------
 // Grower / Customer App Routes
 // ---------------------------------
-// Mock In-Memory Data for Demo
-let mockRanches: any[] = [];
-let mockTanks: any[] = [];
 
 router.get('/ranches', async (req: AuthenticatedRequest, res) => {
   if (req.user!.id.startsWith('mock-')) {
@@ -164,16 +162,40 @@ router.get('/products', async (req: AuthenticatedRequest, res) => {
 // Admin Approvals Routes
 // ---------------------------------
 router.get('/admin/approvals', async (req: AuthenticatedRequest, res) => {
+  const pendingCustomers = mockUsers.filter(u => u.approvalStatus === 'PENDING').map(u => ({
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    role: u.role,
+    approvalStatus: u.approvalStatus,
+    createdAt: u.createdAt
+  }));
+
   if (req.user!.id.startsWith('mock-')) {
-    const pendingRanches = mockRanches.filter(r => r.approvalStatus === 'PENDING').map(r => ({ ...r, entity: { name: 'Demo Entity' } }));
+    const pendingRanches = mockRanches.filter(r => r.approvalStatus === 'PENDING').map(r => ({ ...r, entity: r.entity || { name: 'Demo Entity' } }));
     const pendingTanks = mockTanks.filter(t => t.approvalStatus === 'PENDING').map(t => ({ ...t, ranch: mockRanches.find(r => r.id === t.ranchId) || { name: 'Demo Ranch' } }));
-    return res.json({ ranches: pendingRanches, tanks: pendingTanks });
+    return res.json({ customers: pendingCustomers, ranches: pendingRanches, tanks: pendingTanks });
   }
   try {
     const pendingRanches = await prisma.ranch.findMany({ where: { approvalStatus: 'PENDING' }, include: { entity: true } });
     const pendingTanks = await prisma.tankSetup.findMany({ where: { approvalStatus: 'PENDING' }, include: { ranch: true } });
-    res.json({ ranches: pendingRanches, tanks: pendingTanks });
-  } catch (error) { res.status(500).json({ error: 'Failed' }); }
+    res.json({ customers: pendingCustomers, ranches: pendingRanches, tanks: pendingTanks });
+  } catch (error) { 
+    // Fallback to in-memory on DB errors
+    const pendingRanches = mockRanches.filter(r => r.approvalStatus === 'PENDING').map(r => ({ ...r, entity: r.entity || { name: 'Demo Entity' } }));
+    const pendingTanks = mockTanks.filter(t => t.approvalStatus === 'PENDING').map(t => ({ ...t, ranch: mockRanches.find(r => r.id === t.ranchId) || { name: 'Demo Ranch' } }));
+    res.json({ customers: pendingCustomers, ranches: pendingRanches, tanks: pendingTanks }); 
+  }
+});
+
+router.post('/admin/approvals/customer/:id', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { status } = req.body; // APPROVED or REJECTED
+    const updated = updateCustomerApprovalStatus(req.params.id as string, status as any);
+    res.json({ success: true, customer: updated });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update customer approval' });
+  }
 });
 
 router.post('/admin/approvals/ranch/:id', async (req: AuthenticatedRequest, res) => {
@@ -181,7 +203,8 @@ router.post('/admin/approvals/ranch/:id', async (req: AuthenticatedRequest, res)
     const { status } = req.body; // APPROVED or REJECTED
     if (req.user!.id.startsWith('mock-')) {
       const idx = mockRanches.findIndex(r => r.id === req.params.id);
-      if (idx !== -1) mockRanches[idx].approvalStatus = status;
+      const target = idx !== -1 ? mockRanches[idx] : undefined;
+      if (target) target.approvalStatus = status;
       return res.json({ success: true });
     }
     const ranch = await prisma.ranch.update({
@@ -197,7 +220,8 @@ router.post('/admin/approvals/tank/:id', async (req: AuthenticatedRequest, res) 
     const { status } = req.body; // APPROVED or REJECTED
     if (req.user!.id.startsWith('mock-')) {
       const idx = mockTanks.findIndex(t => t.id === req.params.id);
-      if (idx !== -1) mockTanks[idx].approvalStatus = status;
+      const targetTank = idx !== -1 ? mockTanks[idx] : undefined;
+      if (targetTank) targetTank.approvalStatus = status;
       return res.json({ success: true });
     }
     const tank = await prisma.tankSetup.update({
