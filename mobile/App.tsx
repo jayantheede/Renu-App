@@ -1,16 +1,12 @@
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
-import { useColorScheme } from 'react-native';
+import { useColorScheme, View, StyleSheet } from 'react-native';
 import { Provider as PaperProvider } from 'react-native-paper';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { lightTheme, darkTheme } from './src/theme/theme';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-// Supabase removed
 import { useAuthStore } from './src/store/useAuthStore';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-
-import { useVideoPlayer, VideoView } from 'expo-video';
-import { View, StyleSheet } from 'react-native';
 
 export default function App() {
   const colorScheme = useColorScheme();
@@ -21,19 +17,11 @@ export default function App() {
     initialize();
   }, []);
 
-  const player = useVideoPlayer(require('./assets/sky_field.mp4'), player => {
-    player.loop = true;
-    player.play();
-  });
-
   return (
-    <SafeAreaProvider>
+    <SafeAreaProvider style={styles.safeArea}>
       <PaperProvider theme={theme as any} settings={{ icon: props => <MaterialCommunityIcons {...props as any} /> }}>
         <View style={styles.container}>
-          <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />
-          <View style={StyleSheet.absoluteFill}>
-            <RootNavigator />
-          </View>
+          <RootNavigator />
         </View>
         <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       </PaperProvider>
@@ -42,8 +30,15 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
   container: {
     flex: 1,
-    backgroundColor: 'transparent',
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#F8FAFC',
   },
 });

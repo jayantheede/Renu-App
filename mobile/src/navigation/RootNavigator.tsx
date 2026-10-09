@@ -4,26 +4,25 @@ import { useAuthStore } from '../store/useAuthStore';
 import { AuthNavigator } from './AuthNavigator';
 import { MainTabNavigator } from './MainTabNavigator';
 import { AdminTabNavigator } from './AdminTabNavigator';
-
 import { EmployeeTabNavigator } from './EmployeeTabNavigator';
 
 export const RootNavigator = () => {
   const { isLoggedIn, role } = useAuthStore();
 
-  const transparentTheme = {
+  const appTheme = {
     ...DefaultTheme,
     colors: {
       ...DefaultTheme.colors,
-      primary: 'transparent',
-      background: 'transparent',
-      card: 'transparent',
-      border: 'transparent',
-      text: '#FFF',
+      primary: '#1F4E34',
+      background: '#F8FAFC',
+      card: '#FFFFFF',
+      border: '#E2E8F0',
+      text: '#111827',
     },
   };
 
   return (
-    <NavigationContainer theme={transparentTheme}>
+    <NavigationContainer theme={appTheme}>
       {!isLoggedIn ? (
         <AuthNavigator />
       ) : role?.toLowerCase() === 'admin' ? (
