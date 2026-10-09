@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Image, FlatList, Dimensions, TextInput } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Image, FlatList, Dimensions, TextInput, RefreshControl } from 'react-native';
 import { Text, ActivityIndicator } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuthStore } from '../store/useAuthStore';
-import { fetchProducts } from '../api/client';
+import { fetchProducts, submitOrder } from '../api/client';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -18,6 +18,7 @@ const FALLBACK_PRODUCTS = [
 export const ShopScreen = () => {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'detail' | 'cart' | 'checkout' | 'success'>('list');
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [quantity, setQuantity] = useState(1);
@@ -33,7 +34,7 @@ export const ShopScreen = () => {
   
   const user = useAuthStore(state => state.user);
 
-  useEffect(() => {
+  const loadProducts = () => {
     fetchProducts()
       .then(data => {
         if (Array.isArray(data) && data.length > 0) {
@@ -46,7 +47,14 @@ export const ShopScreen = () => {
         console.error(e);
         setProducts(FALLBACK_PRODUCTS);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoading(false);
+        setRefreshing(false);
+      });
+  };
+
+  useEffect(() => {
+    loadProducts();
   }, []);
 
   const handleProductSelect = (product: any) => {
@@ -80,6 +88,18 @@ export const ShopScreen = () => {
   
   const processPayment = () => {
     setIsProcessing(true);
+
+    // Sync order to backend
+    submitOrder({
+      items: cart.map(item => ({
+        product: item.product.name,
+        qty: `${item.qty} Gal`,
+        price: item.product.price
+      })),
+      total: cartTotal,
+      customerEmail: user?.email || 'customer@renu.com'
+    }).catch(e => console.warn('Order sync warning', e));
+
     setTimeout(() => {
       setIsProcessing(false);
       setCart([]);
@@ -87,7 +107,7 @@ export const ShopScreen = () => {
       setExpiry('');
       setCvc('');
       setViewMode('success');
-    }, 2000);
+    }, 1500);
   };
   
   const cartTotal = cart.reduce((acc, item) => acc + (item.product.price * item.qty), 0);
@@ -129,6 +149,16 @@ export const ShopScreen = () => {
           contentContainerStyle={styles.listContent}
           numColumns={2}
           columnWrapperStyle={styles.rowWrapper}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                loadProducts();
+              }}
+              tintColor="#2E5D36"
+            />
+          }
           renderItem={({ item: prod }) => (
             <TouchableOpacity style={styles.productCard} onPress={() => handleProductSelect(prod)}>
               <Image source={{ uri: prod.imageUrl || 'https://via.placeholder.com/150' }} style={styles.productImage} />

@@ -420,9 +420,42 @@ const mockOrdersList = [
   { id: 'ord-3', orderId: 'ORD-1097', customerEmail: 'sarah@farms.com', product: 'K-RUSH', qty: '5 Gal', amt: 900, status: 'PENDING', date: '2026-10-06' },
 ];
 
-app.get(['/api/admin/orders', '/api/app/admin/orders'], async (req, res) => {
+app.get(['/api/orders', '/api/app/orders', '/api/admin/orders', '/api/app/admin/orders'], async (req, res) => {
   res.json(mockOrdersList);
 });
+
+app.post(['/api/orders', '/api/app/orders'], async (req, res) => {
+  try {
+    const { items, total, customerEmail, product, qty } = req.body;
+    const prodName = product || (items && items[0]?.product) || 'Biome Care';
+    const quantity = qty || (items && items[0]?.qty) || '10 Gal';
+    const amount = total || 1000;
+    const email = customerEmail || 'customer@renu.com';
+    const newOrder = {
+      id: `ord-${Date.now()}`,
+      orderId: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
+      customerEmail: email,
+      product: prodName,
+      qty: quantity,
+      amt: amount,
+      status: 'PENDING',
+      date: new Date().toISOString().split('T')[0] || '2026-10-09'
+    };
+    mockOrdersList.unshift(newOrder as any);
+
+    addAuditLog({
+      action: 'ORDER_PLACED',
+      details: `New order ${newOrder.orderId} for ${prodName} placed by ${email}`,
+      actor: email,
+      category: 'ORDERS'
+    });
+
+    res.json({ success: true, order: newOrder });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to create order' });
+  }
+});
+
 
 app.post(['/api/admin/orders/:id/accept', '/api/app/admin/orders/:id/accept'], async (req, res) => {
   const order = mockOrdersList.find(o => o.id === req.params.id);

@@ -17,7 +17,7 @@ router.get('/profile', async (req: AuthenticatedRequest, res) => {
 });
 
 import { mockAvatars } from './index';
-import { mockRanches, mockTanks, mockUsers, mockOrdersList, updateCustomerApprovalStatus, updateCustomerDetails, mockPlatformSettings, mockAuditLogs, addAuditLog } from './usersStore';
+import { mockRanches, mockTanks, mockUsers, mockOrdersList, updateCustomerApprovalStatus, updateCustomerDetails, mockPlatformSettings, mockAuditLogs, addAuditLog, mockProducts } from './usersStore';
 
 router.put('/profile', async (req: AuthenticatedRequest, res) => {
   try {
@@ -127,6 +127,39 @@ router.get('/orders', async (req: AuthenticatedRequest, res) => {
   } catch (error) { res.status(500).json({ error: 'Failed' }); }
 });
 
+router.post('/orders', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { items, total, customerEmail, product, qty } = req.body;
+    const prodName = product || (items && items[0]?.product) || 'Biome Care';
+    const quantity = qty || (items && items[0]?.qty) || '10 Gal';
+    const amount = total || 1000;
+    const email = customerEmail || req.user?.email || 'customer@renu.com';
+    const newOrder = {
+      id: `ord-${Date.now()}`,
+      orderId: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
+      customerEmail: email,
+      product: prodName,
+      qty: quantity,
+      amt: amount,
+      status: 'PENDING',
+      date: new Date().toISOString().split('T')[0] || '2026-10-09'
+    };
+    mockOrdersList.unshift(newOrder as any);
+
+    addAuditLog({
+      action: 'ORDER_PLACED',
+      details: `New order ${newOrder.orderId} for ${prodName} placed by ${email}`,
+      actor: email,
+      category: 'ORDERS'
+    });
+
+    res.json({ success: true, order: newOrder });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to create order' });
+  }
+});
+
+
 router.get('/invoices', async (req: AuthenticatedRequest, res) => {
   if (req.user!.id.startsWith('mock-')) return res.json([]);
   try {
@@ -144,19 +177,21 @@ router.get('/messages', async (req: AuthenticatedRequest, res) => {
 });
 
 router.get('/products', async (req: AuthenticatedRequest, res) => {
-  if (req.user!.id.startsWith('mock-')) {
-    return res.json([
-      { id: 'prod-1', name: 'Biome Care', description: 'Fermentation-based liquid designed to improve soil health and water-holding capacity.', price: 120.00, imageUrl: 'https://via.placeholder.com/150/15803D/FFFFFF?text=Biome+Care' },
-      { id: 'prod-2', name: 'N-CARE', description: 'Green nitrification inhibitor that extends nitrogen shelf life by up to 8 weeks and reduces leaching.', price: 250.00, imageUrl: 'https://via.placeholder.com/150/10B981/FFFFFF?text=N-CARE' },
-      { id: 'prod-3', name: 'K-RUSH', description: 'Specialized formula for frost prevention and enhancing fruit quality.', price: 180.00, imageUrl: 'https://via.placeholder.com/150/FACC15/000000?text=K-RUSH' },
-      { id: 'prod-4', name: 'Bee Bloom', description: 'Pheromone blend to promote bee health and optimize pollination.', price: 85.00, imageUrl: 'https://via.placeholder.com/150/F59E0B/000000?text=Bee+Bloom' }
-    ]);
-  }
   try {
-    const products = await prisma.product.findMany();
-    res.json(products);
-  } catch (error) { res.status(500).json({ error: 'Failed' }); }
+    const dbProducts = await prisma.product.findMany();
+    if (dbProducts && dbProducts.length > 0) {
+      const combined = [...mockProducts];
+      for (const p of dbProducts) {
+        if (!combined.some(item => item.id === p.id)) combined.push(p as any);
+      }
+      return res.json(combined);
+    }
+  } catch (error) {
+    console.warn('[DB Warning] Failed to fetch db products, using mockProducts');
+  }
+  res.json(mockProducts);
 });
+
 
 // ---------------------------------
 // Admin Approvals Routes
@@ -259,12 +294,48 @@ router.post('/admin/approvals/tank/:id', async (req: AuthenticatedRequest, res) 
 router.post('/admin/products', async (req: AuthenticatedRequest, res) => {
   try {
     const { name, description, price, imageUrl } = req.body;
-    const product = await prisma.product.create({
-      data: { name, description, price: parseFloat(price), imageUrl }
+    const newProd = {
+      id: `prod-${Date.now()}`,
+      name: (name || '').trim(),
+      description: (description || '').trim(),
+      price: parseFloat(price) || 0,
+      imageUrl: imageUrl || '',
+      createdAt: new Date().toISOString()
+    };
+    mockProducts.unshift(newProd);
+
+    try {
+      await prisma.product.create({
+        data: { name: newProd.name, description: newProd.description, price: newProd.price, imageUrl: newProd.imageUrl }
+      });
+    } catch (dbErr) {
+      console.warn('[DB Warning] Product create fallback to mock:', (dbErr as any).message);
+    }
+
+    addAuditLog({
+      action: 'PRODUCT_CREATED',
+      details: `New storefront product added: ${newProd.name} ($${newProd.price})`,
+      actor: req.user?.email || 'admin@renu.com',
+      category: 'SYSTEM'
     });
-    res.json(product);
-  } catch (error) { res.status(500).json({ error: 'Failed to add product' }); }
+
+    res.json(newProd);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to add product' });
+  }
 });
+
+router.delete('/admin/products/:id', async (req: AuthenticatedRequest, res) => {
+  const idx = mockProducts.findIndex(p => p.id === req.params.id);
+  if (idx !== -1) {
+    mockProducts.splice(idx, 1);
+  }
+  try {
+    await prisma.product.delete({ where: { id: req.params.id as string } });
+  } catch (e) {}
+  res.json({ success: true, message: 'Product deleted' });
+});
+
 
 router.get('/admin/settings', async (req: AuthenticatedRequest, res) => {
   res.json(mockPlatformSettings);
