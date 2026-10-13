@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView, Alert, Modal, Switch, Linking } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Alert, Modal, Switch, Linking, Platform } from 'react-native';
 import { Text, List, useTheme, Avatar, TextInput, Button, Divider } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuthStore } from '../store/useAuthStore';
-import { updateProfile } from '../api/client';
+import { updateProfile, fetchYearEndSummary, toggleMfa } from '../api/client';
 import * as ImagePicker from 'expo-image-picker';
 
 export const MoreScreen = () => {
@@ -53,15 +53,86 @@ export const MoreScreen = () => {
   const [tankLevelAlerts, setTankLevelAlerts] = useState(true);
   const [agronomyAlerts, setAgronomyAlerts] = useState(false);
 
+  // Year-End Purchase Summary State
+  const [yearEndModalVisible, setYearEndModalVisible] = useState(false);
+  const [selectedYear, setSelectedYear] = useState<number>(2026);
+  const [yearEndLoading, setYearEndLoading] = useState(false);
+  const [yearEndData, setYearEndData] = useState<any>(null);
+
   // Security & 2FA State
   const [securityModalVisible, setSecurityModalVisible] = useState(false);
   const [twoFactorAuth, setTwoFactorAuth] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [updatingPassword, setUpdatingPassword] = useState(false);
 
   // Help Center State
   const [helpModalVisible, setHelpModalVisible] = useState(false);
+
+  const handleSignOut = () => {
+    if (Platform.OS === 'web') {
+      logout();
+    } else {
+      Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign Out', style: 'destructive', onPress: logout }
+      ]);
+    }
+  };
+
+  const loadYearEndSummary = async (year: number) => {
+    setSelectedYear(year);
+    setYearEndLoading(true);
+    try {
+      const data = await fetchYearEndSummary(year);
+      setYearEndData(data);
+    } catch (err: any) {
+      console.warn('Failed to load year end summary:', err);
+      Alert.alert('Error', 'Unable to fetch year-end summary.');
+    } finally {
+      setYearEndLoading(false);
+    }
+  };
+
+  const downloadYearEndCsv = () => {
+    if (!yearEndData) return;
+    try {
+      let csv = `Year-End Purchase Summary - ${yearEndData.customerName || 'Customer'} (${yearEndData.year})\n`;
+      csv += `Total Gallons: ${yearEndData.totalGallons}, Total Amount: $${(yearEndData.totalAmount || 0).toLocaleString()}\n\n`;
+      csv += `DELIVERIES\nDate,Delivery ID,Product,Gallons,Ranch,Tank,Status\n`;
+      (yearEndData.deliveries || []).forEach((d: any) => {
+        csv += `"${d.date}","${d.id}","${d.productName || d.product}","${d.gallons}","${d.ranchName || ''}","${d.tankName || ''}","${d.status}"\n`;
+      });
+      csv += `\nINVOICES\nInvoice #,Date,Due Date,Amount,Status,Delivery Ref\n`;
+      (yearEndData.invoices || []).forEach((inv: any) => {
+        csv += `"${inv.invoiceNumber}","${inv.invoiceDate}","${inv.dueDate}","${inv.amount}","${inv.status}","${inv.deliveryId || ''}"\n`;
+      });
+
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `ReNu-Biome-Summary-${yearEndData.year}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else {
+        Alert.alert('CSV Ready', 'Summary exported successfully.');
+      }
+    } catch (e: any) {
+      Alert.alert('Error', 'Failed to generate CSV.');
+    }
+  };
+
+  const handlePrintYearEnd = () => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.print();
+    } else {
+      Alert.alert('Print Summary', 'Use the print option from your mobile share menu.');
+    }
+  };
 
   useEffect(() => {
     if (user?.name) setName(user.name);
@@ -82,10 +153,14 @@ export const MoreScreen = () => {
           if (parsed.agronomyAlerts !== undefined) setAgronomyAlerts(parsed.agronomyAlerts);
         }
 
-        const storedSec = await AsyncStorage.getItem(`@security_prefs_${user.email}`);
-        if (storedSec) {
-          const parsedSec = JSON.parse(storedSec);
-          if (parsedSec.twoFactorAuth !== undefined) setTwoFactorAuth(parsedSec.twoFactorAuth);
+        if (user.mfaEnabled !== undefined) {
+          setTwoFactorAuth(user.mfaEnabled);
+        } else {
+          const storedSec = await AsyncStorage.getItem(`@security_prefs_${user.email}`);
+          if (storedSec) {
+            const parsedSec = JSON.parse(storedSec);
+            if (parsedSec.twoFactorAuth !== undefined) setTwoFactorAuth(parsedSec.twoFactorAuth);
+          }
         }
       } catch (e) {
         console.warn('Failed to load preferences from storage', e);
@@ -151,8 +226,15 @@ export const MoreScreen = () => {
       }
     }
 
+    setUpdatingPassword(true);
     try {
+      if (newPassword) {
+        await updateProfile({ password: newPassword });
+      }
+
       if (user?.email) {
+        await toggleMfa(user.email, twoFactorAuth);
+        await updateUser({ mfaEnabled: twoFactorAuth });
         await AsyncStorage.setItem(
           `@security_prefs_${user.email}`,
           JSON.stringify({ twoFactorAuth })
@@ -162,9 +244,11 @@ export const MoreScreen = () => {
       setNewPassword('');
       setConfirmPassword('');
       setSecurityModalVisible(false);
-      Alert.alert('Security Updated', 'Your security & 2FA preferences have been updated.');
-    } catch (e) {
-      Alert.alert('Error', 'Failed to update security preferences.');
+      Alert.alert('Security Updated', 'Your password and security preferences have been updated.');
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Failed to update security preferences.');
+    } finally {
+      setUpdatingPassword(false);
     }
   };
 
@@ -199,7 +283,7 @@ export const MoreScreen = () => {
 
         {isEditing ? (
           <View style={styles.editForm}>
-            <Button mode="outlined" onPress={handlePickImage} icon="camera" style={{ marginBottom: 12 }}>
+            <Button mode="outlined" onPress={handlePickImage} icon="camera" style={{ marginBottom: 12, minHeight: 48, justifyContent: 'center' }}>
               Upload Avatar
             </Button>
             <TextInput
@@ -210,15 +294,15 @@ export const MoreScreen = () => {
               mode="outlined"
             />
             <View style={styles.actionRow}>
-              <Button mode="text" onPress={() => { setIsEditing(false); setName(user?.name||''); setAvatarUrl(user?.avatarUrl||''); }} textColor="#6B7280">Cancel</Button>
-              <Button mode="contained" onPress={handleSaveProfile} loading={saving} buttonColor="#2E5D36">Save Changes</Button>
+              <Button mode="text" onPress={() => { setIsEditing(false); setName(user?.name||''); setAvatarUrl(user?.avatarUrl||''); }} textColor="#6B7280" style={{ minHeight: 48, justifyContent: 'center' }}>Cancel</Button>
+              <Button mode="contained" onPress={handleSaveProfile} loading={saving} buttonColor="#2E5D36" style={{ minHeight: 48, justifyContent: 'center' }}>Save Changes</Button>
             </View>
           </View>
         ) : (
           <View style={styles.profileInfo}>
             <Text variant="headlineSmall" style={{ fontWeight: 'bold' }}>{user?.name}</Text>
             <Text variant="bodyMedium" style={{ color: '#666', marginBottom: 12 }}>{user?.email}</Text>
-            <Button mode="outlined" onPress={() => setIsEditing(true)} textColor="#2E5D36" style={{ borderColor: '#2E5D36' }}>
+            <Button mode="outlined" onPress={() => setIsEditing(true)} textColor="#2E5D36" style={{ borderColor: '#2E5D36', minHeight: 48, justifyContent: 'center' }}>
               Edit Profile
             </Button>
           </View>
@@ -248,12 +332,26 @@ export const MoreScreen = () => {
           onPress={() => setSecurityModalVisible(true)}
           style={styles.clickableItem}
         />
+
+        <List.Subheader style={[styles.subheader, { marginTop: 12 }]}>Financial & Reports</List.Subheader>
+
+        <List.Item
+          title="Year-End Purchase Summary"
+          description="Deliveries and invoices statement for tax accountant"
+          left={props => <List.Icon {...props} icon="file-document-outline" color="#2E5D36" />}
+          right={props => <List.Icon {...props} icon="chevron-right" color="#94A3B8" />}
+          onPress={() => {
+            setYearEndModalVisible(true);
+            loadYearEndSummary(selectedYear);
+          }}
+          style={styles.clickableItem}
+        />
         
         <List.Subheader style={[styles.subheader, { marginTop: 12 }]}>Support</List.Subheader>
         
         <List.Item
           title="Help Center"
-          description="FAQs, contact support & agronomist"
+          description="Direct telephone & email support"
           left={props => <List.Icon {...props} icon="help-circle-outline" color="#2E5D36" />}
           right={props => <List.Icon {...props} icon="chevron-right" color="#94A3B8" />}
           onPress={() => setHelpModalVisible(true)}
@@ -265,7 +363,7 @@ export const MoreScreen = () => {
         <List.Item
           title="Log Out"
           description="Sign out from this device"
-          onPress={logout}
+          onPress={handleSignOut}
           titleStyle={{ color: '#D32F2F', fontWeight: 'bold' }}
           left={props => <List.Icon {...props} icon="logout" color="#D32F2F" />}
           style={styles.clickableItem}
@@ -463,7 +561,7 @@ export const MoreScreen = () => {
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalTitle}>Help & Support Center</Text>
-                <Text style={styles.modalSubtitle}>Assistance with tanks, deliveries & soil data</Text>
+                <Text style={styles.modalSubtitle}>Assistance with ranches, deliveries & invoices</Text>
               </View>
               <TouchableOpacity onPress={() => setHelpModalVisible(false)} style={styles.closeBtn}>
                 <MaterialCommunityIcons name="close" size={24} color="#64748B" />
@@ -471,22 +569,6 @@ export const MoreScreen = () => {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
-              {/* Direct Action: Message Agronomist */}
-              <TouchableOpacity 
-                style={styles.helpActionCard}
-                onPress={() => {
-                  setHelpModalVisible(false);
-                  navigateTo('Messages');
-                }}
-              >
-                <MaterialCommunityIcons name="chat-processing-outline" size={26} color="#1F4E34" />
-                <View style={{ marginLeft: 12, flex: 1 }}>
-                  <Text style={styles.helpActionTitle}>Message Us / Agronomist</Text>
-                  <Text style={styles.helpActionDesc}>Direct live chat with ReNu agronomic support</Text>
-                </View>
-                <MaterialCommunityIcons name="chevron-right" size={22} color="#1F4E34" />
-              </TouchableOpacity>
-
               {/* Direct Action: Call Support */}
               <TouchableOpacity 
                 style={styles.helpActionCard}
@@ -494,7 +576,7 @@ export const MoreScreen = () => {
               >
                 <MaterialCommunityIcons name="phone-outline" size={26} color="#15803D" />
                 <View style={{ marginLeft: 12, flex: 1 }}>
-                  <Text style={styles.helpActionTitle}>Call ReNu Support</Text>
+                  <Text style={styles.helpActionTitle}>Call ReNu-Biome Office</Text>
                   <Text style={styles.helpActionDesc}>Toll-Free: (800) 555-RENU (Mon-Fri 7am - 6pm)</Text>
                 </View>
                 <MaterialCommunityIcons name="chevron-right" size={22} color="#15803D" />
@@ -507,7 +589,7 @@ export const MoreScreen = () => {
               >
                 <MaterialCommunityIcons name="email-outline" size={26} color="#0369A1" />
                 <View style={{ marginLeft: 12, flex: 1 }}>
-                  <Text style={styles.helpActionTitle}>Email Help Desk</Text>
+                  <Text style={styles.helpActionTitle}>Email Support Desk</Text>
                   <Text style={styles.helpActionDesc}>support@renubiome.com</Text>
                 </View>
                 <MaterialCommunityIcons name="chevron-right" size={22} color="#0369A1" />
@@ -516,18 +598,18 @@ export const MoreScreen = () => {
               <Text style={[styles.sectionSubtitle, { marginTop: 16, marginBottom: 8 }]}>Frequently Asked Questions</Text>
               
               <View style={styles.faqCard}>
-                <Text style={styles.faqQ}>How do I reorder a delivery or refill?</Text>
-                <Text style={styles.faqA}>Tap "Reorder last delivery" on Home, or navigate to Shop to select your custom biological blend and schedule a delivery date.</Text>
+                <Text style={styles.faqQ}>How do I place an order for delivery?</Text>
+                <Text style={styles.faqA}>Orders are phoned in directly to ReNu-Biome. Our office records your product, delivery window, tanks, and blocks, and you can track the status under the Deliveries tab.</Text>
               </View>
 
               <View style={styles.faqCard}>
-                <Text style={styles.faqQ}>How do I view my ranches & tanks?</Text>
-                <Text style={styles.faqA}>Visit the "Ranches" tab to view real-time tank capacity levels, drag-and-drop ranch layouts, and track application schedules.</Text>
+                <Text style={styles.faqQ}>How do I view my ranches & blocks?</Text>
+                <Text style={styles.faqA}>Visit the Ranches tab to view computed ranch acreage, detailed block records (crop, variety, acreage, APN), and tank registers.</Text>
               </View>
 
               <View style={styles.faqCard}>
-                <Text style={styles.faqQ}>Where can I download receipts?</Text>
-                <Text style={styles.faqA}>Visit the "Invoices" tab to download PDF statements or complete pending payments.</Text>
+                <Text style={styles.faqQ}>Where can I download invoices and statements?</Text>
+                <Text style={styles.faqA}>Visit the Invoices tab to view open and paid statements, view official QuickBooks invoices, or download your Year-End Purchase Summary from More.</Text>
               </View>
             </ScrollView>
 
@@ -536,9 +618,148 @@ export const MoreScreen = () => {
                 mode="contained" 
                 onPress={() => setHelpModalVisible(false)} 
                 buttonColor="#2E5D36" 
-                style={{ flex: 1 }}
+                style={{ flex: 1, minHeight: 48, justifyContent: 'center' }}
               >
                 Close Help Center
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ==================== YEAR-END PURCHASE SUMMARY MODAL ==================== */}
+      <Modal visible={yearEndModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Year-End Purchase Summary</Text>
+                <Text style={styles.modalSubtitle}>Statement for tax accountant & records</Text>
+              </View>
+              <TouchableOpacity onPress={() => setYearEndModalVisible(false)} style={styles.closeBtn}>
+                <MaterialCommunityIcons name="close" size={24} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Year Selector Chips */}
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+              {[2026, 2025, 2024].map((year) => (
+                <TouchableOpacity
+                  key={year}
+                  onPress={() => loadYearEndSummary(year)}
+                  style={{
+                    paddingHorizontal: 16,
+                    paddingVertical: 8,
+                    borderRadius: 20,
+                    backgroundColor: selectedYear === year ? '#2E5D36' : '#F1F5F9',
+                    borderWidth: 1,
+                    borderColor: selectedYear === year ? '#2E5D36' : '#CBD5E1',
+                    minHeight: 40,
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{
+                    fontSize: 14,
+                    fontWeight: '700',
+                    color: selectedYear === year ? '#FFFFFF' : '#475569',
+                  }}>
+                    {year}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {yearEndLoading ? (
+              <View style={{ padding: 40, alignItems: 'center' }}>
+                <Text style={{ color: '#64748B' }}>Loading summary data...</Text>
+              </View>
+            ) : yearEndData ? (
+              <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
+                {/* Metric Summary Cards */}
+                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
+                  <View style={{ flex: 1, backgroundColor: '#F0FDF4', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#DCFCE7' }}>
+                    <Text style={{ fontSize: 12, color: '#166534', fontWeight: '600' }}>TOTAL GALLONS</Text>
+                    <Text style={{ fontSize: 20, fontWeight: '800', color: '#15803D', marginTop: 4 }}>
+                      {(yearEndData.totalGallons || 0).toLocaleString()} gal
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1, backgroundColor: '#F8FAFC', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                    <Text style={{ fontSize: 12, color: '#475569', fontWeight: '600' }}>TOTAL INVOICED</Text>
+                    <Text style={{ fontSize: 20, fontWeight: '800', color: '#0F172A', marginTop: 4 }}>
+                      ${(yearEndData.totalAmount || 0).toLocaleString()}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Deliveries Section */}
+                <Text style={[styles.sectionSubtitle, { marginBottom: 8 }]}>
+                  Deliveries in {yearEndData.year} ({yearEndData.deliveries?.length || 0})
+                </Text>
+                {(!yearEndData.deliveries || yearEndData.deliveries.length === 0) ? (
+                  <Text style={{ color: '#94A3B8', fontSize: 13, marginBottom: 16 }}>No deliveries recorded for {yearEndData.year}.</Text>
+                ) : (
+                  <View style={{ backgroundColor: '#F8FAFC', borderRadius: 12, padding: 8, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                    {yearEndData.deliveries.map((d: any, idx: number) => (
+                      <View key={d.id || idx} style={{ paddingVertical: 8, borderBottomWidth: idx === yearEndData.deliveries.length - 1 ? 0 : 1, borderBottomColor: '#E2E8F0' }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Text style={{ fontWeight: '700', fontSize: 13, color: '#0F172A' }}>{d.productName || d.product}</Text>
+                          <Text style={{ fontWeight: '700', fontSize: 13, color: '#2E5D36' }}>{Number(d.gallons).toLocaleString()} gal</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 3 }}>
+                          <Text style={{ fontSize: 12, color: '#64748B' }}>{d.date} • {d.ranchName || 'Ranch'} ({d.tankName || 'Tank'})</Text>
+                          <Text style={{ fontSize: 11, fontWeight: '600', color: d.status === 'Delivered' ? '#16A34A' : '#D97706' }}>{d.status}</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {/* Invoices Section */}
+                <Text style={[styles.sectionSubtitle, { marginBottom: 8 }]}>
+                  Invoices in {yearEndData.year} ({yearEndData.invoices?.length || 0})
+                </Text>
+                {(!yearEndData.invoices || yearEndData.invoices.length === 0) ? (
+                  <Text style={{ color: '#94A3B8', fontSize: 13, marginBottom: 16 }}>No invoices recorded for {yearEndData.year}.</Text>
+                ) : (
+                  <View style={{ backgroundColor: '#F8FAFC', borderRadius: 12, padding: 8, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                    {yearEndData.invoices.map((inv: any, idx: number) => (
+                      <View key={inv.id || idx} style={{ paddingVertical: 8, borderBottomWidth: idx === yearEndData.invoices.length - 1 ? 0 : 1, borderBottomColor: '#E2E8F0' }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Text style={{ fontWeight: '700', fontSize: 13, color: '#0F172A' }}>{inv.invoiceNumber}</Text>
+                          <Text style={{ fontWeight: '700', fontSize: 13, color: '#0F172A' }}>${Number(inv.amount).toLocaleString()}</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 3 }}>
+                          <Text style={{ fontSize: 12, color: '#64748B' }}>Date: {inv.invoiceDate} • Due: {inv.dueDate}</Text>
+                          <Text style={{ fontSize: 11, fontWeight: '600', color: inv.status === 'Paid' ? '#16A34A' : inv.status === 'Overdue' ? '#DC2626' : '#2563EB' }}>
+                            {inv.status}
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </ScrollView>
+            ) : null}
+
+            {/* Modal Actions */}
+            <View style={[styles.modalActions, { gap: 10 }]}>
+              <Button 
+                mode="outlined" 
+                onPress={downloadYearEndCsv} 
+                icon="file-delimited-outline"
+                textColor="#2E5D36" 
+                style={{ flex: 1, borderColor: '#2E5D36', minHeight: 48, justifyContent: 'center' }}
+              >
+                Export CSV
+              </Button>
+              <Button 
+                mode="contained" 
+                onPress={handlePrintYearEnd} 
+                icon="printer"
+                buttonColor="#2E5D36" 
+                style={{ flex: 1, minHeight: 48, justifyContent: 'center' }}
+              >
+                Print / PDF
               </Button>
             </View>
           </View>

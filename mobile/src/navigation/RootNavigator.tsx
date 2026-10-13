@@ -22,7 +22,7 @@ export const RootNavigator = () => {
   };
 
   return (
-    <NavigationContainer theme={appTheme}>
+    <NavigationContainer key={isLoggedIn ? `auth-${role}` : 'guest'} theme={appTheme}>
       {!isLoggedIn ? (
         <AuthNavigator />
       ) : role?.toLowerCase() === 'admin' ? (

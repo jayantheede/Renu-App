@@ -3,24 +3,21 @@ import { View, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { HomeScreen } from '../screens/HomeScreen';
 import { InvoicesScreen } from '../screens/InvoicesScreen';
-import { MessagesScreen } from '../screens/MessagesScreen';
 import { MoreScreen } from '../screens/MoreScreen';
-import { ShopScreen } from '../screens/ShopScreen';
 import { RanchesScreen } from '../screens/RanchesScreen';
-import { OrdersScreen } from '../screens/OrdersScreen';
+import { DeliveriesScreen } from '../screens/DeliveriesScreen';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Text } from 'react-native-paper';
 
 const Tab = createBottomTabNavigator();
-const { width } = Dimensions.get('window');
 
-const TabBarIcon = ({ name, isFocused, label }: { name: string, isFocused: boolean, label: string }) => {
+const TabBarIcon = ({ name, isFocused, label }: { name: string; isFocused: boolean; label: string }) => {
   return (
     <View style={[styles.iconWrapper, isFocused && styles.activeIconWrapper]}>
       <MaterialCommunityIcons 
         name={name as any} 
-        size={24} 
-        color={isFocused ? '#1F4E34' : '#6B7280'} 
+        size={22} 
+        color={isFocused ? '#1F4E34' : '#64748B'} 
       />
       <Text style={[styles.iconLabel, isFocused && styles.activeIconLabel]}>
         {label}
@@ -52,11 +49,9 @@ const CustomTabBar = ({ state, descriptors, navigation }: any) => {
 
           let iconName = 'leaf';
           if (route.name === 'Home') iconName = 'home-outline';
-          if (route.name === 'Ranches') iconName = 'terrain';
-          if (route.name === 'Orders') iconName = 'truck-outline';
+          if (route.name === 'Ranches') iconName = 'sprout';
+          if (route.name === 'Deliveries') iconName = 'truck-delivery-outline';
           if (route.name === 'Invoices') iconName = 'receipt';
-          if (route.name === 'Messages') iconName = 'message-outline';
-          if (route.name === 'Shop') iconName = 'cart-outline';
           if (route.name === 'More') iconName = 'dots-horizontal';
 
           return (
@@ -66,6 +61,7 @@ const CustomTabBar = ({ state, descriptors, navigation }: any) => {
               accessibilityState={isFocused ? { selected: true } : {}}
               onPress={onPress}
               style={styles.tabButton}
+              activeOpacity={0.7}
             >
               <TabBarIcon name={iconName} isFocused={isFocused} label={label} />
             </TouchableOpacity>
@@ -82,14 +78,13 @@ export const MainTabNavigator = () => {
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-      }}
+        unmountOnBlur: true, // Unmount screens you leave as specified
+      } as any}
     >
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Home' }} />
       <Tab.Screen name="Ranches" component={RanchesScreen} options={{ title: 'Ranches' }} />
-      <Tab.Screen name="Orders" component={OrdersScreen} options={{ title: 'Orders' }} />
+      <Tab.Screen name="Deliveries" component={DeliveriesScreen} options={{ title: 'Deliveries' }} />
       <Tab.Screen name="Invoices" component={InvoicesScreen} options={{ title: 'Invoices' }} />
-      <Tab.Screen name="Messages" component={MessagesScreen} options={{ title: 'Messages' }} />
-      <Tab.Screen name="Shop" component={ShopScreen} options={{ title: 'Shop' }} />
       <Tab.Screen name="More" component={MoreScreen} options={{ title: 'More' }} />
     </Tab.Navigator>
   );
@@ -98,47 +93,50 @@ export const MainTabNavigator = () => {
 const styles = StyleSheet.create({
   tabBarWrapper: {
     position: 'absolute',
-    bottom: 20,
-    left: 16,
-    right: 16,
-    borderRadius: 30,
+    bottom: 14,
+    left: 12,
+    right: 12,
+    borderRadius: 24,
     backgroundColor: '#FFFFFF',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 10,
-    elevation: 10,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   tabBar: {
     flexDirection: 'row',
-    height: 70,
+    height: 64,
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 12,
+    paddingHorizontal: 6,
   },
   tabButton: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 48, // 48px min tap target
   },
   iconWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 20,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 16,
   },
   activeIconWrapper: {
     backgroundColor: '#E8F5E9',
   },
   iconLabel: {
-    color: '#6B7280',
+    color: '#64748B',
     fontSize: 10,
     marginTop: 2,
     fontWeight: '500',
   },
   activeIconLabel: {
     color: '#1F4E34',
-    fontWeight: 'bold',
+    fontWeight: '700',
   }
 });

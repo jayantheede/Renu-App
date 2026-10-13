@@ -1,47 +1,82 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { requireAuth, requireRole, AuthenticatedRequest } from './auth';
+import {
+  mockRanches,
+  mockTanks,
+  mockUsers,
+  mockOrdersList,
+  mockInvoices,
+  mockProducts,
+  mockFeatureFlags,
+  mockAuditLogs,
+  addAuditLog,
+  addAdminNotification,
+  saveStore,
+  syncStoreFromDB,
+  updateUserProfile,
+  computeRanchAcreage,
+  getRanchesForCustomer,
+  createRanch,
+  addBlockToRanch,
+  updateBlock,
+  deleteBlock,
+  addTankToRanch,
+  updateTank,
+  deleteTank,
+  createDeliveryOrder,
+  updateDeliveryStatus,
+  getInvoicesList,
+  createHandEnteredInvoice,
+  markInvoicePaid,
+  voidInvoice,
+  getCustomerYearEndSummary,
+  getFeatureFlagsForCustomer,
+  updateGlobalFeatureFlags,
+  updateCustomerFeatureFlagOverride,
+  getAllCustomersList,
+  updateCustomerDetails,
+  ProductItem
+} from './usersStore';
+import { mockAvatars, transporter } from './index';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 router.use(requireAuth);
 
+// ---------------------------------
+// Profile & User Settings
+// ---------------------------------
 router.get('/profile', async (req: AuthenticatedRequest, res) => {
-  if (req.user!.id.startsWith('mock-')) {
-    const mockUser = { ...req.user, avatarUrl: mockAvatars[req.user!.id] };
-    return res.json({ message: 'Profile details', user: mockUser });
-  }
-  const u = await prisma.user.findUnique({ where: { id: req.user!.id } });
-  res.json({ message: 'Profile details', user: u });
+  const user = req.user!;
+  const found = mockUsers.find(u => u.id === user.id || u.email.toLowerCase() === user.email.toLowerCase());
+  const userObj: any = found || user;
+  res.json({
+    message: 'Profile details',
+    user: {
+      ...userObj,
+      avatarUrl: userObj.avatarUrl || mockAvatars[user.id] || '',
+      user_metadata: {
+        full_name: userObj.name,
+        role: userObj.role,
+        approvalStatus: userObj.approvalStatus
+      }
+    }
+  });
 });
-
-import { mockAvatars } from './index';
-import { mockRanches, mockTanks, mockUsers, mockOrdersList, mockInvoices, updateCustomerApprovalStatus, updateCustomerDetails, mockPlatformSettings, mockAuditLogs, addAuditLog, mockProducts, mockMessages, saveStore, syncStoreFromDB, updateUserProfile } from './usersStore';
 
 router.put('/profile', async (req: AuthenticatedRequest, res) => {
   try {
-    const { name, avatarUrl, phone, address } = req.body;
+    const { name, avatarUrl, phone, password } = req.body;
     const userEmail = req.user!.email;
     const userId = req.user!.id;
 
-    // Update in-memory mockUsers and save to data_store.json
-    const updated = updateUserProfile(userEmail || userId, { name, avatarUrl, phone, address });
+    const updated = updateUserProfile(userEmail || userId, { name, avatarUrl, phone });
+    if (password && updated) {
+      await updateCustomerDetails(updated.id, { password });
+    }
 
     if (avatarUrl && userId) {
       mockAvatars[userId] = avatarUrl;
-    }
-
-    // Also update Prisma DB if online and non-mock ID
-    try {
-      if (userId && !userId.startsWith('mock-')) {
-        await prisma.user.update({
-          where: { id: userId },
-          data: { name: name || undefined, avatarUrl: avatarUrl || undefined }
-        });
-      }
-    } catch (e: any) {
-      // Non-fatal if DB not reachable
     }
 
     addAuditLog({
@@ -58,8 +93,7 @@ router.put('/profile', async (req: AuthenticatedRequest, res) => {
       name: updated?.name || name || req.user!.name,
       avatarUrl: updated?.avatarUrl || avatarUrl || '',
       approvalStatus: (req.user as any)?.approvalStatus || 'APPROVED',
-      phone: (updated as any)?.phone || phone,
-      address: (updated as any)?.address || address,
+      phone: updated?.phone || phone,
       user_metadata: {
         full_name: updated?.name || name || req.user!.name,
         role: req.user!.role,
@@ -67,409 +101,597 @@ router.put('/profile', async (req: AuthenticatedRequest, res) => {
       }
     });
   } catch (error: any) {
-    console.error('Failed to update profile:', error);
     res.status(500).json({ error: error.message || 'Failed to update profile' });
   }
 });
-router.get('/settings', (req, res) => res.json({ message: 'Settings details' }));
-router.get('/notifications', (req, res) => res.json({ message: 'Notifications' }));
 
 // ---------------------------------
 // Dashboard Routes
 // ---------------------------------
-router.get('/grower/dashboard', requireRole(['Grower', 'admin']), async (req: AuthenticatedRequest, res) => {
-  try {
-    const ranches = await prisma.ranch.count();
-    const orders = await prisma.order.count();
-    res.json({
-      role: 'Grower',
-      metrics: {
-        assignedRanches: ranches,
-        pendingOrders: orders,
-        openInvoices: 0,
-        unreadMessages: 0,
-        activeRecommendations: 0
-      }
-    });
-  } catch (error) { res.status(500).json({ error: 'Failed' }); }
+router.get('/grower/dashboard', async (req: AuthenticatedRequest, res) => {
+  await syncStoreFromDB();
+  const user = req.user!;
+  const ranches = getRanchesForCustomer(user.email, user.role);
+  const totalAcres = ranches.reduce((s, r) => s + (r.ac || 0), 0);
+  const userDeliveries = mockOrdersList.filter(
+    d => d.customerId === user.id || d.customerEmail?.toLowerCase() === user.email.toLowerCase()
+  );
+  const userInvoices = mockInvoices.filter(
+    i => i.customerId === user.id || i.customerEmail?.toLowerCase() === user.email.toLowerCase()
+  );
+
+  res.json({
+    role: user.role,
+    metrics: {
+      assignedRanches: ranches.length,
+      totalAcres,
+      upcomingDeliveries: userDeliveries.filter(d => d.status === 'Scheduled' || d.status === 'Out for delivery').length,
+      openInvoices: userInvoices.filter(i => i.status === 'Open' || i.status === 'Overdue').length,
+      unreadMessages: 0,
+      activeRecommendations: 0
+    }
+  });
 });
 
-router.get('/manager/dashboard', async (req, res) => res.json({ role: 'Ranch Manager', metrics: {} }));
-router.get('/owner/dashboard', async (req, res) => res.json({ role: 'Owner', metrics: {} }));
-router.get('/ceo/dashboard', async (req, res) => res.json({ role: 'CEO', metrics: {} }));
-router.get('/cto/dashboard', async (req, res) => res.json({ role: 'CTO', metrics: {} }));
-router.get('/support/dashboard', async (req, res) => res.json({ role: 'Support Admin', metrics: {} }));
-router.get('/admin/dashboard', async (req, res) => res.json({ role: 'Super Administrator', metrics: {} }));
+router.get('/admin/dashboard', async (req: AuthenticatedRequest, res) => {
+  await syncStoreFromDB();
+  const today = new Date().toISOString().split('T')[0];
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+
+  let deliveriesDueSoon = mockOrdersList.filter(
+    d => (d.status === 'Scheduled' || d.status === 'Out for delivery') &&
+         (d.date === today || d.date === tomorrow || (d.deliveryWindow && (d.deliveryWindow.includes(today) || d.deliveryWindow.includes(tomorrow))))
+  );
+  if (deliveriesDueSoon.length === 0) {
+    deliveriesDueSoon = mockOrdersList.filter(d => d.status === 'Scheduled' || d.status === 'Out for delivery').slice(0, 4);
+  }
+
+  const deliveriesThisWeek = mockOrdersList.filter(d => d.status === 'Scheduled' || d.status === 'Out for delivery');
+
+  const invoices = getInvoicesList(undefined, 'admin');
+  const overdueInvoices = invoices.filter(i => i.status === 'Overdue');
+  const overdueTotal = overdueInvoices.reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
+
+  const paidInvoices = invoices.filter(i => i.status === 'Paid');
+  const totalPaidRevenue = paidInvoices.reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
+
+  const openInvoices = invoices.filter(i => i.status === 'Open');
+  const openTotal = openInvoices.reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
+
+  res.json({
+    deliveriesDueSoon,
+    deliveriesThisWeekCount: deliveriesThisWeek.length,
+    overdueInvoices,
+    overdueTotal,
+    totalPaidRevenue,
+    openTotal,
+    metrics: {
+      totalRevenue: totalPaidRevenue,
+      openInvoicesTotal: openTotal,
+      overdueTotal,
+      activeDeliveries: deliveriesThisWeek.length
+    }
+  });
+});
 
 // ---------------------------------
-// Grower / Customer App Routes
+// Ranches, Blocks & Tanks Routes
 // ---------------------------------
-
 router.get('/ranches', async (req: AuthenticatedRequest, res) => {
   await syncStoreFromDB();
   const user = req.user!;
-  if (user.id.startsWith('mock-')) {
-    let ranches = mockRanches.map(r => ({ ...r, tankSetups: mockTanks.filter(t => t.ranchId === r.id) }));
-    // Employees only see ranches assigned to them
-    if (user.role === 'employee') {
-      ranches = ranches.filter(r => r.assignedEmpEmail === user.email || !r.assignedEmpEmail);
-    }
-    return res.json(ranches);
-  }
-  try {
-    const ranches = await prisma.ranch.findMany({ include: { tankSetups: true } });
-    res.json(ranches);
-  } catch(e) { res.status(500).json({ error: 'Failed to fetch ranches' }); }
+  const ranches = getRanchesForCustomer(user.email, user.role);
+  res.json(ranches);
 });
 
 router.post('/ranches', async (req: AuthenticatedRequest, res) => {
   try {
-    const { entId, name, county, ac } = req.body;
-    
-    if (req.user!.id.startsWith('mock-')) {
-      const newRanch = { id: `mock-ranch-${Date.now()}`, entId: 'mock-entity-1', name, county, ac, approvalStatus: 'PENDING' };
-      mockRanches.push(newRanch);
-      saveStore();
-      return res.json(newRanch);
+    const { name, county, customerId, customerEmail } = req.body;
+    if (!name || !county) {
+      return res.status(400).json({ error: 'Ranch name and county are required' });
     }
+    const user = req.user!;
+    const targetCustId = (user.role === 'admin' && customerId) ? customerId : user.id;
+    const targetCustEmail = (user.role === 'admin' && customerEmail) ? customerEmail : user.email;
 
-    let targetEntId = entId;
-    if (!targetEntId) {
-       const entity = await prisma.entity.create({ data: { name: 'Demo Entity' } });
-       targetEntId = entity.id;
-    }
-
-    const ranch = await prisma.ranch.create({
-      data: { entId: targetEntId, name, county, ac, approvalStatus: 'PENDING' }
+    const ranch = createRanch({
+      name,
+      county,
+      customerId: targetCustId,
+      customerEmail: targetCustEmail
     });
+
+    addAuditLog({
+      action: 'RANCH_CREATED',
+      details: `Ranch "${name}" created in ${county} County`,
+      actor: user.email,
+      category: 'RANCHES'
+    });
+
     res.json(ranch);
-  } catch(e) { res.status(500).json({ error: 'Failed to create ranch' }); }
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Failed to create ranch' });
+  }
+});
+
+router.put('/ranches/:id', async (req: AuthenticatedRequest, res) => {
+  const ranch = mockRanches.find(r => r.id === req.params.id);
+  if (!ranch) return res.status(404).json({ error: 'Ranch not found' });
+
+  if (req.body.name) ranch.name = req.body.name.trim();
+  if (req.body.county) ranch.county = req.body.county.trim();
+  saveStore();
+  res.json(ranch);
+});
+
+router.delete('/ranches/:id', async (req: AuthenticatedRequest, res) => {
+  const idx = mockRanches.findIndex(r => r.id === req.params.id);
+  if (idx >= 0) {
+    mockRanches.splice(idx, 1);
+    saveStore();
+    return res.json({ success: true, message: 'Ranch deleted' });
+  }
+  res.status(404).json({ error: 'Ranch not found' });
+});
+
+// Blocks
+router.post('/ranches/:ranchId/blocks', async (req: AuthenticatedRequest, res) => {
+  try {
+    const block = addBlockToRanch(req.params.ranchId as string, req.body);
+    if (!block) return res.status(404).json({ error: 'Ranch not found' });
+    res.json({ success: true, block });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Failed to add block' });
+  }
+});
+
+router.put('/blocks/:id', async (req: AuthenticatedRequest, res) => {
+  const updated = updateBlock(req.params.id as string, req.body);
+  if (!updated) return res.status(404).json({ error: 'Block not found' });
+  res.json({ success: true, block: updated });
+});
+
+router.delete('/blocks/:id', async (req: AuthenticatedRequest, res) => {
+  const ok = deleteBlock(req.params.id as string);
+  if (ok) return res.json({ success: true, message: 'Block deleted' });
+  res.status(404).json({ error: 'Block not found' });
+});
+
+// Tanks
+router.post('/ranches/:ranchId/tanks', async (req: AuthenticatedRequest, res) => {
+  try {
+    const tank = addTankToRanch(req.params.ranchId as string, req.body);
+    if (!tank) return res.status(404).json({ error: 'Ranch not found' });
+    res.json({ success: true, tank });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Failed to add tank' });
+  }
 });
 
 router.post('/tank-setups', async (req: AuthenticatedRequest, res) => {
   try {
-    const { ranchId, capacity, location, pinX, pinY } = req.body;
-    
-    if (req.user!.id.startsWith('mock-')) {
-      const newTank = {
-        id: `mock-tank-${Date.now()}`,
-        ranchId,
-        capacity: parseInt(capacity) || 1000,
-        location: location || 'Field Station',
-        approvalStatus: 'APPROVED',
-        pinX: pinX !== undefined ? pinX : 50,
-        pinY: pinY !== undefined ? pinY : 50,
-        level: '82%',
-        pressure: '45 PSI'
-      };
-      mockTanks.push(newTank);
-      // Also update the ranch's tankSetups in mockRanches
-      const ranchIdx = mockRanches.findIndex(r => r.id === ranchId);
-      if (ranchIdx >= 0) {
-        if (!mockRanches[ranchIdx].tankSetups) mockRanches[ranchIdx].tankSetups = [];
-        mockRanches[ranchIdx].tankSetups!.push(newTank);
+    const { ranchId, capacity, location, name } = req.body;
+    const tank = addTankToRanch(ranchId, { capacity, location, name });
+    if (!tank) return res.status(404).json({ error: 'Ranch not found' });
+    res.json(tank);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Failed to add tank' });
+  }
+});
+
+router.put('/tanks/:id', async (req: AuthenticatedRequest, res) => {
+  const updated = updateTank(req.params.id as string, req.body);
+  if (!updated) return res.status(404).json({ error: 'Tank not found' });
+  res.json({ success: true, tank: updated });
+});
+
+router.delete('/tanks/:id', async (req: AuthenticatedRequest, res) => {
+  const ok = deleteTank(req.params.id as string);
+  if (ok) return res.json({ success: true, message: 'Tank deleted' });
+  res.status(404).json({ error: 'Tank not found' });
+});
+
+// ---------------------------------
+// Deliveries (Orders) Routes
+// ---------------------------------
+router.get(['/deliveries', '/orders'], async (req: AuthenticatedRequest, res) => {
+  await syncStoreFromDB();
+  const user = req.user!;
+  if (user.role === 'admin') {
+    return res.json(mockOrdersList);
+  }
+  const norm = user.email.toLowerCase().trim();
+  const userDeliveries = mockOrdersList.filter(
+    d => (d.customerId && d.customerId.toLowerCase() === norm) ||
+         (d.customerEmail && d.customerEmail.toLowerCase() === norm)
+  );
+  res.json(userDeliveries);
+});
+
+router.post(['/deliveries', '/orders'], async (req: AuthenticatedRequest, res) => {
+  try {
+    const {
+      customerId,
+      customerEmail,
+      product,
+      gallons,
+      ranchId,
+      tankId,
+      blockIds,
+      deliveryWindow,
+      gateCode,
+      contactOnArrival,
+      notes
+    } = req.body;
+
+    const targetEmail = customerEmail || req.user?.email || 'customer@renu.com';
+    const targetCustId = customerId || req.user?.id || 'mock-cust-1';
+
+    const delivery = createDeliveryOrder({
+      customerId: targetCustId,
+      customerEmail: targetEmail,
+      product: product || 'Biome Care',
+      gallons: Number(gallons) || 500,
+      ranchId: ranchId || 'ranch-1',
+      tankId: tankId || 'tank-1-1',
+      blockIds: Array.isArray(blockIds) ? blockIds : [],
+      deliveryWindow: deliveryWindow || 'Scheduled date window',
+      gateCode,
+      contactOnArrival,
+      notes
+    });
+
+    // Send email notification to customer on Scheduled
+    if (transporter && targetEmail) {
+      try {
+        await transporter.sendMail({
+          from: `"ReNu-Biome Deliveries" <${process.env.SMTP_USER || 'deliveries@renubiome.com'}>`,
+          to: targetEmail,
+          subject: `Delivery Scheduled: Order #${delivery.orderId} (${delivery.product})`,
+          html: `
+            <div style="font-family: sans-serif; padding: 20px; color: #1E293B;">
+              <h2 style="color: #2E5D36;">ReNu-Biome Delivery Scheduled</h2>
+              <p>Your delivery has been scheduled with the following details:</p>
+              <ul>
+                <li><strong>Order #:</strong> ${delivery.orderId}</li>
+                <li><strong>Product:</strong> ${delivery.product}</li>
+                <li><strong>Gallons:</strong> ${delivery.gallons.toLocaleString()} Gal</li>
+                <li><strong>Delivery Window:</strong> ${delivery.deliveryWindow}</li>
+                <li><strong>Status:</strong> Scheduled</li>
+              </ul>
+              <p>You can track delivery status anytime in the ReNu-Biome portal.</p>
+            </div>
+          `
+        });
+      } catch (err: any) {
+        console.warn('[Email Warning] Could not send scheduled delivery email:', err.message);
       }
-      saveStore();
-      return res.json(newTank);
     }
 
-    const tank = await prisma.tankSetup.create({
-      data: { ranchId, capacity: parseInt(capacity) || 1000, location, approvalStatus: 'APPROVED' }
-    });
-    res.json(tank);
-  } catch(e) { res.status(500).json({ error: 'Failed to create tank setup' }); }
-});
-
-router.get('/orders', async (req: AuthenticatedRequest, res) => {
-  await syncStoreFromDB();
-  if (req.user!.id.startsWith('mock-')) return res.json(mockOrdersList);
-  try {
-    const orders = await prisma.order.findMany();
-    res.json(orders && orders.length > 0 ? orders : mockOrdersList);
-  } catch (error) { res.json(mockOrdersList); }
-});
-
-router.post('/orders', async (req: AuthenticatedRequest, res) => {
-  try {
-    const { items, total, customerEmail, product, qty } = req.body;
-    const prodName = product || (items && items[0]?.product) || 'Biome Care';
-    const quantity = qty || (items && items[0]?.qty) || '10 Gal';
-    const amount = total || 1000;
-    const email = customerEmail || req.user?.email || 'customer@renu.com';
-    const newOrder = {
-      id: `ord-${Date.now()}`,
-      orderId: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
-      customerEmail: email,
-      product: prodName,
-      qty: quantity,
-      amt: amount,
-      status: 'PENDING' as const,
-      date: new Date().toISOString().split('T')[0] || '2026-10-09',
-      paymentEmailSent: false,
-      trackingStep: 1,
-      trackingTimeline: [
-        { title: 'Order Placed', desc: 'Received and awaiting admin acceptance', date: new Date().toISOString().replace('T', ' ').substring(0, 16), done: true },
-        { title: 'Accepted & Payment Sent', desc: 'Awaiting customer payment', date: 'Pending', done: false },
-        { title: 'Payment Confirmed', desc: 'Invoice generated & blending initiated', date: 'Pending', done: false },
-        { title: 'Dispatched', desc: 'Tank delivery in transit', date: 'Pending', done: false },
-        { title: 'Delivered', desc: 'Injected into ranch tank', date: 'Pending', done: false }
-      ]
-    };
-    mockOrdersList.unshift(newOrder as any);
-    saveStore();
-
     addAuditLog({
-      action: 'ORDER_PLACED',
-      details: `New order ${newOrder.orderId} for ${prodName} placed by ${email}`,
-      actor: email,
+      action: 'DELIVERY_CREATED',
+      details: `Order #${delivery.orderId} created for ${targetEmail} (${delivery.gallons} Gal ${delivery.product})`,
+      actor: req.user?.email || 'admin@renu.com',
       category: 'ORDERS'
     });
 
-    res.json({ success: true, order: newOrder });
-  } catch (err: any) {
-    res.status(500).json({ error: 'Failed to create order' });
+    res.json({ success: true, order: delivery, delivery });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Failed to create delivery' });
   }
 });
 
+router.put(['/deliveries/:id/status', '/orders/:id/status'], async (req: AuthenticatedRequest, res) => {
+  try {
+    const { status, deliveredGallons, deliveredDate, cancelReason } = req.body;
+    const delivery = updateDeliveryStatus(req.params.id as string, status, {
+      deliveredGallons,
+      deliveredDate,
+      cancelReason
+    });
 
+    if (!delivery) return res.status(404).json({ error: 'Delivery not found' });
+
+    // Email notification on status changes
+    if (transporter && delivery.customerEmail) {
+      try {
+        let subject = `Delivery Update: Order #${delivery.orderId} is ${status}`;
+        let msg = `<p>Your delivery status has changed to <strong>${status}</strong>.</p>`;
+
+        if (status === 'Out for delivery') {
+          subject = `Out for Delivery: Order #${delivery.orderId} (${delivery.product})`;
+          msg = `<p>Our dispatch truck is en route with <strong>${delivery.gallons} Gal</strong> of <strong>${delivery.product}</strong> for injection.</p>`;
+        } else if (status === 'Delivered') {
+          subject = `Delivery Completed: Order #${delivery.orderId} (${delivery.product})`;
+          msg = `<p>Successfully injected <strong>${delivery.deliveredGallons || delivery.gallons} Gal</strong> of <strong>${delivery.product}</strong> on ${delivery.deliveredDate || 'today'}.</p>`;
+        }
+
+        await transporter.sendMail({
+          from: `"ReNu-Biome Deliveries" <${process.env.SMTP_USER || 'deliveries@renubiome.com'}>`,
+          to: delivery.customerEmail,
+          subject,
+          html: `
+            <div style="font-family: sans-serif; padding: 20px; color: #1E293B;">
+              <h2 style="color: #2E5D36;">ReNu-Biome Delivery Update</h2>
+              ${msg}
+              <ul>
+                <li><strong>Order #:</strong> ${delivery.orderId}</li>
+                <li><strong>Product:</strong> ${delivery.product}</li>
+                <li><strong>Delivered Quantity:</strong> ${(delivery.deliveredGallons || delivery.gallons).toLocaleString()} Gal</li>
+                <li><strong>Status:</strong> ${status}</li>
+              </ul>
+            </div>
+          `
+        });
+
+        // If delivered, notify other admin as required:
+        if (status === 'Delivered') {
+          addAdminNotification({
+            title: 'Delivery Marked Delivered',
+            message: `Delivery #${delivery.orderId} (${delivery.product}, ${delivery.deliveredGallons || delivery.gallons} Gal) marked delivered for ${delivery.customerEmail}.`,
+            type: 'DELIVERY'
+          });
+        }
+      } catch (err: any) {
+        console.warn('[Email Warning] Status update email failed:', err.message);
+      }
+    }
+
+    res.json({ success: true, delivery, order: delivery });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Failed to update delivery status' });
+  }
+});
+
+router.put(['/deliveries/:id', '/orders/:id'], async (req: AuthenticatedRequest, res) => {
+  const delivery = mockOrdersList.find(d => d.id === req.params.id || d.orderId === req.params.id);
+  if (!delivery) return res.status(404).json({ error: 'Delivery not found' });
+
+  if (req.body.deliveryWindow) delivery.deliveryWindow = req.body.deliveryWindow;
+  if (req.body.gateCode !== undefined) delivery.gateCode = req.body.gateCode;
+  if (req.body.contactOnArrival !== undefined) delivery.contactOnArrival = req.body.contactOnArrival;
+  if (req.body.notes !== undefined) delivery.notes = req.body.notes;
+  if (req.body.gallons !== undefined) delivery.gallons = Number(req.body.gallons) || delivery.gallons;
+  if (req.body.deliveredGallons !== undefined) delivery.deliveredGallons = Number(req.body.deliveredGallons);
+  if (req.body.deliveredDate !== undefined) delivery.deliveredDate = req.body.deliveredDate;
+
+  saveStore();
+  res.json({ success: true, delivery, order: delivery });
+});
+
+// ---------------------------------
+// Invoices Routes (Hand-entered from QuickBooks)
+// ---------------------------------
 router.get('/invoices', async (req: AuthenticatedRequest, res) => {
   await syncStoreFromDB();
-  if (req.user!.id.startsWith('mock-')) return res.json(mockInvoices);
-  try {
-    const invoices = await prisma.invoice.findMany({ include: { entity: true } });
-    res.json(invoices && invoices.length > 0 ? invoices : mockInvoices);
-  } catch (error) { res.json(mockInvoices); }
+  const user = req.user!;
+  const invoices = getInvoicesList(user.email, user.role);
+  res.json(invoices);
 });
 
-router.get('/messages', async (req: AuthenticatedRequest, res) => {
-  // Always return mock messages (real DB integration pending)
+router.post('/invoices', async (req: AuthenticatedRequest, res) => {
   try {
-    const dbMessages = await prisma.message.findMany({ orderBy: { createdAt: 'desc' } });
-    if (dbMessages && dbMessages.length > 0) {
-      return res.json(dbMessages);
+    const {
+      invoiceNumber,
+      customerId,
+      customerEmail,
+      deliveryId,
+      invoiceDate,
+      dueDate,
+      amount,
+      pdfData,
+      pdfFileName,
+      quickbooksInvoiceId
+    } = req.body;
+
+    if (!invoiceNumber || !amount || !dueDate) {
+      return res.status(400).json({ error: 'Invoice number, amount, and due date are required' });
     }
-  } catch (error) {
-    // Fall through to mock data
+
+    const invoice = createHandEnteredInvoice({
+      invoiceNumber,
+      customerId: customerId || 'mock-cust-1',
+      customerEmail: customerEmail || 'customer@renu.com',
+      deliveryId,
+      invoiceDate,
+      dueDate,
+      amount: Number(amount) || 0,
+      pdfData,
+      pdfFileName,
+      quickbooksInvoiceId
+    });
+
+    addAuditLog({
+      action: 'INVOICE_ENTERED',
+      details: `Invoice #${invoice.invoiceNumber} entered from QuickBooks ($${invoice.amount}) for ${invoice.customerEmail}`,
+      actor: req.user?.email || 'admin@renu.com',
+      category: 'SYSTEM'
+    });
+
+    res.json({ success: true, invoice });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Failed to create invoice' });
   }
-  res.json(mockMessages);
 });
 
-router.post('/messages', async (req: AuthenticatedRequest, res) => {
+router.put('/invoices/:id/pay', async (req: AuthenticatedRequest, res) => {
+  const { paymentDate } = req.body;
+  const invoice = markInvoicePaid(req.params.id as string, paymentDate);
+  if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+
+  addAuditLog({
+    action: 'INVOICE_MARKED_PAID',
+    details: `Invoice #${invoice.invoiceNumber} marked Paid ($${invoice.amount}) on ${invoice.paidDate}`,
+    actor: req.user?.email || 'admin@renu.com',
+    category: 'SYSTEM'
+  });
+
+  res.json({ success: true, invoice });
+});
+
+router.put('/invoices/:id/void', async (req: AuthenticatedRequest, res) => {
+  const invoice = voidInvoice(req.params.id as string);
+  if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+  res.json({ success: true, invoice });
+});
+
+router.put('/invoices/:id', async (req: AuthenticatedRequest, res) => {
+  const inv = mockInvoices.find(i => i.id === req.params.id || i.invoiceNumber === req.params.id);
+  if (!inv) return res.status(404).json({ error: 'Invoice not found' });
+
+  if (req.body.invoiceNumber) inv.invoiceNumber = req.body.invoiceNumber.trim();
+  if (req.body.amount !== undefined) inv.amount = Number(req.body.amount) || inv.amount;
+  if (req.body.dueDate) inv.dueDate = req.body.dueDate;
+  if (req.body.invoiceDate) inv.invoiceDate = req.body.invoiceDate;
+  if (req.body.pdfData) inv.pdfData = req.body.pdfData;
+  if (req.body.pdfFileName) inv.pdfFileName = req.body.pdfFileName;
+  if (req.body.quickbooksInvoiceId !== undefined) inv.quickbooksInvoiceId = req.body.quickbooksInvoiceId;
+
+  saveStore();
+  res.json({ success: true, invoice: inv });
+});
+
+// ---------------------------------
+// Year-End Purchase Summary & Reports
+// ---------------------------------
+router.get(['/reports/year-end-summary', '/reports/year-end'], async (req: AuthenticatedRequest, res) => {
+  await syncStoreFromDB();
+  const year = parseInt(req.query.year as string, 10) || new Date().getFullYear();
+  const customerId = (req.query.customerId as string) || (req.user?.role === 'admin' ? 'customer@renu.com' : (req.user?.email || 'customer@renu.com'));
+
+  const summary = getCustomerYearEndSummary(customerId, year);
+  res.json({
+    ...summary,
+    customerName: summary.customer?.name,
+    totalGallons: summary.totals?.totalGallons,
+    totalAmount: summary.totals?.totalInvoiced
+  });
+});
+
+router.get('/reports/csv', async (req: AuthenticatedRequest, res) => {
+  await syncStoreFromDB();
+  const type = (req.query.type as string) || 'deliveries';
+  const startDate = (req.query.startDate as string) || '2026-01-01';
+  const endDate = (req.query.endDate as string) || '2026-12-31';
+
+  let csvContent = '';
+  if (type === 'deliveries') {
+    csvContent = 'Order ID,Customer Email,Product,Gallons,Delivered Gallons,Status,Date,Ranch,Delivery Window\n';
+    const list = mockOrdersList.filter(d => d.date >= startDate && d.date <= endDate);
+    for (const d of list) {
+      const ranch = mockRanches.find(r => r.id === d.ranchId);
+      csvContent += `"${d.orderId}","${d.customerEmail}","${d.product}",${d.gallons},${d.deliveredGallons || d.gallons},"${d.status}","${d.date}","${ranch?.name || ''}","${d.deliveryWindow || ''}"\n`;
+    }
+  } else {
+    csvContent = 'Invoice Number,Customer Email,Amount,Status,Invoice Date,Due Date,Paid Date,Product,Gallons\n';
+    const list = mockInvoices.filter(i => i.invoiceDate >= startDate && i.invoiceDate <= endDate);
+    for (const i of list) {
+      csvContent += `"${i.invoiceNumber}","${i.customerEmail}",${i.amount},"${i.status}","${i.invoiceDate}","${i.dueDate}","${i.paidDate || ''}","${i.product || ''}",${i.gallons || ''}\n`;
+    }
+  }
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename="${type}_report_${Date.now()}.csv"`);
+  res.send(csvContent);
+});
+
+// ---------------------------------
+// Feature Flags Routes
+// ---------------------------------
+router.get('/feature-flags', async (req: AuthenticatedRequest, res) => {
+  const customerId = req.query.customerId as string;
+  const flags = getFeatureFlagsForCustomer(customerId || req.user?.email);
+  res.json({
+    flags,
+    global: mockFeatureFlags.global,
+    customerOverrides: mockFeatureFlags.customerOverrides
+  });
+});
+
+router.post('/feature-flags', async (req: AuthenticatedRequest, res) => {
   try {
-    const { title, body, toEmail } = req.body;
-    if (!title || !body) return res.status(400).json({ error: 'Title and body are required' });
-    const newMsg = {
-      id: `msg-${Date.now()}`,
-      title: title.trim(),
-      sub: body.trim(),
-      when: 'Just now',
-      dot: 'true',
-      fromEmail: req.user?.email || 'user@renu.com',
-      toEmail: toEmail || 'admin@renu.com',
-      type: 'USER'
-    };
-    mockMessages.unshift(newMsg as any);
-    res.json({ success: true, message: newMsg });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message || 'Failed to send message' });
+    const { global, customerId, customerOverrides } = req.body;
+    if (global) {
+      updateGlobalFeatureFlags(global);
+    }
+    if (customerId && customerOverrides) {
+      updateCustomerFeatureFlagOverride(customerId, customerOverrides);
+    }
+    res.json({
+      success: true,
+      global: mockFeatureFlags.global,
+      customerOverrides: mockFeatureFlags.customerOverrides
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Failed to update feature flags' });
   }
 });
 
+// ---------------------------------
+// Products Routes (NO PRICE FIELD ANYWHERE!)
+// ---------------------------------
 router.get('/products', async (req: AuthenticatedRequest, res) => {
-  try {
-    const dbProducts = await prisma.product.findMany();
-    if (dbProducts && dbProducts.length > 0) {
-      const combined = [...mockProducts];
-      for (const p of dbProducts) {
-        if (!combined.some(item => item.id === p.id)) combined.push(p as any);
-      }
-      return res.json(combined);
-    }
-  } catch (error) {
-    console.warn('[DB Warning] Failed to fetch db products, using mockProducts');
-  }
-  res.json(mockProducts);
-});
-
-
-// ---------------------------------
-// Admin Approvals Routes
-// ---------------------------------
-router.get('/admin/approvals', async (req: AuthenticatedRequest, res) => {
-  const pendingOrders = mockOrdersList.filter(o => o.status === 'PENDING');
-  const pendingCustomers = mockUsers.filter(u => u.approvalStatus === 'PENDING').map(u => ({
-    id: u.id,
-    name: u.name,
-    email: u.email,
-    role: u.role,
-    approvalStatus: u.approvalStatus,
-    createdAt: u.createdAt
+  await syncStoreFromDB();
+  // Strip any price field from response
+  const sanitized = mockProducts.map(p => ({
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    analysis: p.analysis || '',
+    omriCertified: p.omriCertified !== undefined ? p.omriCertified : true,
+    imageUrl: p.imageUrl || '',
+    createdAt: p.createdAt
   }));
-
-  const pendingRanches = mockRanches.filter(r => r.approvalStatus === 'PENDING').map(r => ({ ...r, entity: r.entity || { name: 'Demo Entity' } }));
-  const pendingTanks = mockTanks.filter(t => t.approvalStatus === 'PENDING').map(t => ({ ...t, ranch: mockRanches.find(r => r.id === t.ranchId) || { name: 'Demo Ranch' } }));
-
-  try {
-    const dbRanches = await prisma.ranch.findMany({ where: { approvalStatus: 'PENDING' }, include: { entity: true } });
-    const dbTanks = await prisma.tankSetup.findMany({ where: { approvalStatus: 'PENDING' }, include: { ranch: true } });
-    const combinedRanches = [...pendingRanches];
-    for (const r of dbRanches) {
-      if (!combinedRanches.some(item => item.id === r.id)) combinedRanches.push(r as any);
-    }
-    const combinedTanks = [...pendingTanks];
-    for (const t of dbTanks) {
-      if (!combinedTanks.some(item => item.id === t.id)) combinedTanks.push(t as any);
-    }
-    res.json({ orders: pendingOrders, customers: pendingCustomers, ranches: combinedRanches, tanks: combinedTanks });
-  } catch (error) { 
-    res.json({ orders: pendingOrders, customers: pendingCustomers, ranches: pendingRanches, tanks: pendingTanks }); 
-  }
+  res.json(sanitized);
 });
 
-router.post('/admin/approvals/customer/:id', async (req: AuthenticatedRequest, res) => {
-  try {
-    const { status } = req.body; // APPROVED or REJECTED
-    const updated = updateCustomerApprovalStatus(req.params.id as string, status as any);
-    res.json({ success: true, customer: updated });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to update customer approval' });
-  }
-});
-
-router.put('/admin/customers/:id', async (req: AuthenticatedRequest, res) => {
-  try {
-    const { name, email, role, approvalStatus, password } = req.body;
-    const updated = await updateCustomerDetails(req.params.id as string, { name, email, role, approvalStatus, password });
-    if (updated) {
-      addAuditLog({
-        action: 'CUSTOMER_UPDATED',
-        details: `Customer details modified for ${(name || updated.name)} (${(email || updated.email)})`,
-        actor: req.user?.email || 'admin@renu.com',
-        category: 'USERS'
-      });
-      res.json({ success: true, customer: updated });
-    } else {
-      res.status(404).json({ error: 'Customer not found' });
-    }
-  } catch (error: any) {
-    res.status(500).json({ error: error.message || 'Failed to update customer' });
-  }
-});
-
-
-router.post('/admin/approvals/ranch/:id', async (req: AuthenticatedRequest, res) => {
-  try {
-    const { status } = req.body; // APPROVED or REJECTED
-    if (req.user!.id.startsWith('mock-')) {
-      const idx = mockRanches.findIndex(r => r.id === req.params.id);
-      const target = idx !== -1 ? mockRanches[idx] : undefined;
-      if (target) target.approvalStatus = status;
-      return res.json({ success: true });
-    }
-    const ranch = await prisma.ranch.update({
-      where: { id: req.params.id as string },
-      data: { approvalStatus: status }
-    });
-    res.json(ranch);
-  } catch (error) { res.status(500).json({ error: 'Failed' }); }
-});
-
-router.post('/admin/approvals/tank/:id', async (req: AuthenticatedRequest, res) => {
-  try {
-    const { status } = req.body; // APPROVED or REJECTED
-    if (req.user!.id.startsWith('mock-')) {
-      const idx = mockTanks.findIndex(t => t.id === req.params.id);
-      const targetTank = idx !== -1 ? mockTanks[idx] : undefined;
-      if (targetTank) targetTank.approvalStatus = status;
-      return res.json({ success: true });
-    }
-    const tank = await prisma.tankSetup.update({
-      where: { id: req.params.id as string },
-      data: { approvalStatus: status }
-    });
-    res.json(tank);
-  } catch (error) { res.status(500).json({ error: 'Failed' }); }
-});
 router.post('/admin/products', async (req: AuthenticatedRequest, res) => {
   try {
-    const { name, description, price, imageUrl } = req.body;
-    const newProd = {
+    const { name, description, analysis, omriCertified, imageUrl } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ error: 'Product name is required' });
+
+    const newProd: ProductItem = {
       id: `prod-${Date.now()}`,
-      name: (name || '').trim(),
+      name: name.trim(),
       description: (description || '').trim(),
-      price: parseFloat(price) || 0,
+      analysis: (analysis || '').trim(),
+      omriCertified: Boolean(omriCertified),
       imageUrl: imageUrl || '',
       createdAt: new Date().toISOString()
     };
+
     mockProducts.unshift(newProd);
     saveStore();
 
-    try {
-      await prisma.product.create({
-        data: { name: newProd.name, description: newProd.description, price: newProd.price, imageUrl: newProd.imageUrl }
-      });
-    } catch (dbErr) {
-      console.warn('[DB Warning] Product create fallback to mock:', (dbErr as any).message);
-    }
-
     addAuditLog({
       action: 'PRODUCT_CREATED',
-      details: `New storefront product added: ${newProd.name} ($${newProd.price})`,
+      details: `Product "${newProd.name}" added to catalogue`,
       actor: req.user?.email || 'admin@renu.com',
       category: 'SYSTEM'
     });
 
     res.json(newProd);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to add product' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to create product' });
   }
 });
 
 router.put('/admin/products/:id', async (req: AuthenticatedRequest, res) => {
   try {
-    const { price, name, description, imageUrl } = req.body;
-    const id = req.params.id as string;
-    const idx = mockProducts.findIndex(p => p.id === id);
-    if (idx === -1) {
-      return res.status(404).json({ error: 'Product not found' });
-    }
+    const { name, description, analysis, omriCertified, imageUrl } = req.body;
+    const prod = mockProducts.find(p => p.id === req.params.id);
+    if (!prod) return res.status(404).json({ error: 'Product not found' });
 
-    const oldPrice = mockProducts[idx].price;
-    if (price !== undefined) {
-      const parsedPrice = parseFloat(price);
-      if (isNaN(parsedPrice) || parsedPrice < 0) {
-        return res.status(400).json({ error: 'Valid positive price is required' });
-      }
-      mockProducts[idx].price = parsedPrice;
-    }
-    if (name !== undefined && name.trim()) mockProducts[idx].name = name.trim();
-    if (description !== undefined) mockProducts[idx].description = description.trim();
-    if (imageUrl !== undefined) mockProducts[idx].imageUrl = imageUrl;
+    if (name) prod.name = name.trim();
+    if (description !== undefined) prod.description = description.trim();
+    if (analysis !== undefined) prod.analysis = analysis.trim();
+    if (omriCertified !== undefined) prod.omriCertified = Boolean(omriCertified);
+    if (imageUrl !== undefined) prod.imageUrl = imageUrl;
 
     saveStore();
-
-    try {
-      await prisma.product.update({
-        where: { id },
-        data: {
-          price: mockProducts[idx].price,
-          name: mockProducts[idx].name,
-          description: mockProducts[idx].description,
-          imageUrl: mockProducts[idx].imageUrl
-        }
-      });
-    } catch (e) {}
-
-    addAuditLog({
-      action: 'PRODUCT_PRICE_UPDATED',
-      details: `Product "${mockProducts[idx].name}" price updated from $${oldPrice} to $${mockProducts[idx].price}`,
-      actor: req.user?.email || 'admin@renu.com',
-      category: 'SYSTEM'
-    });
-
-    res.json({ success: true, product: mockProducts[idx] });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to update product price' });
+    res.json({ success: true, product: prod });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to update product' });
   }
 });
 
@@ -478,45 +700,9 @@ router.delete('/admin/products/:id', async (req: AuthenticatedRequest, res) => {
   if (idx !== -1) {
     mockProducts.splice(idx, 1);
     saveStore();
+    return res.json({ success: true, message: 'Product deleted' });
   }
-  try {
-    await prisma.product.delete({ where: { id: req.params.id as string } });
-  } catch (e) {}
-  res.json({ success: true, message: 'Product deleted' });
-});
-
-
-router.get('/admin/settings', async (req: AuthenticatedRequest, res) => {
-  res.json(mockPlatformSettings);
-});
-
-router.post('/admin/settings', async (req: AuthenticatedRequest, res) => {
-  try {
-    Object.assign(mockPlatformSettings, req.body);
-    addAuditLog({
-      action: 'SETTINGS_UPDATED',
-      details: `Global platform settings modified (Maintenance: ${mockPlatformSettings.maintenanceMode ? 'ON' : 'OFF'}, 2FA: ${mockPlatformSettings.require2FAForAdmin ? 'ON' : 'OFF'})`,
-      actor: req.user?.email || 'admin@renu.com',
-      category: 'SYSTEM'
-    });
-    res.json({ success: true, settings: mockPlatformSettings });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to update platform settings' });
-  }
-});
-
-router.get('/admin/audit-logs', async (req: AuthenticatedRequest, res) => {
-  res.json(mockAuditLogs);
-});
-
-router.post('/admin/reset-cache', async (req: AuthenticatedRequest, res) => {
-  addAuditLog({
-    action: 'CACHE_PURGED',
-    details: 'System memory cache cleared and re-synced',
-    actor: req.user?.email || 'admin@renu.com',
-    category: 'SYSTEM'
-  });
-  res.json({ success: true, message: 'System cache cleared and synchronized' });
+  res.status(404).json({ error: 'Product not found' });
 });
 
 export default router;

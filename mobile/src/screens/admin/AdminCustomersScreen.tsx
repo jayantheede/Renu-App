@@ -1,52 +1,100 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity, Alert, Modal, Share, Platform } from 'react-native';
-import { Text, TextInput, Button, Chip, Divider } from 'react-native-paper';
-import { Ionicons } from '@expo/vector-icons';
-import { updateCustomer, assignGrowerToEmployee, exportData, importData } from '../../api/client';
+import { View, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert, Modal, Platform } from 'react-native';
+import { Text, TextInput, Button, Chip, Divider, Checkbox } from 'react-native-paper';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { 
+  submitRanch, 
+  submitBlock, 
+  submitTankSetup, 
+  submitDelivery, 
+  fetchProducts, 
+  fetchRanches 
+} from '../../api/client';
 
 export const AdminCustomersScreen = () => {
   const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [allRanches, setAllRanches] = useState<any[]>([]);
+  const [productsList, setProductsList] = useState<any[]>([]);
 
-  // Create Modal State
-  const [modalVisible, setModalVisible] = useState(false);
+  // 1. Create Single Customer Login Modal State (Admin types name, email, phone, password)
+  const [createCustomerModalVisible, setCreateCustomerModalVisible] = useState(false);
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
+  const [newPhone, setNewPhone] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [newRole, setNewRole] = useState('Grower');
-  const [newHarvestStages, setNewHarvestStages] = useState<string[]>(['Pre Harvest', 'Harvest']);
   const [creating, setCreating] = useState(false);
 
-  // Assign to Employee Modal State
-  const [assignModalVisible, setAssignModalVisible] = useState(false);
-  const [targetCustomer, setTargetCustomer] = useState<any>(null);
-  const [selectedEmployeeEmail, setSelectedEmployeeEmail] = useState('employee@renu.com');
-  const [assigning, setAssigning] = useState(false);
+  // 2. Reset Password Modal State
+  const [resetPasswordModalVisible, setResetPasswordModalVisible] = useState(false);
+  const [selectedCustomerForPassword, setSelectedCustomerForPassword] = useState<any>(null);
+  const [resetPasswordValue, setResetPasswordValue] = useState('');
+  const [resettingPassword, setResettingPassword] = useState(false);
 
-  // Import Modal State
-  const [importModalVisible, setImportModalVisible] = useState(false);
-  const [importJsonText, setImportJsonText] = useState('');
+  // 3. Drilldown: Ranches, Blocks & Tanks Modal State
+  const [drilldownModalVisible, setDrilldownModalVisible] = useState(false);
+  const [activeCustomer, setActiveCustomer] = useState<any>(null);
 
-  // Edit Modal State
-  const [editModalVisible, setEditModalVisible] = useState(false);
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
-  const [editName, setEditName] = useState('');
-  const [editEmail, setEditEmail] = useState('');
-  const [editRole, setEditRole] = useState('Grower');
-  const [editStatus, setEditStatus] = useState<'APPROVED' | 'PENDING' | 'REJECTED'>('APPROVED');
-  const [editPassword, setEditPassword] = useState('');
-  const [updating, setUpdating] = useState(false);
+  // Add Ranch submodal
+  const [addRanchModalVisible, setAddRanchModalVisible] = useState(false);
+  const [ranchName, setRanchName] = useState('');
+  const [ranchLocation, setRanchLocation] = useState('');
+  const [savingRanch, setSavingRanch] = useState(false);
+
+  // Add Block submodal
+  const [addBlockModalVisible, setAddBlockModalVisible] = useState(false);
+  const [targetRanchForBlock, setTargetRanchForBlock] = useState<any>(null);
+  const [blockIdInput, setBlockIdInput] = useState('');
+  const [blockCrop, setBlockCrop] = useState('Almond');
+  const [blockVariety, setBlockVariety] = useState('');
+  const [blockRootstock, setBlockRootstock] = useState('');
+  const [blockAcreage, setBlockAcreage] = useState('');
+  const [blockPlantingYear, setBlockPlantingYear] = useState('');
+  const [blockIrrigation, setBlockIrrigation] = useState('Drip');
+  const [blockFertigationSet, setBlockFertigationSet] = useState('');
+  const [blockCounty, setBlockCounty] = useState('Fresno County');
+  const [blockApns, setBlockApns] = useState('');
+  const [savingBlock, setSavingBlock] = useState(false);
+
+  // Add Tank submodal (Plain form, NO map)
+  const [addTankModalVisible, setAddTankModalVisible] = useState(false);
+  const [targetRanchForTank, setTargetRanchForTank] = useState<any>(null);
+  const [tankNameInput, setTankNameInput] = useState('');
+  const [tankCapacityInput, setTankCapacityInput] = useState('');
+  const [tankLocationInput, setTankLocationInput] = useState('');
+  const [savingTank, setSavingTank] = useState(false);
+
+  // 4. Create Order Modal State (from Customer screen)
+  const [createOrderModalVisible, setCreateOrderModalVisible] = useState(false);
+  const [orderCustomer, setOrderCustomer] = useState<any>(null);
+  const [selectedProduct, setSelectedProduct] = useState('');
+  const [orderGallons, setOrderGallons] = useState('');
+  const [orderRanchId, setOrderRanchId] = useState('');
+  const [orderTankId, setOrderTankId] = useState('');
+  const [orderBlocksSelected, setOrderBlocksSelected] = useState<string[]>([]);
+  const [orderDate, setOrderDate] = useState('');
+  const [orderWindow, setOrderWindow] = useState('Morning (8:00 AM - 12:00 PM)');
+  const [orderGateCode, setOrderGateCode] = useState('');
+  const [orderWhoToCall, setOrderWhoToCall] = useState('');
+  const [orderNotes, setOrderNotes] = useState('');
+  const [savingOrder, setSavingOrder] = useState(false);
 
   const BACKEND_URL = (process.env.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
 
-  const fetchCustomers = useCallback(async () => {
+  const loadData = useCallback(async () => {
     try {
-      const res = await fetch(`${BACKEND_URL}/api/admin/customers`);
-      const data = await res.json();
-      setCustomers(Array.isArray(data) ? data : []);
+      const [custRes, ranches, products] = await Promise.all([
+        fetch(`${BACKEND_URL}/api/admin/customers`),
+        fetchRanches().catch(() => []),
+        fetchProducts().catch(() => [])
+      ]);
+      const custData = await custRes.json();
+      setCustomers(Array.isArray(custData) ? custData : []);
+      setAllRanches(Array.isArray(ranches) ? ranches : []);
+      setProductsList(Array.isArray(products) ? products : []);
     } catch (e) {
-      console.error('Failed to fetch customers:', e);
+      console.error('Failed to fetch customers & data:', e);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -54,35 +102,17 @@ export const AdminCustomersScreen = () => {
   }, [BACKEND_URL]);
 
   useEffect(() => {
-    fetchCustomers();
-  }, [fetchCustomers]);
+    loadData();
+  }, [loadData]);
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchCustomers();
-  };
-
-  const handleApproveCustomer = async (id: string, status: 'APPROVED' | 'REJECTED') => {
-    try {
-      const res = await fetch(`${BACKEND_URL}/api/admin/approvals/customer/${id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status })
-      });
-      if (res.ok) {
-        Alert.alert('Success', `Customer marked as ${status}`);
-        fetchCustomers();
-      } else {
-        Alert.alert('Error', 'Failed to update customer status');
-      }
-    } catch (e) {
-      Alert.alert('Error', 'Network error updating customer status');
-    }
-  };
-
+  // Admin creates customer single login
   const handleCreateCustomer = async () => {
     if (!newEmail.trim()) {
-      Alert.alert('Missing Email', 'Please provide an email address.');
+      Alert.alert('Validation Error', 'Please enter a valid customer email.');
+      return;
+    }
+    if (!newPassword.trim()) {
+      Alert.alert('Validation Error', 'Please enter a password for this customer.');
       return;
     }
     setCreating(true);
@@ -91,23 +121,25 @@ export const AdminCustomersScreen = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: newName.trim(),
+          name: newName.trim() || newEmail.split('@')[0],
           email: newEmail.trim(),
-          password: newPassword.trim() || 'Customer123!',
-          role: newRole,
-          harvestStages: newHarvestStages
+          phone: newPhone.trim(),
+          password: newPassword.trim(),
+          role: 'client'
         })
       });
       const data = await res.json();
       if (res.ok) {
-        Alert.alert('Success', 'Customer account created with operational crop stages!');
+        Alert.alert(
+          'Customer Account Created',
+          `Customer ${newName || newEmail} created. Password: "${newPassword}". Provide this password to the grower by phone.`
+        );
         setNewName('');
         setNewEmail('');
+        setNewPhone('');
         setNewPassword('');
-        setNewRole('Grower');
-        setNewHarvestStages(['Pre Harvest', 'Harvest']);
-        setModalVisible(false);
-        fetchCustomers();
+        setCreateCustomerModalVisible(false);
+        loadData();
       } else {
         Alert.alert('Error', data?.error || 'Failed to create customer');
       }
@@ -118,93 +150,199 @@ export const AdminCustomersScreen = () => {
     }
   };
 
-  const handleAssignGrower = async () => {
-    if (!targetCustomer) return;
-    setAssigning(true);
-    try {
-      await assignGrowerToEmployee(targetCustomer.id, selectedEmployeeEmail);
-      Alert.alert('Success', `${targetCustomer.name || targetCustomer.email} successfully assigned to ${selectedEmployeeEmail}.`);
-      setAssignModalVisible(false);
-      fetchCustomers();
-    } catch (e: any) {
-      Alert.alert('Assignment Error', e.message || 'Failed to assign grower');
-    } finally {
-      setAssigning(false);
-    }
-  };
-
-  const handleExportCustomers = async () => {
-    try {
-      const res = await exportData('customers');
-      const jsonStr = JSON.stringify(res.data, null, 2);
-      if (Platform.OS === 'web') {
-        const blob = new Blob([jsonStr], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `renu_customers_${Date.now()}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-      } else {
-        await Share.share({ title: 'Export Customers', message: jsonStr });
-      }
-    } catch (e: any) {
-      Alert.alert('Export Failed', e.message || 'Could not export customers');
-    }
-  };
-
-  const handleImportCustomers = async () => {
-    try {
-      const parsed = JSON.parse(importJsonText);
-      const items = Array.isArray(parsed) ? parsed : [parsed];
-      await importData('customers', items);
-      Alert.alert('Success', `Imported ${items.length} customers successfully`);
-      setImportModalVisible(false);
-      setImportJsonText('');
-      fetchCustomers();
-    } catch (e: any) {
-      Alert.alert('Invalid Format', 'Please enter a valid JSON array of customers.');
-    }
-  };
-
-  const openEditModal = (c: any) => {
-    setSelectedCustomerId(c.id);
-    setEditName(c.name || c.user_metadata?.full_name || '');
-    setEditEmail(c.email || '');
-    setEditRole(c.role || c.user_metadata?.role || 'Grower');
-    setEditStatus(c.approvalStatus || c.user_metadata?.approvalStatus || 'APPROVED');
-    setEditPassword('');
-    setEditModalVisible(true);
-  };
-
-  const handleSaveCustomerEdit = async () => {
-    if (!selectedCustomerId) return;
-    if (!editEmail.trim()) {
-      Alert.alert('Error', 'Email address is required');
+  // Reset Password by Admin
+  const handleResetPassword = async () => {
+    if (!selectedCustomerForPassword || !resetPasswordValue.trim()) {
+      Alert.alert('Validation Error', 'Please enter the new password.');
       return;
     }
-
-    setUpdating(true);
+    setResettingPassword(true);
     try {
-      const payload: any = {
-        name: editName.trim(),
-        email: editEmail.trim(),
-        role: editRole,
-        approvalStatus: editStatus,
-      };
-      if (editPassword.trim()) {
-        payload.password = editPassword.trim();
+      const res = await fetch(`${BACKEND_URL}/api/admin/customers/${selectedCustomerForPassword.id}/reset-password`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: resetPasswordValue.trim() })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        Alert.alert(
+          'Password Reset',
+          `Password updated for ${selectedCustomerForPassword.name || selectedCustomerForPassword.email}. Provide new password to customer.`
+        );
+        setResetPasswordValue('');
+        setResetPasswordModalVisible(false);
+      } else {
+        Alert.alert('Error', data?.error || 'Failed to reset password');
       }
-
-      await updateCustomer(selectedCustomerId, payload);
-      Alert.alert('Success', 'Customer profile updated successfully!');
-      setEditModalVisible(false);
-      fetchCustomers();
     } catch (e: any) {
-      console.error(e);
-      Alert.alert('Error', e.message || 'Failed to update customer');
+      Alert.alert('Error', e.message || 'Failed to reset password');
     } finally {
-      setUpdating(false);
+      setResettingPassword(false);
+    }
+  };
+
+  // Open drilldown
+  const openDrilldown = (customer: any) => {
+    setActiveCustomer(customer);
+    setDrilldownModalVisible(true);
+  };
+
+  // Customer Ranches
+  const customerRanches = activeCustomer 
+    ? allRanches.filter(r => r.customerId === activeCustomer.id || r.customerEmail?.toLowerCase() === activeCustomer.email?.toLowerCase())
+    : [];
+
+  // Add Ranch
+  const handleAddRanch = async () => {
+    if (!ranchName.trim() || !activeCustomer) return;
+    setSavingRanch(true);
+    try {
+      await submitRanch({
+        name: ranchName.trim(),
+        location: ranchLocation.trim() || 'Central Valley, CA',
+        customerId: activeCustomer.id,
+        customerEmail: activeCustomer.email
+      });
+      setRanchName('');
+      setRanchLocation('');
+      setAddRanchModalVisible(false);
+      await loadData();
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to add ranch');
+    } finally {
+      setSavingRanch(false);
+    }
+  };
+
+  // Add Block
+  const handleAddBlock = async () => {
+    if (!targetRanchForBlock || !blockIdInput.trim()) {
+      Alert.alert('Error', 'Block ID is required.');
+      return;
+    }
+    const acNum = parseFloat(blockAcreage);
+    if (isNaN(acNum) || acNum <= 0) {
+      Alert.alert('Error', 'Please enter a valid acreage number.');
+      return;
+    }
+    setSavingBlock(true);
+    try {
+      await submitBlock(targetRanchForBlock.id, {
+        blockId: blockIdInput.trim(),
+        crop: blockCrop.trim(),
+        variety: blockVariety.trim(),
+        rootstock: blockRootstock.trim(),
+        acreage: acNum,
+        plantingYear: parseInt(blockPlantingYear) || 2020,
+        irrigationType: blockIrrigation.trim(),
+        fertigationSet: blockFertigationSet.trim(),
+        county: blockCounty.trim(),
+        apns: blockApns.split(',').map(s => s.trim()).filter(Boolean)
+      });
+      setBlockIdInput('');
+      setBlockVariety('');
+      setBlockRootstock('');
+      setBlockAcreage('');
+      setBlockFertigationSet('');
+      setBlockApns('');
+      setAddBlockModalVisible(false);
+      await loadData();
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to add block');
+    } finally {
+      setSavingBlock(false);
+    }
+  };
+
+  // Add Tank (Plain form, NO map)
+  const handleAddTank = async () => {
+    if (!targetRanchForTank || !tankNameInput.trim()) {
+      Alert.alert('Error', 'Tank name is required.');
+      return;
+    }
+    const capNum = parseFloat(tankCapacityInput) || 5000;
+    setSavingTank(true);
+    try {
+      await submitTankSetup({
+        ranchId: targetRanchForTank.id,
+        name: tankNameInput.trim(),
+        capacity: capNum,
+        location: tankLocationInput.trim() || 'Ranch primary pad'
+      });
+      setTankNameInput('');
+      setTankCapacityInput('');
+      setTankLocationInput('');
+      setAddTankModalVisible(false);
+      await loadData();
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to add tank');
+    } finally {
+      setSavingTank(false);
+    }
+  };
+
+  // Open Create Order Modal
+  const openCreateOrderModal = (customer: any) => {
+    const today = new Date().toISOString().split('T')[0];
+    setOrderCustomer(customer);
+    setSelectedProduct(productsList[0]?.name || 'Bio-Gro Nitrogen Optimizer');
+    setOrderGallons('');
+    const cRanches = allRanches.filter(r => r.customerId === customer.id || r.customerEmail?.toLowerCase() === customer.email?.toLowerCase());
+    const defaultRanch = cRanches[0];
+    setOrderRanchId(defaultRanch?.id || '');
+    setOrderTankId(defaultRanch?.tanks?.[0]?.id || '');
+    setOrderBlocksSelected([]);
+    setOrderDate(today);
+    setOrderWindow('Morning (8:00 AM - 12:00 PM)');
+    setOrderGateCode('#4821');
+    setOrderWhoToCall(customer.phone ? `${customer.name} (${customer.phone})` : customer.name);
+    setOrderNotes('');
+    setCreateOrderModalVisible(true);
+  };
+
+  // Submit Order Created by Admin
+  const handleSaveOrder = async () => {
+    if (!orderCustomer || !orderGallons.trim()) {
+      Alert.alert('Validation Error', 'Please enter gallon quantity.');
+      return;
+    }
+    const galNum = parseFloat(orderGallons);
+    if (isNaN(galNum) || galNum <= 0) {
+      Alert.alert('Validation Error', 'Please enter valid gallons.');
+      return;
+    }
+    setSavingOrder(true);
+    try {
+      const ranchObj = allRanches.find(r => r.id === orderRanchId);
+      const tankObj = ranchObj?.tanks?.find((t: any) => t.id === orderTankId);
+
+      await submitDelivery({
+        customerId: orderCustomer.id,
+        customerEmail: orderCustomer.email,
+        customerName: orderCustomer.name,
+        product: selectedProduct,
+        productName: selectedProduct,
+        gallons: galNum,
+        ranchId: orderRanchId,
+        ranchName: ranchObj?.name || 'Ranch',
+        tankId: orderTankId,
+        tankName: tankObj?.name || 'Tank',
+        blocks: orderBlocksSelected,
+        date: orderDate || new Date().toISOString().split('T')[0],
+        deliveryWindow: orderWindow,
+        gateCode: orderGateCode.trim(),
+        whoToCall: orderWhoToCall.trim(),
+        notes: orderNotes.trim(),
+        status: 'Scheduled'
+      });
+
+      Alert.alert('Delivery Scheduled', `Order created and scheduled for ${orderCustomer.name}. Customer will receive email confirmation.`);
+      setCreateOrderModalVisible(false);
+      loadData();
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to create order');
+    } finally {
+      setSavingOrder(false);
     }
   };
 
@@ -214,715 +352,616 @@ export const AdminCustomersScreen = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2E5D36" />
+          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor="#2E5D36" />
         }
       >
+        {/* Header */}
         <View style={styles.header}>
-          <View style={styles.titleContainer}>
-            <Text variant="headlineMedium" style={styles.title}>Customers</Text>
-            <Text variant="bodyMedium" style={styles.subtitle}>All registered clients and growers</Text>
+          <View>
+            <Text style={styles.title}>Customers & Accounts</Text>
+            <Text style={styles.subtitle}>Maintain growers, ranches, blocks & logins</Text>
           </View>
-          <View style={styles.headerButtons}>
-            <TouchableOpacity onPress={handleExportCustomers} style={[styles.iconBtn, { paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
-              <Ionicons name="download-outline" size={16} color="#2E5D36" />
-              <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2E5D36' }}>Export</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => {
-                setImportJsonText(JSON.stringify([{
-                  name: 'Pacific Ag Farms',
-                  email: 'ops@pacificag.com',
-                  role: 'Grower',
-                  approvalStatus: 'APPROVED'
-                }], null, 2));
-                setImportModalVisible(true);
-              }}
-              style={[styles.iconBtn, { paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 4 }]}
-            >
-              <Ionicons name="cloud-upload-outline" size={16} color="#2E5D36" />
-              <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2E5D36' }}>Import</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={onRefresh} style={styles.iconBtn}>
-              <Ionicons name="refresh" size={18} color="#0F172A" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.addBtn}>
-              <Ionicons name="add" size={18} color="#FFF" />
-              <Text style={styles.addBtnText}>Add</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity 
+            onPress={() => setCreateCustomerModalVisible(true)} 
+            style={styles.addBtn}
+          >
+            <Ionicons name="person-add-outline" size={18} color="#FFF" />
+            <Text style={styles.addBtnText}>Add Customer</Text>
+          </TouchableOpacity>
         </View>
 
-        {loading ? (
-          <ActivityIndicator color="#2E5D36" style={{ marginTop: 40 }} />
-        ) : customers.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="people-outline" size={48} color="#94A3B8" />
-            <Text style={styles.emptyText}>No customers found.</Text>
-            <Button mode="contained" onPress={() => setModalVisible(true)} style={styles.emptyBtn} buttonColor="#2E5D36">
-              Create First Customer
-            </Button>
-          </View>
-        ) : (
-          customers.map((c, idx) => {
-            const displayName = c.name || c.user_metadata?.full_name || 'Grower Client';
-            const displayRole = c.role || c.user_metadata?.role || 'Grower';
-            const status = c.approvalStatus || c.user_metadata?.approvalStatus || 'APPROVED';
-            const isPending = status.toUpperCase() === 'PENDING';
-            const stages = c.harvestStages || ['Pre Harvest', 'Harvest', 'Post Harvest'];
-
-            return (
-              <View key={c.id || idx} style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.name}>{displayName}</Text>
-                    <Text style={styles.email}>{c.email}</Text>
-                  </View>
-                  <View style={{ alignItems: 'flex-end', gap: 6 }}>
-                    <Chip
-                      compact
-                      style={[
-                        styles.chip,
-                        isPending ? styles.pendingChip : styles.approvedChip
-                      ]}
-                      textStyle={{
-                        color: isPending ? '#B45309' : '#15803D',
-                        fontSize: 11,
-                        fontWeight: 'bold'
-                      }}
-                    >
-                      {status.toUpperCase()}
-                    </Chip>
-                  </View>
-                </View>
-
-                {/* Harvest / Crop Lifecycle Badges */}
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-                  {stages.map((st: string) => (
-                    <Chip key={st} compact style={{ backgroundColor: '#F1F5F9', height: 24 }} textStyle={{ fontSize: 10, color: '#334155' }}>
-                      🌱 {st}
-                    </Chip>
-                  ))}
-                  {c.assignedEmpEmail && (
-                    <Chip compact style={{ backgroundColor: '#DBEAFE', height: 24 }} textStyle={{ fontSize: 10, color: '#1D4ED8', fontWeight: 'bold' }}>
-                      👤 Assigned: {c.assignedEmpEmail}
-                    </Chip>
-                  )}
-                </View>
-
-                <View style={styles.metaRow}>
-                  <View>
-                    <Text style={styles.role}>Role: {displayRole}</Text>
-                    {c.createdAt && (
-                      <Text style={styles.date}>
-                        Joined: {new Date(c.createdAt).toLocaleDateString()}
-                      </Text>
-                    )}
-                  </View>
-
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <TouchableOpacity
-                      onPress={() => {
-                        setTargetCustomer(c);
-                        setAssignModalVisible(true);
-                      }}
-                      style={[styles.editCardBtn, { borderColor: '#1D4ED8', backgroundColor: '#EFF6FF' }]}
-                    >
-                      <Ionicons name="person-add" size={13} color="#1D4ED8" />
-                      <Text style={[styles.editCardBtnText, { color: '#1D4ED8' }]}>Assign</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => openEditModal(c)} style={styles.editCardBtn}>
-                      <Ionicons name="pencil" size={14} color="#2E5D36" />
-                      <Text style={styles.editCardBtnText}>Edit</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                {isPending && (
-                  <View style={styles.approvalActionRow}>
-                    <Button
-                      mode="outlined"
-                      textColor="#DC2626"
-                      style={styles.actionBtn}
-                      onPress={() => handleApproveCustomer(c.id, 'REJECTED')}
-                    >
-                      Reject
-                    </Button>
-                    <Button
-                      mode="contained"
-                      buttonColor="#2E5D36"
-                      style={styles.actionBtn}
-                      onPress={() => handleApproveCustomer(c.id, 'APPROVED')}
-                    >
-                      Approve
-                    </Button>
-                  </View>
-                )}
+        {/* Customer Cards List */}
+        {customers.map((c: any) => (
+          <View key={c.id} style={styles.customerCard}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.customerName}>{c.name || 'Unnamed Grower'}</Text>
+                <Text style={styles.customerContact}>{c.email} {c.phone ? `• ${c.phone}` : ''}</Text>
               </View>
-            );
-          })
-        )}
+              <Chip compact style={{ backgroundColor: '#F0FDF4' }} textStyle={{ color: '#166534', fontWeight: '700', fontSize: 11 }}>
+                Account Active
+              </Chip>
+            </View>
+
+            {/* Metrics Row */}
+            <View style={styles.customerMetricsRow}>
+              <View style={styles.metricItem}>
+                <Text style={styles.metricVal}>{c.ranchesCount || 0}</Text>
+                <Text style={styles.metricLbl}>Ranches</Text>
+              </View>
+              <View style={styles.metricItem}>
+                <Text style={styles.metricVal}>{Number(c.totalAcres || 0).toFixed(1)}</Text>
+                <Text style={styles.metricLbl}>Total Acres</Text>
+              </View>
+              <View style={styles.metricItem}>
+                <Text style={styles.metricVal}>{(c.ytdGallons || 0).toLocaleString()}</Text>
+                <Text style={styles.metricLbl}>YTD Gal</Text>
+              </View>
+              <View style={styles.metricItem}>
+                <Text style={[styles.metricVal, { color: (c.openBalance || 0) > 0 ? '#DC2626' : '#15803D' }]}>
+                  ${(c.openBalance || 0).toLocaleString()}
+                </Text>
+                <Text style={styles.metricLbl}>Open Bal</Text>
+              </View>
+            </View>
+
+            <Divider style={{ marginVertical: 12, backgroundColor: '#F1F5F9' }} />
+
+            {/* Customer Operations Buttons */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              <Button 
+                mode="contained" 
+                onPress={() => openDrilldown(c)}
+                buttonColor="#2E5D36"
+                icon="tree-outline"
+                style={{ borderRadius: 10, flex: 1, minWidth: 150 }}
+                contentStyle={{ minHeight: 48 }}
+              >
+                Ranches & Blocks
+              </Button>
+
+              <Button 
+                mode="outlined" 
+                onPress={() => openCreateOrderModal(c)}
+                textColor="#2E5D36"
+                style={{ borderColor: '#2E5D36', borderRadius: 10, flex: 1, minWidth: 130 }}
+                contentStyle={{ minHeight: 48 }}
+              >
+                Create Order
+              </Button>
+
+              <Button 
+                mode="text" 
+                onPress={() => {
+                  setSelectedCustomerForPassword(c);
+                  setResetPasswordValue('');
+                  setResetPasswordModalVisible(true);
+                }}
+                textColor="#64748B"
+                style={{ minHeight: 48, justifyContent: 'center' }}
+              >
+                Reset Password
+              </Button>
+            </View>
+          </View>
+        ))}
       </ScrollView>
 
-      {/* ---------------- EDIT CUSTOMER MODAL ---------------- */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={editModalVisible}
-        onRequestClose={() => setEditModalVisible(false)}
-      >
+      {/* ================= CREATE CUSTOMER MODAL ================= */}
+      <Modal visible={createCustomerModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeaderRow}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
               <View>
-                <Text variant="titleLarge" style={styles.modalTitle}>Edit Customer</Text>
-                <Text variant="bodySmall" style={styles.modalSub}>Update client information & status</Text>
+                <Text style={styles.modalTitle}>Create Customer Login</Text>
+                <Text style={styles.modalSubtitle}>Create single login; give password by phone</Text>
               </View>
-              <TouchableOpacity onPress={() => setEditModalVisible(false)} style={styles.closeModalBtn}>
-                <Ionicons name="close" size={22} color="#64748B" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 440 }}>
-              <TextInput
-                label="Full Name"
-                value={editName}
-                onChangeText={setEditName}
-                style={styles.input}
-                mode="outlined"
-                activeOutlineColor="#2E5D36"
-              />
-
-              <TextInput
-                label="Email Address"
-                value={editEmail}
-                onChangeText={setEditEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                style={styles.input}
-                mode="outlined"
-                activeOutlineColor="#2E5D36"
-              />
-
-              {/* Role Selection Chips */}
-              <Text style={styles.fieldSectionLabel}>Role</Text>
-              <View style={styles.chipsRow}>
-                {['Grower', 'Ranch Manager', 'Agronomist', 'Admin'].map(r => (
-                  <TouchableOpacity
-                    key={r}
-                    onPress={() => setEditRole(r)}
-                    style={[styles.roleSelectChip, editRole === r && styles.roleSelectChipActive]}
-                  >
-                    <Text style={[styles.roleSelectChipText, editRole === r && styles.roleSelectChipTextActive]}>
-                      {r}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Status Selection Chips */}
-              <Text style={[styles.fieldSectionLabel, { marginTop: 12 }]}>Approval Status</Text>
-              <View style={styles.chipsRow}>
-                {[
-                  { key: 'APPROVED', label: 'Approved', color: '#15803D' },
-                  { key: 'PENDING', label: 'Pending', color: '#B45309' },
-                  { key: 'REJECTED', label: 'Rejected', color: '#DC2626' }
-                ].map(s => (
-                  <TouchableOpacity
-                    key={s.key}
-                    onPress={() => setEditStatus(s.key as any)}
-                    style={[
-                      styles.statusSelectChip,
-                      editStatus === s.key && { backgroundColor: s.color, borderColor: s.color }
-                    ]}
-                  >
-                    <Text style={[styles.statusSelectChipText, editStatus === s.key && { color: '#FFF' }]}>
-                      {s.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <TextInput
-                label="Reset Password (leave empty to keep current)"
-                value={editPassword}
-                onChangeText={setEditPassword}
-                secureTextEntry
-                style={[styles.input, { marginTop: 14 }]}
-                mode="outlined"
-                activeOutlineColor="#2E5D36"
-              />
-            </ScrollView>
-
-            <View style={styles.modalBtnRow}>
-              <Button
-                mode="outlined"
-                onPress={() => setEditModalVisible(false)}
-                style={{ flex: 1, borderColor: '#CBD5E1' }}
-                textColor="#64748B"
-              >
-                Cancel
-              </Button>
-              <Button
-                mode="contained"
-                onPress={handleSaveCustomerEdit}
-                loading={updating}
-                disabled={updating}
-                buttonColor="#2E5D36"
-                style={{ flex: 1 }}
-              >
-                Save Changes
-              </Button>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ---------------- CREATE CUSTOMER MODAL ---------------- */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeaderRow}>
-              <View>
-                <Text variant="titleLarge" style={styles.modalTitle}>Add New Customer</Text>
-                <Text variant="bodySmall" style={styles.modalSub}>Create a customer account directly</Text>
-              </View>
-              <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeModalBtn}>
-                <Ionicons name="close" size={22} color="#64748B" />
+              <TouchableOpacity onPress={() => setCreateCustomerModalVisible(false)}>
+                <MaterialCommunityIcons name="close" size={24} color="#64748B" />
               </TouchableOpacity>
             </View>
 
             <TextInput
-              label="Full Name"
+              label="Company / Farm Name"
               value={newName}
               onChangeText={setNewName}
-              style={styles.input}
               mode="outlined"
-              activeOutlineColor="#2E5D36"
+              placeholder="e.g. Central Valley Orchards"
+              style={styles.modalInput}
             />
-
             <TextInput
-              label="Email Address"
+              label="Email (Login ID)"
               value={newEmail}
               onChangeText={setNewEmail}
               keyboardType="email-address"
               autoCapitalize="none"
-              style={styles.input}
               mode="outlined"
-              activeOutlineColor="#2E5D36"
+              style={styles.modalInput}
             />
-
             <TextInput
-              label="Password (optional, default: Customer123!)"
+              label="Mobile Number"
+              value={newPhone}
+              onChangeText={setNewPhone}
+              keyboardType="phone-pad"
+              mode="outlined"
+              placeholder="e.g. (559) 555-0100"
+              style={styles.modalInput}
+            />
+            <TextInput
+              label="Password (Admin Types)"
               value={newPassword}
               onChangeText={setNewPassword}
-              secureTextEntry
-              style={styles.input}
               mode="outlined"
-              activeOutlineColor="#2E5D36"
+              placeholder="Type initial password"
+              style={styles.modalInput}
             />
 
-            <Text style={styles.fieldSectionLabel}>Role</Text>
-            <View style={styles.chipsRow}>
-              {['Grower', 'Ranch Manager', 'Agronomist'].map(r => (
-                <TouchableOpacity
-                  key={r}
-                  onPress={() => setNewRole(r)}
-                  style={[styles.roleSelectChip, newRole === r && styles.roleSelectChipActive]}
-                >
-                  <Text style={[styles.roleSelectChipText, newRole === r && styles.roleSelectChipTextActive]}>
-                    {r}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Operational Crop Lifecycle Phases */}
-            <Text style={[styles.fieldSectionLabel, { marginTop: 12 }]}>Crop Lifecycle Phases</Text>
-            <View style={{ flexDirection: 'row', gap: 6, marginVertical: 8 }}>
-              {['Pre Harvest', 'Harvest', 'Post Harvest'].map(stage => {
-                const selected = newHarvestStages.includes(stage);
-                return (
-                  <Button
-                    key={stage}
-                    mode={selected ? 'contained' : 'outlined'}
-                    buttonColor={selected ? '#2E5D36' : undefined}
-                    textColor={selected ? '#FFFFFF' : '#2E5D36'}
-                    onPress={() => {
-                      if (selected) setNewHarvestStages(newHarvestStages.filter(s => s !== stage));
-                      else setNewHarvestStages([...newHarvestStages, stage]);
-                    }}
-                    style={{ flex: 1, borderRadius: 8, borderColor: '#2E5D36' }}
-                    labelStyle={{ fontSize: 11, marginHorizontal: 0 }}
-                    compact
-                  >
-                    {stage}
-                  </Button>
-                );
-              })}
-            </View>
-
-            <View style={styles.modalBtnRow}>
-              <Button
-                mode="text"
-                onPress={() => setModalVisible(false)}
-                style={{ flex: 1 }}
+            <View style={styles.modalActions}>
+              <Button 
+                mode="outlined" 
+                onPress={() => setCreateCustomerModalVisible(false)}
                 textColor="#64748B"
+                style={{ flex: 1, marginRight: 8, minHeight: 48, justifyContent: 'center' }}
               >
                 Cancel
               </Button>
-              <Button
-                mode="contained"
+              <Button 
+                mode="contained" 
                 onPress={handleCreateCustomer}
                 loading={creating}
-                disabled={creating}
                 buttonColor="#2E5D36"
-                style={{ flex: 1 }}
+                style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}
               >
-                Create
+                Save Login
               </Button>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* ---------------- ASSIGN GROWER TO EMPLOYEE MODAL ---------------- */}
-      <Modal visible={assignModalVisible} animationType="slide" transparent>
+      {/* ================= RESET PASSWORD MODAL ================= */}
+      <Modal visible={resetPasswordModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeaderRow}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
               <View>
-                <Text variant="titleLarge" style={styles.modalTitle}>Assign Grower to Employee</Text>
-                <Text variant="bodySmall" style={styles.modalSub}>
-                  Assign {targetCustomer?.name || targetCustomer?.email} to an agronomist
+                <Text style={styles.modalTitle}>Reset Customer Password</Text>
+                <Text style={styles.modalSubtitle}>
+                  {selectedCustomerForPassword?.name} ({selectedCustomerForPassword?.email})
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => setAssignModalVisible(false)} style={styles.closeModalBtn}>
-                <Ionicons name="close" size={22} color="#64748B" />
+              <TouchableOpacity onPress={() => setResetPasswordModalVisible(false)}>
+                <MaterialCommunityIcons name="close" size={24} color="#64748B" />
               </TouchableOpacity>
             </View>
 
             <TextInput
-              label="Employee / Agronomist Email"
-              value={selectedEmployeeEmail}
-              onChangeText={setSelectedEmployeeEmail}
+              label="New Password"
+              value={resetPasswordValue}
+              onChangeText={setResetPasswordValue}
               mode="outlined"
-              style={styles.input}
-              activeOutlineColor="#2E5D36"
+              placeholder="Type new password"
+              style={styles.modalInput}
             />
 
-            <View style={{ flexDirection: 'row', gap: 8, marginVertical: 8 }}>
-              {['employee@renu.com', 'agronomist@renu.com'].map(emp => (
+            <View style={styles.modalActions}>
+              <Button 
+                mode="outlined" 
+                onPress={() => setResetPasswordModalVisible(false)}
+                textColor="#64748B"
+                style={{ flex: 1, marginRight: 8, minHeight: 48, justifyContent: 'center' }}
+              >
+                Cancel
+              </Button>
+              <Button 
+                mode="contained" 
+                onPress={handleResetPassword}
+                loading={resettingPassword}
+                buttonColor="#2E5D36"
+                style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}
+              >
+                Update Password
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================= DRILLDOWN: RANCHES, BLOCKS & TANKS ================= */}
+      <Modal visible={drilldownModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '92%' }]}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>{activeCustomer?.name} - Ranches</Text>
+                <Text style={styles.modalSubtitle}>Computed acreage, block table & tanks</Text>
+              </View>
+              <TouchableOpacity onPress={() => setDrilldownModalVisible(false)}>
+                <MaterialCommunityIcons name="close" size={24} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>
+                  Ranches ({customerRanches.length})
+                </Text>
+                <Button 
+                  mode="contained" 
+                  onPress={() => setAddRanchModalVisible(true)}
+                  buttonColor="#2E5D36"
+                  compact
+                  icon="plus"
+                >
+                  Add Ranch
+                </Button>
+              </View>
+
+              {customerRanches.length === 0 ? (
+                <Text style={{ color: '#64748B', fontStyle: 'italic', paddingVertical: 12 }}>
+                  No ranches recorded. Tap "Add Ranch" to create one.
+                </Text>
+              ) : (
+                customerRanches.map((r: any) => {
+                  const blocks = r.blocks || [];
+                  const tanks = r.tanks || [];
+                  const computedAcres = blocks.reduce((sum: number, b: any) => sum + (Number(b.acreage) || 0), 0);
+
+                  return (
+                    <View key={r.id} style={styles.drilldownRanchCard}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <View>
+                          <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>{r.name}</Text>
+                          <Text style={{ fontSize: 12, color: '#64748B' }}>{r.location}</Text>
+                        </View>
+                        <Chip compact style={{ backgroundColor: '#DCFCE7' }} textStyle={{ color: '#166534', fontWeight: '800' }}>
+                          {computedAcres.toFixed(1)} Acres (Computed)
+                        </Chip>
+                      </View>
+
+                      {/* BLOCKS SECTION */}
+                      <View style={{ marginTop: 12, backgroundColor: '#F8FAFC', padding: 10, borderRadius: 12 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>
+                            Planted Blocks ({blocks.length})
+                          </Text>
+                          <Button 
+                            mode="text" 
+                            compact 
+                            onPress={() => {
+                              setTargetRanchForBlock(r);
+                              setAddBlockModalVisible(true);
+                            }}
+                            textColor="#2E5D36"
+                          >
+                            + Add Block
+                          </Button>
+                        </View>
+
+                        {blocks.map((b: any, bIdx: number) => (
+                          <View key={b.id || bIdx} style={{ paddingVertical: 4, borderBottomWidth: bIdx === blocks.length - 1 ? 0 : 1, borderBottomColor: '#E2E8F0' }}>
+                            <Text style={{ fontWeight: '700', fontSize: 13, color: '#1E293B' }}>
+                              Block {b.blockId || b.id}: {b.crop} ({b.variety || 'Standard'}, {b.rootstock || 'Rootstock'})
+                            </Text>
+                            <Text style={{ fontSize: 12, color: '#64748B' }}>
+                              {b.acreage} ac • Planted {b.plantingYear} • APN: {Array.isArray(b.apns) ? b.apns.join(', ') : b.apns}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+
+                      {/* TANKS REGISTER (Plain form, NO map) */}
+                      <View style={{ marginTop: 10, backgroundColor: '#F8FAFC', padding: 10, borderRadius: 12 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>
+                            Tank Register ({tanks.length})
+                          </Text>
+                          <Button 
+                            mode="text" 
+                            compact 
+                            onPress={() => {
+                              setTargetRanchForTank(r);
+                              setAddTankModalVisible(true);
+                            }}
+                            textColor="#2E5D36"
+                          >
+                            + Add Tank
+                          </Button>
+                        </View>
+
+                        {tanks.map((t: any, tIdx: number) => (
+                          <View key={t.id || tIdx} style={{ paddingVertical: 4 }}>
+                            <Text style={{ fontWeight: '700', fontSize: 12, color: '#1E293B' }}>
+                              {t.name} • {t.capacity} gal ({t.location || 'Pad'})
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
+
+            <Button 
+              mode="contained" 
+              onPress={() => setDrilldownModalVisible(false)}
+              buttonColor="#2E5D36"
+              style={{ marginTop: 14, minHeight: 48, justifyContent: 'center' }}
+            >
+              Close
+            </Button>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================= SUBMODAL: ADD RANCH ================= */}
+      <Modal visible={addRanchModalVisible} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Add Ranch</Text>
+            <TextInput
+              label="Ranch Name"
+              value={ranchName}
+              onChangeText={setRanchName}
+              mode="outlined"
+              placeholder="e.g. Bear Creek Ranch"
+              style={styles.modalInput}
+            />
+            <TextInput
+              label="Location / County"
+              value={ranchLocation}
+              onChangeText={setRanchLocation}
+              mode="outlined"
+              placeholder="e.g. Fresno County, CA"
+              style={styles.modalInput}
+            />
+            <View style={styles.modalActions}>
+              <Button mode="outlined" onPress={() => setAddRanchModalVisible(false)} textColor="#64748B" style={{ flex: 1, marginRight: 8, minHeight: 48, justifyContent: 'center' }}>Cancel</Button>
+              <Button mode="contained" onPress={handleAddRanch} loading={savingRanch} buttonColor="#2E5D36" style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}>Save Ranch</Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================= SUBMODAL: ADD BLOCK ================= */}
+      <Modal visible={addBlockModalVisible} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '85%' }]}>
+            <Text style={styles.modalTitle}>Add Block to {targetRanchForBlock?.name}</Text>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <TextInput label="Block ID (e.g. N-4)" value={blockIdInput} onChangeText={setBlockIdInput} mode="outlined" style={styles.modalInput} />
+              <TextInput label="Crop (almond, pistachio, grape)" value={blockCrop} onChangeText={setBlockCrop} mode="outlined" style={styles.modalInput} />
+              <TextInput label="Variety" value={blockVariety} onChangeText={setBlockVariety} mode="outlined" placeholder="e.g. Nonpareil" style={styles.modalInput} />
+              <TextInput label="Rootstock" value={blockRootstock} onChangeText={setBlockRootstock} mode="outlined" placeholder="e.g. Nemaguard" style={styles.modalInput} />
+              <TextInput label="Acreage" value={blockAcreage} onChangeText={setBlockAcreage} keyboardType="numeric" mode="outlined" placeholder="e.g. 45" style={styles.modalInput} />
+              <TextInput label="Planting Year" value={blockPlantingYear} onChangeText={setBlockPlantingYear} keyboardType="numeric" mode="outlined" placeholder="e.g. 2018" style={styles.modalInput} />
+              <TextInput label="Irrigation Type" value={blockIrrigation} onChangeText={setBlockIrrigation} mode="outlined" placeholder="Drip / Micro-sprinkler" style={styles.modalInput} />
+              <TextInput label="Fertigation Set / Valve" value={blockFertigationSet} onChangeText={setBlockFertigationSet} mode="outlined" placeholder="Set 1 Valve B" style={styles.modalInput} />
+              <TextInput label="County" value={blockCounty} onChangeText={setBlockCounty} mode="outlined" style={styles.modalInput} />
+              <TextInput label="APN(s) (comma separated)" value={blockApns} onChangeText={setBlockApns} mode="outlined" placeholder="e.g. 042-120-008, 042-120-009" style={styles.modalInput} />
+            </ScrollView>
+            <View style={styles.modalActions}>
+              <Button mode="outlined" onPress={() => setAddBlockModalVisible(false)} textColor="#64748B" style={{ flex: 1, marginRight: 8, minHeight: 48, justifyContent: 'center' }}>Cancel</Button>
+              <Button mode="contained" onPress={handleAddBlock} loading={savingBlock} buttonColor="#2E5D36" style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}>Save Block</Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================= SUBMODAL: ADD TANK (NO MAP) ================= */}
+      <Modal visible={addTankModalVisible} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Add Tank to {targetRanchForTank?.name}</Text>
+            <TextInput label="Tank Name" value={tankNameInput} onChangeText={setTankNameInput} mode="outlined" placeholder="e.g. North Ag Tank #1" style={styles.modalInput} />
+            <TextInput label="Capacity (Gallons)" value={tankCapacityInput} onChangeText={setTankCapacityInput} keyboardType="numeric" mode="outlined" placeholder="e.g. 6500" style={styles.modalInput} />
+            <TextInput label="Location / Description" value={tankLocationInput} onChangeText={setTankLocationInput} mode="outlined" placeholder="e.g. Well #3 Pad" style={styles.modalInput} />
+            <View style={styles.modalActions}>
+              <Button mode="outlined" onPress={() => setAddTankModalVisible(false)} textColor="#64748B" style={{ flex: 1, marginRight: 8, minHeight: 48, justifyContent: 'center' }}>Cancel</Button>
+              <Button mode="contained" onPress={handleAddTank} loading={savingTank} buttonColor="#2E5D36" style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}>Save Tank</Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================= CREATE ORDER MODAL ================= */}
+      <Modal visible={createOrderModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Create Delivery Order</Text>
+                <Text style={styles.modalSubtitle}>For {orderCustomer?.name}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setCreateOrderModalVisible(false)}>
+                <MaterialCommunityIcons name="close" size={24} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.fieldSectionHeading}>Product & Volume</Text>
+              {productsList.map((p) => (
                 <TouchableOpacity
-                  key={emp}
-                  onPress={() => setSelectedEmployeeEmail(emp)}
+                  key={p.id}
+                  onPress={() => setSelectedProduct(p.name)}
                   style={[
-                    styles.roleSelectChip,
-                    selectedEmployeeEmail === emp && styles.roleSelectChipActive
+                    styles.radioItem,
+                    selectedProduct === p.name && styles.radioItemSelected
                   ]}
                 >
-                  <Text style={[styles.roleSelectChipText, selectedEmployeeEmail === emp && styles.roleSelectChipTextActive]}>
-                    {emp}
-                  </Text>
+                  <Text style={{ fontWeight: '700', color: selectedProduct === p.name ? '#15803D' : '#1E293B' }}>{p.name}</Text>
+                  <Text style={{ fontSize: 11, color: '#64748B' }}>{p.analysis || p.description}</Text>
                 </TouchableOpacity>
               ))}
-            </View>
 
-            <View style={styles.modalBtnRow}>
-              <Button
+              <TextInput
+                label="Quantity in Gallons"
+                value={orderGallons}
+                onChangeText={setOrderGallons}
+                keyboardType="numeric"
                 mode="outlined"
-                onPress={() => setAssignModalVisible(false)}
-                style={{ flex: 1, borderColor: '#CBD5E1' }}
-                textColor="#64748B"
-              >
-                Cancel
-              </Button>
-              <Button
-                mode="contained"
-                buttonColor="#2E5D36"
-                loading={assigning}
-                disabled={assigning}
-                onPress={handleAssignGrower}
-                style={{ flex: 1 }}
-              >
-                Confirm Assignment
-              </Button>
+                placeholder="e.g. 500"
+                style={styles.modalInput}
+              />
+
+              <Text style={[styles.fieldSectionHeading, { marginTop: 12 }]}>Ranch & Tank Destination</Text>
+              {allRanches
+                .filter(r => r.customerId === orderCustomer?.id || r.customerEmail?.toLowerCase() === orderCustomer?.email?.toLowerCase())
+                .map((r) => (
+                  <TouchableOpacity
+                    key={r.id}
+                    onPress={() => {
+                      setOrderRanchId(r.id);
+                      setOrderTankId(r.tanks?.[0]?.id || '');
+                    }}
+                    style={[styles.radioItem, orderRanchId === r.id && styles.radioItemSelected]}
+                  >
+                    <Text style={{ fontWeight: '700' }}>{r.name}</Text>
+                    <Text style={{ fontSize: 11, color: '#64748B' }}>
+                      Tanks: {(r.tanks || []).map((t: any) => t.name).join(', ') || 'No registered tanks'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+
+              <TextInput
+                label="Requested Delivery Window"
+                value={orderWindow}
+                onChangeText={setOrderWindow}
+                mode="outlined"
+                placeholder="Morning / Afternoon + Date"
+                style={styles.modalInput}
+              />
+
+              <TextInput
+                label="Gate Code"
+                value={orderGateCode}
+                onChangeText={setOrderGateCode}
+                mode="outlined"
+                placeholder="e.g. #4821"
+                style={styles.modalInput}
+              />
+
+              <TextInput
+                label="Who to Call on Arrival"
+                value={orderWhoToCall}
+                onChangeText={setOrderWhoToCall}
+                mode="outlined"
+                style={styles.modalInput}
+              />
+
+              <TextInput
+                label="Delivery Notes"
+                value={orderNotes}
+                onChangeText={setOrderNotes}
+                mode="outlined"
+                multiline
+                numberOfLines={2}
+                style={styles.modalInput}
+              />
+            </ScrollView>
+
+            <View style={styles.modalActions}>
+              <Button mode="outlined" onPress={() => setCreateOrderModalVisible(false)} textColor="#64748B" style={{ flex: 1, marginRight: 8, minHeight: 48, justifyContent: 'center' }}>Cancel</Button>
+              <Button mode="contained" onPress={handleSaveOrder} loading={savingOrder} buttonColor="#2E5D36" style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}>Schedule Order</Button>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* ---------------- IMPORT CUSTOMERS MODAL ---------------- */}
-      <Modal visible={importModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeaderRow}>
-              <Text variant="titleLarge" style={styles.modalTitle}>Import Customers</Text>
-              <TouchableOpacity onPress={() => setImportModalVisible(false)} style={styles.closeModalBtn}>
-                <Ionicons name="close" size={22} color="#64748B" />
-              </TouchableOpacity>
-            </View>
-            <TextInput
-              mode="outlined"
-              multiline
-              numberOfLines={8}
-              value={importJsonText}
-              onChangeText={setImportJsonText}
-              style={{ backgroundColor: '#F8FAFC', fontSize: 12, marginBottom: 16 }}
-              outlineColor="#CBD5E1"
-              activeOutlineColor="#2E5D36"
-            />
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <Button mode="outlined" onPress={() => setImportModalVisible(false)} style={{ flex: 1 }} textColor="#64748B">
-                Cancel
-              </Button>
-              <Button mode="contained" onPress={handleImportCustomers} style={{ flex: 1, backgroundColor: '#2E5D36' }}>
-                Import
-              </Button>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  scrollContent: {
-    paddingBottom: 120,
-    paddingHorizontal: 20,
-  },
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  scrollContent: { paddingBottom: 120, paddingHorizontal: 16 },
   header: {
-    paddingTop: 50,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 54,
     paddingBottom: 16,
   },
-  titleContainer: {
-    marginBottom: 12,
-  },
-  title: {
-    color: '#0F172A',
-    fontWeight: 'bold',
-  },
-  subtitle: {
-    color: '#64748B',
-    marginTop: 2,
-  },
-  headerButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  iconBtn: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: '#E2E8F0',
-  },
+  title: { fontSize: 22, fontWeight: '800', color: '#0F172A' },
+  subtitle: { fontSize: 13, color: '#64748B', marginTop: 2 },
   addBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
     backgroundColor: '#2E5D36',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 24,
+    gap: 4,
+    minHeight: 48,
   },
-  addBtnText: {
-    color: '#FFF',
-    fontWeight: 'bold',
-    fontSize: 13,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 60,
-    padding: 20,
-  },
-  emptyText: {
-    color: '#64748B',
-    marginTop: 12,
-    fontSize: 16,
-  },
-  emptyBtn: {
-    marginTop: 16,
-  },
-  card: {
+  addBtnText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
+  customerCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 18,
+    padding: 16,
     marginBottom: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
-    shadowRadius: 8,
+    shadowRadius: 6,
     elevation: 2,
   },
-  cardHeader: {
+  customerName: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
+  customerContact: { fontSize: 12, color: '#64748B', marginTop: 2 },
+  customerMetricsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  name: {
-    color: '#0F172A',
-    fontWeight: 'bold',
-    fontSize: 17,
-    marginBottom: 2,
-  },
-  email: {
-    color: '#64748B',
-    fontSize: 13,
-  },
-  chip: {
-    height: 24,
-    alignSelf: 'flex-start',
-  },
-  pendingChip: {
-    backgroundColor: '#FEF3C7',
-  },
-  approvedChip: {
-    backgroundColor: '#DCFCE7',
-  },
-  metaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 10,
     marginTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    paddingTop: 10,
   },
-  role: {
-    color: '#2E5D36',
-    fontWeight: '600',
-    fontSize: 12,
-  },
-  date: {
-    color: '#94A3B8',
-    fontSize: 11,
-    marginTop: 2,
-  },
-  editCardBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#E8F5E9',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#C8E6C9',
-  },
-  editCardBtnText: {
-    color: '#2E5D36',
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  approvalActionRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 8,
-    marginTop: 12,
-    paddingTop: 8,
-  },
-  actionBtn: {
-    borderRadius: 8,
-  },
+  metricItem: { alignItems: 'center', flex: 1 },
+  metricVal: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
+  metricLbl: { fontSize: 11, color: '#64748B', marginTop: 2 },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.6)',
     justifyContent: 'center',
     padding: 20,
   },
-  modalCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 20,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 8,
-    maxHeight: '90%',
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 20,
   },
-  modalHeaderRow: {
+  modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 14,
   },
-  modalTitle: {
-    fontWeight: 'bold',
-    color: '#0F172A',
-  },
-  modalSub: {
-    color: '#64748B',
-  },
-  closeModalBtn: {
-    padding: 4,
-  },
-  input: {
-    marginBottom: 12,
-    backgroundColor: '#FFF',
-  },
-  fieldSectionLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#475569',
-    marginBottom: 6,
-    marginTop: 4,
-  },
-  chipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+  modalTitle: { fontSize: 19, fontWeight: '800', color: '#0F172A' },
+  modalSubtitle: { fontSize: 12, color: '#64748B', marginTop: 2 },
+  modalInput: { marginBottom: 10, backgroundColor: '#FFFFFF' },
+  modalActions: { flexDirection: 'row', marginTop: 12 },
+  drilldownRanchCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 14,
+    padding: 12,
     marginBottom: 10,
   },
-  roleSelectChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: '#F1F5F9',
+  fieldSectionHeading: { fontSize: 14, fontWeight: '800', color: '#0F172A', marginBottom: 6 },
+  radioItem: {
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    marginBottom: 6,
   },
-  roleSelectChipActive: {
-    backgroundColor: '#2E5D36',
+  radioItemSelected: {
+    backgroundColor: '#F0FDF4',
     borderColor: '#2E5D36',
-  },
-  roleSelectChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  roleSelectChipTextActive: {
-    color: '#FFF',
-  },
-  statusSelectChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  statusSelectChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  modalBtnRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 18,
   },
 });

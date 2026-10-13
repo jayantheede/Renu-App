@@ -10,6 +10,16 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
   multiGet: jest.fn().mockResolvedValue([['@auth_token', null], ['@auth_user', null]]),
 }));
 
+jest.mock('@expo/vector-icons', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    Ionicons: (props) => React.createElement(View, props),
+    MaterialCommunityIcons: (props) => React.createElement(View, props),
+    MaterialIcons: (props) => React.createElement(View, props),
+  };
+});
+
 // Mock for React 19 test-renderer where createRoot was removed
 const testRenderer = require('react-test-renderer');
 if (!testRenderer.createRoot) {

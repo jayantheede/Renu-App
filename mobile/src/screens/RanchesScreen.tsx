@@ -1,228 +1,110 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Dimensions,
   Modal,
   Alert,
-  Image,
-  Share,
-  Platform,
-  Switch,
-  PanResponder,
-  Animated,
+  RefreshControl,
 } from 'react-native';
-import { Text, TextInput, Button, Chip, Card, Divider, ActivityIndicator } from 'react-native-paper';
+import { Text, TextInput, Button, Card, Divider, Chip, ActivityIndicator } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import { fetchRanches as fetchRanchesApi, submitRanch, submitTankSetup, toggleRanchVisibility, exportData, importData } from '../api/client';
+import {
+  fetchRanches,
+  submitRanch,
+  submitBlock,
+  submitTankSetup,
+  fetchDeliveries,
+  deleteTank,
+} from '../api/client';
 import { useAuthStore } from '../store/useAuthStore';
-
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const MAP_HEIGHT = 280;
-const MAP_WIDTH = SCREEN_WIDTH - 40;
-
-const DEFAULT_RANCH_IMAGES = [
-  'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1592417817098-8f3d6910985c?w=800&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1574943320219-553eb213f72d?w=800&auto=format&fit=crop'
-];
-
-// ---- Draggable Tank Pin Component ----
-const DraggableTankPin = ({
-  tank,
-  index,
-  isSelected,
-  onSelect,
-  onDragEnd,
-  mapWidth,
-  mapHeight,
-}: {
-  tank: any;
-  index: number;
-  isSelected: boolean;
-  onSelect: () => void;
-  onDragEnd: (x: number, y: number) => void;
-  mapWidth: number;
-  mapHeight: number;
-}) => {
-  const pinX = ((tank.pinX || (30 + index * 35)) / 100) * mapWidth;
-  const pinY = ((tank.pinY || (40 + index * 25)) / 100) * mapHeight;
-
-  const pan = useRef(new Animated.ValueXY({ x: pinX - 16, y: pinY - 16 })).current;
-  const isDragging = useRef(false);
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        pan.setOffset({ x: (pan.x as any)._value, y: (pan.y as any)._value });
-        pan.setValue({ x: 0, y: 0 });
-        isDragging.current = false;
-      },
-      onPanResponderMove: (_, gestureState) => {
-        if (Math.abs(gestureState.dx) > 4 || Math.abs(gestureState.dy) > 4) {
-          isDragging.current = true;
-        }
-        Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false })(_, gestureState);
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        pan.flattenOffset();
-        const rawX = (pan.x as any)._value + 16;
-        const rawY = (pan.y as any)._value + 16;
-        const clampedX = Math.max(0, Math.min(mapWidth, rawX));
-        const clampedY = Math.max(0, Math.min(mapHeight, rawY));
-
-        if (isDragging.current) {
-          const pctX = Math.round((clampedX / mapWidth) * 100);
-          const pctY = Math.round((clampedY / mapHeight) * 100);
-          onDragEnd(pctX, pctY);
-        } else {
-          onSelect();
-        }
-        isDragging.current = false;
-      },
-    })
-  ).current;
-
-  return (
-    <Animated.View
-      {...panResponder.panHandlers}
-      style={[
-        styles.pinMarker,
-        isSelected && styles.pinMarkerActive,
-        { transform: [{ translateX: pan.x }, { translateY: pan.y }] },
-      ]}
-    >
-      <MaterialCommunityIcons name="water-pump" size={18} color="#FFFFFF" />
-      <View style={styles.pinCallout}>
-        <Text style={styles.pinCalloutText} numberOfLines={1}>
-          {tank.location ? tank.location.substring(0, 14) : `Tank ${index + 1}`}
-        </Text>
-      </View>
-    </Animated.View>
-  );
-};
 
 export const RanchesScreen = () => {
   const user = useAuthStore(state => state.user);
-  const isEmployeeOrAdmin = user?.role === 'employee' || user?.role === 'admin';
+  const isAdmin = user?.role === 'admin';
 
   const [ranches, setRanches] = useState<any[]>([]);
+  const [deliveries, setDeliveries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
-  const [selectedRanch, setSelectedRanch] = useState<any>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Add Ranch Modal State
+  // Selected Block Detail Modal
+  const [selectedBlock, setSelectedBlock] = useState<any>(null);
+  const [selectedBlockRanch, setSelectedBlockRanch] = useState<any>(null);
+  const [blockModalVisible, setBlockModalVisible] = useState(false);
+
+  // Add Ranch Modal
   const [addRanchModalVisible, setAddRanchModalVisible] = useState(false);
   const [newRanchName, setNewRanchName] = useState('');
-  const [newRanchCounty, setNewRanchCounty] = useState('');
-  const [newRanchAc, setNewRanchAc] = useState('');
-  const [newRanchImage, setNewRanchImage] = useState(DEFAULT_RANCH_IMAGES[0]);
+  const [newRanchCounty, setNewRanchCounty] = useState('Fresno');
   const [submittingRanch, setSubmittingRanch] = useState(false);
 
-  // Add Tank Modal State
+  // Add Block Modal
+  const [addBlockModalVisible, setAddBlockModalVisible] = useState(false);
+  const [targetRanchForBlock, setTargetRanchForBlock] = useState<any>(null);
+  const [blkId, setBlkId] = useState('');
+  const [blkCrop, setBlkCrop] = useState('Almond');
+  const [blkVariety, setBlkVariety] = useState('Nonpareil');
+  const [blkRootstock, setBlkRootstock] = useState('Nemaguard');
+  const [blkAcres, setBlkAcres] = useState('');
+  const [blkPlantingYear, setBlkPlantingYear] = useState('2020');
+  const [blkIrrigation, setBlkIrrigation] = useState('Drip');
+  const [blkFertigationSet, setBlkFertigationSet] = useState('Set 1');
+  const [blkCounty, setBlkCounty] = useState('Fresno');
+  const [blkApns, setBlkApns] = useState('');
+  const [submittingBlock, setSubmittingBlock] = useState(false);
+
+  // Add Tank Modal (Plain form, no map!)
   const [addTankModalVisible, setAddTankModalVisible] = useState(false);
+  const [targetRanchForTank, setTargetRanchForTank] = useState<any>(null);
+  const [tankName, setTankName] = useState('');
   const [tankCapacity, setTankCapacity] = useState('1000');
-  const [tankLocationName, setTankLocationName] = useState('North Station');
-  const [pendingPinCoords, setPendingPinCoords] = useState<{ x: number; y: number } | null>(null);
-  const [addingTank, setAddingTank] = useState(false);
+  const [tankLocation, setTankLocation] = useState('');
+  const [submittingTank, setSubmittingTank] = useState(false);
 
-  // Selected Pin Telemetry Drawer State
-  const [selectedPinTank, setSelectedPinTank] = useState<any>(null);
-
-  // Drag hint state
-  const [dragHintVisible, setDragHintVisible] = useState(true);
-
-  // Import Modal State
-  const [importModalVisible, setImportModalVisible] = useState(false);
-  const [importJsonText, setImportJsonText] = useState('');
-
-  // Local tank positions for drag state (keyed by tank id)
-  const [tankPositions, setTankPositions] = useState<Record<string, { x: number; y: number }>>({});
-
-  const loadRanches = async () => {
-    setLoading(true);
+  const loadAll = async () => {
     try {
-      const data = await fetchRanchesApi();
-      if (Array.isArray(data)) {
-        setRanches(data);
-        if (selectedRanch) {
-          const updated = data.find((r: any) => r.id === selectedRanch.id);
-          if (updated) setSelectedRanch(updated);
-        }
-      }
+      const [rData, dData] = await Promise.all([
+        fetchRanches().catch(() => []),
+        fetchDeliveries().catch(() => []),
+      ]);
+      if (Array.isArray(rData)) setRanches(rData);
+      if (Array.isArray(dData)) setDeliveries(dData);
     } catch (e) {
-      console.error('Failed to load ranches:', e);
+      console.warn('Ranches load error:', e);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
   useEffect(() => {
-    loadRanches();
+    loadAll();
   }, []);
 
-  const handlePickRanchImage = async () => {
-    try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert('Permission Denied', 'Camera roll permissions are required to upload ranch images.');
-        return;
-      }
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadAll();
+  };
 
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [16, 9],
-        quality: 0.7,
-        base64: true,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
-        const isPng = asset.mimeType?.includes('png') || asset.uri?.toLowerCase().endsWith('.png');
-        const mime = isPng ? 'image/png' : 'image/jpeg';
-        if (asset.base64) {
-          setNewRanchImage(`data:${mime};base64,${asset.base64}`);
-        } else {
-          setNewRanchImage(asset.uri);
-        }
-      }
-    } catch (e: any) {
-      Alert.alert('Error', 'Failed to pick image');
-    }
+  const handleOpenBlockDetail = (ranch: any, block: any) => {
+    setSelectedBlock(block);
+    setSelectedBlockRanch(ranch);
+    setBlockModalVisible(true);
   };
 
   const handleCreateRanch = async () => {
-    if (!newRanchName.trim() || !newRanchAc.trim()) {
-      Alert.alert('Required Fields', 'Please enter Ranch Name and Acreage');
+    if (!newRanchName.trim()) {
+      Alert.alert('Required', 'Please enter a ranch name.');
       return;
     }
-
     setSubmittingRanch(true);
     try {
-      const res = await submitRanch({
-        name: newRanchName.trim(),
-        county: newRanchCounty.trim() || 'Fresno',
-        ac: parseFloat(newRanchAc) || 100,
-        imageUrl: newRanchImage
-      });
-
-      Alert.alert('Success', 'Ranch created with aerial mapping enabled!');
+      await submitRanch({ name: newRanchName.trim(), county: newRanchCounty.trim() });
       setAddRanchModalVisible(false);
       setNewRanchName('');
-      setNewRanchCounty('');
-      setNewRanchAc('');
-      await loadRanches();
-
-      if (res) {
-        setSelectedRanch(res);
-        setViewMode('map');
-      }
+      loadAll();
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to create ranch');
     } finally {
@@ -230,593 +112,575 @@ export const RanchesScreen = () => {
     }
   };
 
-  const handleToggleHide = async (ranch: any) => {
-    const nextHidden = !ranch.hidden;
-    try {
-      await toggleRanchVisibility(ranch.id, nextHidden);
-      setRanches(ranches.map(r => r.id === ranch.id ? { ...r, hidden: nextHidden } : r));
-      Alert.alert(
-        nextHidden ? 'Ranch Hidden' : 'Ranch Visible',
-        `"${ranch.name}" is now ${nextHidden ? 'hidden from operational field view' : 'visible in operations'}.`
-      );
-    } catch (e: any) {
-      Alert.alert('Error', 'Failed to update visibility toggle');
+  const handleCreateBlock = async () => {
+    if (!targetRanchForBlock) return;
+    if (!blkId.trim() || !blkAcres.trim()) {
+      Alert.alert('Required', 'Please enter Block ID and Acreage.');
+      return;
     }
-  };
-
-  const handleMapPress = (evt: any) => {
-    const { locationX, locationY } = evt.nativeEvent;
-    const xPct = Math.round((locationX / MAP_WIDTH) * 100);
-    const yPct = Math.round((locationY / MAP_HEIGHT) * 100);
-    setPendingPinCoords({ x: Math.max(5, Math.min(95, xPct)), y: Math.max(5, Math.min(95, yPct)) });
-    setAddTankModalVisible(true);
-  };
-
-  const handleAddTankPin = async () => {
-    if (!selectedRanch) return;
-    setAddingTank(true);
+    setSubmittingBlock(true);
     try {
-      const newTank = await submitTankSetup({
-        ranchId: selectedRanch.id,
-        capacity: parseInt(tankCapacity) || 1000,
-        location: tankLocationName.trim() || 'Field Station',
-        pinX: pendingPinCoords?.x || 50,
-        pinY: pendingPinCoords?.y || 50
+      const apnList = blkApns
+        .split(',')
+        .map(a => a.trim())
+        .filter(Boolean);
+
+      await submitBlock(targetRanchForBlock.id, {
+        blockId: blkId.trim(),
+        crop: blkCrop.trim(),
+        variety: blkVariety.trim(),
+        rootstock: blkRootstock.trim(),
+        acreage: parseFloat(blkAcres) || 0,
+        plantingYear: parseInt(blkPlantingYear, 10) || 2020,
+        irrigationType: blkIrrigation.trim(),
+        fertigationSet: blkFertigationSet.trim(),
+        county: blkCounty.trim() || targetRanchForBlock.county,
+        apns: apnList.length > 0 ? apnList : ['045-120-001'],
       });
 
-      Alert.alert('Tank Added ✓', `"${tankLocationName}" pinned to the map successfully.`);
-      setAddTankModalVisible(false);
-      setPendingPinCoords(null);
-      setTankCapacity('1000');
-      setTankLocationName('North Station');
-      await loadRanches();
+      setAddBlockModalVisible(false);
+      setBlkId('');
+      setBlkAcres('');
+      setBlkApns('');
+      loadAll();
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to save tank pin');
+      Alert.alert('Error', e.message || 'Failed to add block');
     } finally {
-      setAddingTank(false);
+      setSubmittingBlock(false);
     }
   };
 
-  const handleTankDragEnd = (tank: any, xPct: number, yPct: number) => {
-    // Update local position state for immediate feedback
-    setTankPositions(prev => ({ ...prev, [tank.id]: { x: xPct, y: yPct } }));
-    Alert.alert(
-      'Tank Relocated',
-      `"${tank.location || 'Tank'}" moved to position (${xPct}%, ${yPct}%).\n\nDrag to reposition anytime.`,
-      [{ text: 'OK' }]
-    );
-  };
-
-  const handleExportRanches = async () => {
+  const handleCreateTank = async () => {
+    if (!targetRanchForTank) return;
+    if (!tankName.trim() || !tankCapacity.trim()) {
+      Alert.alert('Required', 'Please enter tank name and capacity.');
+      return;
+    }
+    setSubmittingTank(true);
     try {
-      const res = await exportData('ranches');
-      const jsonStr = JSON.stringify(res.data, null, 2);
-      if (Platform.OS === 'web') {
-        const blob = new Blob([jsonStr], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `renu_ranches_${Date.now()}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-      } else {
-        await Share.share({ title: 'Export Ranches', message: jsonStr });
-      }
+      await submitTankSetup({
+        ranchId: targetRanchForTank.id,
+        name: tankName.trim(),
+        capacity: parseInt(tankCapacity, 10) || 1000,
+        location: tankLocation.trim() || 'Injection Station',
+      });
+      setAddTankModalVisible(false);
+      setTankName('');
+      setTankLocation('');
+      loadAll();
     } catch (e: any) {
-      Alert.alert('Export Failed', e.message || 'Could not export ranches');
+      Alert.alert('Error', e.message || 'Failed to add tank');
+    } finally {
+      setSubmittingTank(false);
     }
   };
 
-  const handleImportRanches = async () => {
-    try {
-      const parsed = JSON.parse(importJsonText);
-      const items = Array.isArray(parsed) ? parsed : [parsed];
-      await importData('ranches', items);
-      Alert.alert('Success', `Imported ${items.length} ranches successfully`);
-      setImportModalVisible(false);
-      setImportJsonText('');
-      loadRanches();
-    } catch (e: any) {
-      Alert.alert('Invalid Format', 'Please enter a valid JSON array of ranch objects.');
-    }
+  // Find deliveries matching the selected block
+  const getDeliveriesForBlock = (blockId: string) => {
+    return deliveries.filter(d => {
+      if (!d.blockIds || !Array.isArray(d.blockIds)) return false;
+      return d.blockIds.includes(blockId);
+    });
   };
 
-  // ---------------------------------
-  // Interactive Map View
-  // ---------------------------------
-  if (viewMode === 'map' && selectedRanch) {
-    const ranchImage = selectedRanch.imageUrl || DEFAULT_RANCH_IMAGES[0];
-    const tanks: any[] = selectedRanch.tankSetups && selectedRanch.tankSetups.length > 0
-      ? selectedRanch.tankSetups
-      : [
-        { id: 't1', capacity: 1000, location: 'North Injection Valve', pinX: 30, pinY: 40, level: '82%', pressure: '45 PSI' },
-        { id: 't2', capacity: 500, location: 'South Field Tank 2', pinX: 70, pinY: 65, level: '64%', pressure: '38 PSI' }
-      ];
-
-    // Merge drag overrides
-    const resolvedTanks = tanks.map(t => ({
-      ...t,
-      pinX: tankPositions[t.id]?.x ?? t.pinX,
-      pinY: tankPositions[t.id]?.y ?? t.pinY,
-    }));
-
-    return (
-      <View style={styles.container}>
-        <View style={styles.mapHeader}>
-          <TouchableOpacity onPress={() => { setViewMode('list'); setDragHintVisible(true); }} style={styles.backBtn}>
-            <MaterialCommunityIcons name="arrow-left" size={24} color="#0F172A" />
-          </TouchableOpacity>
-          <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={styles.mapTitle}>{selectedRanch.name}</Text>
-            <Text style={styles.mapSubTitle}>{selectedRanch.county} County • {selectedRanch.ac} Acres</Text>
-          </View>
-          <Button
-            mode="contained"
-            icon="plus"
-            buttonColor="#2E5D36"
-            onPress={() => {
-              setPendingPinCoords({ x: 50, y: 50 });
-              setAddTankModalVisible(true);
-            }}
-            style={{ borderRadius: 8 }}
-          >
-            Add Tank
-          </Button>
-        </View>
-
-        <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
-          {/* Drag hint banner */}
-          {dragHintVisible && (
-            <TouchableOpacity
-              onPress={() => setDragHintVisible(false)}
-              style={styles.dragHintBanner}
-            >
-              <MaterialCommunityIcons name="gesture-tap-hold" size={18} color="#7C3AED" />
-              <Text style={styles.dragHintText}>💡 Tap the aerial map to drop a tank pin. Drag existing pins to reposition them.</Text>
-              <MaterialCommunityIcons name="close" size={16} color="#7C3AED" />
-            </TouchableOpacity>
-          )}
-
-          <Text style={styles.canvasInstruction}>
-            Tap map to add tank • Drag pin markers to reposition:
-          </Text>
-
-          {/* Interactive Ranch Canvas Container */}
-          <View style={styles.canvasWrapper}>
-            <TouchableOpacity
-              activeOpacity={1}
-              onPress={handleMapPress}
-              style={{ width: '100%', height: '100%' }}
-            >
-              <Image source={{ uri: ranchImage }} style={styles.canvasImage} resizeMode="cover" />
-              {/* Semi-transparent grid overlay */}
-              <View style={styles.canvasGridOverlay} />
-            </TouchableOpacity>
-
-            {/* Render Draggable Tank Pins */}
-            {resolvedTanks.map((tank: any, index: number) => (
-              <DraggableTankPin
-                key={tank.id || index}
-                tank={tank}
-                index={index}
-                isSelected={selectedPinTank?.id === tank.id}
-                onSelect={() => setSelectedPinTank(selectedPinTank?.id === tank.id ? null : tank)}
-                onDragEnd={(x, y) => handleTankDragEnd(tank, x, y)}
-                mapWidth={MAP_WIDTH}
-                mapHeight={MAP_HEIGHT}
-              />
-            ))}
-          </View>
-
-          {/* Selected Pin Telemetry Card */}
-          {selectedPinTank && (
-            <Card style={styles.telemetryCard}>
-              <Card.Content>
-                <View style={styles.row}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <MaterialCommunityIcons name="gauge" size={24} color="#2E5D36" style={{ marginRight: 8 }} />
-                    <View>
-                      <Text style={{ fontWeight: 'bold', fontSize: 16, color: '#0F172A' }}>
-                        {selectedPinTank.location || 'Station Telemetry'}
-                      </Text>
-                      <Text style={{ fontSize: 12, color: '#64748B' }}>
-                        Position ({tankPositions[selectedPinTank.id]?.x ?? selectedPinTank.pinX ?? 30}%, {tankPositions[selectedPinTank.id]?.y ?? selectedPinTank.pinY ?? 40}%)
-                      </Text>
-                    </View>
-                  </View>
-                  <Chip style={{ backgroundColor: '#DCFCE7' }} textStyle={{ color: '#15803D', fontWeight: 'bold' }}>
-                    ONLINE
-                  </Chip>
-                </View>
-
-                <Divider style={{ marginVertical: 12 }} />
-
-                <View style={styles.telemetryGrid}>
-                  <View style={styles.telemetryItem}>
-                    <Text style={styles.tLabel}>Capacity</Text>
-                    <Text style={styles.tVal}>{selectedPinTank.capacity} Gal</Text>
-                  </View>
-                  <View style={styles.telemetryItem}>
-                    <Text style={styles.tLabel}>Fill Level</Text>
-                    <Text style={[styles.tVal, { color: '#15803D' }]}>{selectedPinTank.level || '78%'}</Text>
-                  </View>
-                  <View style={styles.telemetryItem}>
-                    <Text style={styles.tLabel}>Line Pressure</Text>
-                    <Text style={styles.tVal}>{selectedPinTank.pressure || '42 PSI'}</Text>
-                  </View>
-                  <View style={styles.telemetryItem}>
-                    <Text style={styles.tLabel}>Nutrient Active</Text>
-                    <Text style={styles.tVal}>Biome Care</Text>
-                  </View>
-                </View>
-              </Card.Content>
-            </Card>
-          )}
-
-          {/* List of mapped tanks */}
-          <Text style={[styles.sectionTitle, { marginTop: 24, marginBottom: 12 }]}>
-            Mapped Tank Assets ({resolvedTanks.length})
-          </Text>
-          {resolvedTanks.map((t: any, idx: number) => (
-            <View key={t.id || idx} style={styles.tankListItem}>
-              <MaterialCommunityIcons name="propane-tank" size={24} color="#2E5D36" style={{ marginRight: 12 }} />
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontWeight: '700', color: '#0F172A' }}>{t.location || `Tank Station ${idx + 1}`}</Text>
-                <Text style={{ color: '#64748B', fontSize: 13 }}>{t.capacity} Gal capacity • Drag pin to reposition</Text>
-              </View>
-              <Button
-                mode="text"
-                textColor="#2E5D36"
-                onPress={() => setSelectedPinTank(t)}
-              >
-                Inspect
-              </Button>
-            </View>
-          ))}
-        </ScrollView>
-
-        {/* Add Tank Pin Modal */}
-        <Modal visible={addTankModalVisible} animationType="slide" transparent>
-          <View style={styles.modalBackdrop}>
-            <View style={styles.modalSheet}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Map Tank Injection Station</Text>
-                <TouchableOpacity onPress={() => setAddTankModalVisible(false)}>
-                  <MaterialCommunityIcons name="close-circle" size={28} color="#64748B" />
-                </TouchableOpacity>
-              </View>
-              <TextInput
-                label="Station Name / Location"
-                value={tankLocationName}
-                onChangeText={setTankLocationName}
-                mode="outlined"
-                style={styles.input}
-                outlineColor="#CBD5E1"
-                activeOutlineColor="#2E5D36"
-              />
-              <TextInput
-                label="Capacity (Gallons)"
-                value={tankCapacity}
-                onChangeText={setTankCapacity}
-                keyboardType="numeric"
-                mode="outlined"
-                style={styles.input}
-                outlineColor="#CBD5E1"
-                activeOutlineColor="#2E5D36"
-              />
-              <View style={styles.pinCoordBox}>
-                <MaterialCommunityIcons name="crosshairs-gps" size={16} color="#2E5D36" />
-                <Text style={{ color: '#334155', fontSize: 13, marginLeft: 6 }}>
-                  Pin Location: X: <Text style={{ fontWeight: 'bold' }}>{pendingPinCoords?.x}%</Text>, Y: <Text style={{ fontWeight: 'bold' }}>{pendingPinCoords?.y}%</Text>
-                </Text>
-              </View>
-              <Button
-                mode="contained"
-                buttonColor="#2E5D36"
-                onPress={handleAddTankPin}
-                loading={addingTank}
-                disabled={addingTank}
-                style={{ borderRadius: 10, paddingVertical: 4 }}
-                icon="map-marker-plus"
-              >
-                Save Tank to Map
-              </Button>
-            </View>
-          </View>
-        </Modal>
-      </View>
-    );
-  }
-
-  // ---------------------------------
-  // Ranches List View
-  // ---------------------------------
   return (
     <View style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2E5D36" />
+        }
       >
-        {/* Screen Header */}
+        {/* Top Header */}
         <View style={styles.header}>
           <View>
-            <Text variant="headlineMedium" style={styles.title}>Ranches & Fields</Text>
-            <Text variant="bodyMedium" style={styles.subtitle}>Aerial mapping, field boundaries & tank setups</Text>
+            <Text style={styles.title}>Ranches & Blocks</Text>
+            <Text style={styles.subtitle}>
+              Planted field inventory & ranch injection tanks
+            </Text>
           </View>
-          <View style={styles.topActionsRow}>
-            <Button
-              mode="contained"
-              icon="plus"
+          {isAdmin && (
+            <TouchableOpacity
+              style={styles.addRanchBtn}
+              activeOpacity={0.8}
               onPress={() => setAddRanchModalVisible(true)}
-              buttonColor="#2E5D36"
-              style={styles.topBtn}
             >
-              Add Ranch
-            </Button>
-            <Button
-              mode="outlined"
-              icon="download"
-              onPress={handleExportRanches}
-              textColor="#2E5D36"
-              style={[styles.topBtn, { borderColor: '#2E5D36' }]}
-            >
-              Export
-            </Button>
-            <Button
-              mode="outlined"
-              icon="upload"
-              onPress={() => {
-                setImportJsonText(JSON.stringify([{
-                  id: `ranch-${Date.now()}`,
-                  name: 'Green Orchard 4',
-                  county: 'Fresno',
-                  ac: 160,
-                  approvalStatus: 'APPROVED'
-                }], null, 2));
-                setImportModalVisible(true);
-              }}
-              textColor="#2E5D36"
-              style={[styles.topBtn, { borderColor: '#2E5D36' }]}
-            >
-              Import
-            </Button>
-          </View>
+              <MaterialCommunityIcons name="plus" size={18} color="#FFFFFF" />
+              <Text style={styles.addRanchBtnText}>Add Ranch</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
-        {loading ? (
-          <ActivityIndicator color="#2E5D36" size="large" style={{ marginTop: 40 }} />
-        ) : ranches.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <MaterialCommunityIcons name="sprout" size={60} color="#94A3B8" />
-            <Text style={styles.emptyText}>No ranches registered yet.</Text>
-            <Button
-              mode="contained"
-              buttonColor="#2E5D36"
-              onPress={() => setAddRanchModalVisible(true)}
-              style={{ marginTop: 16, borderRadius: 10 }}
-            >
-              Add First Ranch
-            </Button>
+        {loading && !refreshing ? (
+          <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+            <ActivityIndicator size="large" color="#2E5D36" />
+            <Text style={{ marginTop: 12, color: '#64748B' }}>Loading ranches & blocks...</Text>
           </View>
+        ) : ranches.length === 0 ? (
+          <Card style={styles.emptyCard}>
+            <Card.Content style={styles.emptyContent}>
+              <MaterialCommunityIcons name="sprout" size={48} color="#94A3B8" />
+              <Text style={styles.emptyTitle}>No Ranches Configured</Text>
+              <Text style={styles.emptyDesc}>
+                Contact ReNu-Biome administration to set up your ranch profile and blocks.
+              </Text>
+            </Card.Content>
+          </Card>
         ) : (
-          ranches.map((ranch) => {
-            const isApproved = ranch.approvalStatus === 'APPROVED';
-            const isHidden = Boolean(ranch.hidden);
-            const imageUri = ranch.imageUrl || DEFAULT_RANCH_IMAGES[0];
+          ranches.map((ranch: any) => {
+            const blocks = ranch.blocks || [];
+            const tanks = ranch.tanks || ranch.tankSetups || [];
+            // Ranch acreage is strictly computed from blocks
+            const computedAcres = blocks.reduce((s: number, b: any) => s + (Number(b.acreage) || 0), 0);
 
             return (
-              <Card key={ranch.id} style={[styles.card, isHidden && styles.cardHidden]}>
-                <Image source={{ uri: imageUri }} style={styles.cardCover} resizeMode="cover" />
-                <Card.Content style={{ paddingTop: 14 }}>
-                  <View style={styles.row}>
-                    <Text variant="titleMedium" style={{ fontWeight: 'bold', color: '#0F172A', fontSize: 18 }}>
-                      {ranch.name}
+              <View key={ranch.id} style={styles.ranchSection}>
+                {/* Ranch Card Banner */}
+                <View style={styles.ranchBanner}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.ranchTitle}>{ranch.name}</Text>
+                    <Text style={styles.ranchCountyText}>
+                      <MaterialCommunityIcons name="map-marker-outline" size={14} color="#64748B" />{' '}
+                      {ranch.county} County
                     </Text>
-                    <Chip
-                      compact
-                      style={{ backgroundColor: isApproved ? '#DCFCE7' : '#FEF3C7' }}
-                      textStyle={{ color: isApproved ? '#15803D' : '#D97706', fontWeight: 'bold' }}
-                    >
-                      {ranch.approvalStatus || 'PENDING'}
-                    </Chip>
                   </View>
+                  <View style={styles.acreageBadge}>
+                    <Text style={styles.acreageNumber}>{computedAcres}</Text>
+                    <Text style={styles.acreageUnit}>Acres</Text>
+                  </View>
+                </View>
 
-                  <Text variant="bodyMedium" style={{ color: '#64748B', marginTop: 4 }}>
-                    {ranch.county} County • {ranch.ac} Acres • {ranch.entity?.name || 'Registered Farm'}
-                  </Text>
-
-                  {/* Tank count badge */}
-                  {ranch.tankSetups && ranch.tankSetups.length > 0 && (
-                    <View style={styles.tankBadgeRow}>
-                      <MaterialCommunityIcons name="propane-tank" size={14} color="#2E5D36" />
-                      <Text style={styles.tankBadgeText}>{ranch.tankSetups.length} tank{ranch.tankSetups.length > 1 ? 's' : ''} mapped</Text>
-                    </View>
-                  )}
-
-                  {/* Employee Hide Ranch Toggle */}
-                  {isEmployeeOrAdmin && (
-                    <View style={styles.toggleRow}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <MaterialCommunityIcons
-                          name={isHidden ? 'eye-off' : 'eye'}
-                          size={18}
-                          color={isHidden ? '#EF4444' : '#2E5D36'}
-                          style={{ marginRight: 6 }}
-                        />
-                        <Text style={{ fontSize: 13, fontWeight: '600', color: isHidden ? '#EF4444' : '#334155' }}>
-                          {isHidden ? 'Hidden from Ops View' : 'Visible in Field Ops'}
-                        </Text>
-                      </View>
-                      <Switch
-                        value={!isHidden}
-                        onValueChange={() => handleToggleHide(ranch)}
-                        trackColor={{ false: '#CBD5E1', true: '#86EFAC' }}
-                        thumbColor={!isHidden ? '#2E5D36' : '#94A3B8'}
-                      />
-                    </View>
-                  )}
-
-                  <Divider style={{ marginVertical: 12 }} />
-
-                  <View style={{ flexDirection: 'row', gap: 10 }}>
-                    <Button
-                      mode="contained"
-                      buttonColor="#2E5D36"
-                      icon="map-marker-radius"
+                {/* Blocks Table Header */}
+                <View style={styles.blocksHeaderRow}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <MaterialCommunityIcons name="view-grid-outline" size={18} color="#0F172A" style={{ marginRight: 6 }} />
+                    <Text style={styles.blocksSectionTitle}>
+                      Blocks ({blocks.length})
+                    </Text>
+                  </View>
+                  {isAdmin && (
+                    <TouchableOpacity
                       onPress={() => {
-                        setSelectedRanch(ranch);
-                        setViewMode('map');
+                        setTargetRanchForBlock(ranch);
+                        setBlkCounty(ranch.county);
+                        setAddBlockModalVisible(true);
                       }}
-                      style={{ flex: 1, borderRadius: 8 }}
+                      style={styles.addInlineBtn}
                     >
-                      Interactive Map
-                    </Button>
-                    <Button
-                      mode="outlined"
-                      icon="plus-circle"
+                      <MaterialCommunityIcons name="plus-circle-outline" size={16} color="#2E5D36" />
+                      <Text style={styles.addInlineBtnText}>Add Block</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Blocks Table */}
+                {blocks.length === 0 ? (
+                  <View style={styles.noItemsBox}>
+                    <Text style={styles.noItemsText}>No planted blocks added yet.</Text>
+                  </View>
+                ) : (
+                  <View style={styles.tableContainer}>
+                    {/* Table Header Row */}
+                    <View style={styles.tableHeaderRow}>
+                      <Text style={[styles.tableColHeader, { flex: 1.2 }]}>Block ID</Text>
+                      <Text style={[styles.tableColHeader, { flex: 2.2 }]}>Crop & Variety</Text>
+                      <Text style={[styles.tableColHeader, { flex: 1.2, textAlign: 'right' }]}>Acres</Text>
+                      <Text style={[styles.tableColHeader, { flex: 1.2, textAlign: 'right' }]}>Planted</Text>
+                    </View>
+
+                    {/* Table Body */}
+                    {blocks.map((b: any, idx: number) => {
+                      const isLast = idx === blocks.length - 1;
+                      return (
+                        <TouchableOpacity
+                          key={b.id || idx}
+                          style={[styles.tableRow, isLast && styles.noBorder]}
+                          activeOpacity={0.7}
+                          onPress={() => handleOpenBlockDetail(ranch, b)}
+                        >
+                          <View style={{ flex: 1.2, flexDirection: 'row', alignItems: 'center' }}>
+                            <View style={styles.blockIdBadge}>
+                              <Text style={styles.blockIdBadgeText}>{b.blockId}</Text>
+                            </View>
+                          </View>
+                          <View style={{ flex: 2.2 }}>
+                            <Text style={styles.cropVarietyText} numberOfLines={1}>
+                              {b.crop} · {b.variety}
+                            </Text>
+                            <Text style={styles.rootstockText} numberOfLines={1}>
+                              Root: {b.rootstock || 'Std'}
+                            </Text>
+                          </View>
+                          <Text style={[styles.acresText, { flex: 1.2, textAlign: 'right' }]}>
+                            {b.acreage} ac
+                          </Text>
+                          <Text style={[styles.plantedYearText, { flex: 1.2, textAlign: 'right' }]}>
+                            {b.plantingYear}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+
+                {/* Tank Register Section */}
+                <View style={[styles.blocksHeaderRow, { marginTop: 18 }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <MaterialCommunityIcons name="water-pump" size={18} color="#0F172A" style={{ marginRight: 6 }} />
+                    <Text style={styles.blocksSectionTitle}>
+                      Tank Register ({tanks.length})
+                    </Text>
+                  </View>
+                  {isAdmin && (
+                    <TouchableOpacity
                       onPress={() => {
-                        setSelectedRanch(ranch);
-                        setPendingPinCoords({ x: 50, y: 50 });
+                        setTargetRanchForTank(ranch);
                         setAddTankModalVisible(true);
                       }}
-                      textColor="#2E5D36"
-                      style={{ flex: 1, borderRadius: 8, borderColor: '#2E5D36' }}
+                      style={styles.addInlineBtn}
                     >
-                      Add Tank
-                    </Button>
+                      <MaterialCommunityIcons name="plus-circle-outline" size={16} color="#2E5D36" />
+                      <Text style={styles.addInlineBtnText}>Add Tank</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Tanks List */}
+                {tanks.length === 0 ? (
+                  <View style={styles.noItemsBox}>
+                    <Text style={styles.noItemsText}>No injection tanks registered.</Text>
                   </View>
-                </Card.Content>
-              </Card>
+                ) : (
+                  <View style={styles.tanksContainer}>
+                    {tanks.map((tank: any, tIdx: number) => (
+                      <View key={tank.id || tIdx} style={styles.tankCard}>
+                        <View style={styles.tankIconBox}>
+                          <MaterialCommunityIcons name="water-pump" size={22} color="#1D4ED8" />
+                        </View>
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                          <Text style={styles.tankName}>{tank.name || `Tank #${tIdx + 1}`}</Text>
+                          <Text style={styles.tankLocation} numberOfLines={1}>
+                            {tank.location || 'Injection Station'}
+                          </Text>
+                          <View style={styles.tankMetaRow}>
+                            <Text style={styles.tankCapacityText}>
+                              Capacity: {(tank.capacity || 1000).toLocaleString()} Gal
+                            </Text>
+                            {tank.level ? (
+                              <Text style={styles.tankTelemetryText}>· Level: {tank.level}</Text>
+                            ) : null}
+                          </View>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
             );
           })
         )}
       </ScrollView>
 
-      {/* Add Ranch Modal (with Image Upload & Interactive Canvas Trigger) */}
-      <Modal visible={addRanchModalVisible} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add New Ranch</Text>
-              <TouchableOpacity onPress={() => setAddRanchModalVisible(false)}>
-                <MaterialCommunityIcons name="close-circle" size={28} color="#64748B" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <TextInput
-                label="Ranch / Farm Name"
-                value={newRanchName}
-                onChangeText={setNewRanchName}
-                mode="outlined"
-                style={styles.input}
-                outlineColor="#CBD5E1"
-                activeOutlineColor="#2E5D36"
-              />
-              <TextInput
-                label="County / Region"
-                value={newRanchCounty}
-                onChangeText={setNewRanchCounty}
-                placeholder="e.g. Fresno, Kern, Madera"
-                mode="outlined"
-                style={styles.input}
-                outlineColor="#CBD5E1"
-                activeOutlineColor="#2E5D36"
-              />
-              <TextInput
-                label="Total Acreage (Acres)"
-                value={newRanchAc}
-                onChangeText={setNewRanchAc}
-                keyboardType="numeric"
-                mode="outlined"
-                style={styles.input}
-                outlineColor="#CBD5E1"
-                activeOutlineColor="#2E5D36"
-              />
-
-              {/* Ranch Photo Upload (PNG / JPG) */}
-              <Text style={{ fontWeight: '700', color: '#0F172A', marginTop: 10, marginBottom: 8 }}>
-                Ranch Photo / Aerial Map (PNG / JPG)
-              </Text>
-
-              <TouchableOpacity onPress={handlePickRanchImage} style={styles.imagePickerBox}>
-                <Image source={{ uri: newRanchImage }} style={styles.imagePreview} />
-                <View style={styles.imagePickerOverlay}>
-                  <MaterialCommunityIcons name="camera-plus" size={28} color="#FFFFFF" />
-                  <Text style={{ color: '#FFFFFF', fontWeight: 'bold', marginTop: 4 }}>
-                    Choose Photo (PNG / JPG)
-                  </Text>
+      {/* Block Detail & Delivery Timeline Modal */}
+      <Modal visible={blockModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            {selectedBlock && (
+              <>
+                <View style={styles.modalHeader}>
+                  <View>
+                    <View style={styles.modalBadgeRow}>
+                      <View style={styles.modalBadge}>
+                        <Text style={styles.modalBadgeText}>{selectedBlock.blockId}</Text>
+                      </View>
+                      <Text style={styles.modalRanchName}>{selectedBlockRanch?.name}</Text>
+                    </View>
+                    <Text style={styles.modalTitle}>
+                      {selectedBlock.crop} · {selectedBlock.variety}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setBlockModalVisible(false)}
+                    style={styles.modalCloseBtn}
+                  >
+                    <MaterialCommunityIcons name="close" size={24} color="#64748B" />
+                  </TouchableOpacity>
                 </View>
-              </TouchableOpacity>
 
-              <Button
-                mode="contained"
-                buttonColor="#2E5D36"
-                loading={submittingRanch}
-                disabled={submittingRanch}
-                onPress={handleCreateRanch}
-                style={{ marginTop: 20, borderRadius: 10, paddingVertical: 4 }}
-              >
-                Create Ranch & Enable Map
-              </Button>
-            </ScrollView>
+                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+                  {/* Block Specifications Grid */}
+                  <View style={styles.detailGrid}>
+                    <View style={styles.detailItem}>
+                      <Text style={styles.detailLabel}>Acreage</Text>
+                      <Text style={styles.detailValue}>{selectedBlock.acreage} Acres</Text>
+                    </View>
+                    <View style={styles.detailItem}>
+                      <Text style={styles.detailLabel}>Planting Year</Text>
+                      <Text style={styles.detailValue}>{selectedBlock.plantingYear}</Text>
+                    </View>
+                    <View style={styles.detailItem}>
+                      <Text style={styles.detailLabel}>Rootstock</Text>
+                      <Text style={styles.detailValue}>{selectedBlock.rootstock || 'None'}</Text>
+                    </View>
+                    <View style={styles.detailItem}>
+                      <Text style={styles.detailLabel}>Irrigation</Text>
+                      <Text style={styles.detailValue}>{selectedBlock.irrigationType || 'Drip'}</Text>
+                    </View>
+                    <View style={styles.detailItem}>
+                      <Text style={styles.detailLabel}>Fertigation Set</Text>
+                      <Text style={styles.detailValue}>{selectedBlock.fertigationSet || 'Set 1'}</Text>
+                    </View>
+                    <View style={styles.detailItem}>
+                      <Text style={styles.detailLabel}>County</Text>
+                      <Text style={styles.detailValue}>{selectedBlock.county || selectedBlockRanch?.county}</Text>
+                    </View>
+                  </View>
+
+                  {/* APN List */}
+                  <View style={styles.apnContainer}>
+                    <Text style={styles.apnTitle}>Assessor Parcel Numbers (APNs):</Text>
+                    <View style={styles.apnChipsRow}>
+                      {(selectedBlock.apns || ['045-120-001']).map((apn: string, i: number) => (
+                        <Chip key={i} style={styles.apnChip} textStyle={styles.apnChipText}>
+                          {apn}
+                        </Chip>
+                      ))}
+                    </View>
+                  </View>
+
+                  <Divider style={{ marginVertical: 16 }} />
+
+                  {/* Timeline of Deliveries for this Block */}
+                  <View style={styles.timelineSection}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                      <MaterialCommunityIcons name="timeline-clock-outline" size={20} color="#2E5D36" style={{ marginRight: 6 }} />
+                      <Text style={styles.timelineTitle}>Delivery History for this Block</Text>
+                    </View>
+
+                    {(() => {
+                      const blockDeliveries = getDeliveriesForBlock(selectedBlock.blockId);
+                      if (blockDeliveries.length === 0) {
+                        return (
+                          <Text style={styles.timelineEmptyText}>
+                            No past or scheduled deliveries recorded for Block {selectedBlock.blockId}.
+                          </Text>
+                        );
+                      }
+
+                      return blockDeliveries.map((del: any, idx: number) => (
+                        <View key={del.id || idx} style={styles.timelineItem}>
+                          <View style={styles.timelineDot} />
+                          <View style={styles.timelineContent}>
+                            <View style={styles.timelineHeader}>
+                              <Text style={styles.timelineProduct}>{del.product}</Text>
+                              <Text style={styles.timelineDate}>{del.deliveredDate || del.date}</Text>
+                            </View>
+                            <Text style={styles.timelineGallons}>
+                              {del.deliveredGallons || del.gallons} Gallons · Status: {del.status}
+                            </Text>
+                            {del.notes ? (
+                              <Text style={styles.timelineNotes}>"{del.notes}"</Text>
+                            ) : null}
+                          </View>
+                        </View>
+                      ));
+                    })()}
+                  </View>
+                </ScrollView>
+              </>
+            )}
           </View>
         </View>
       </Modal>
 
-      {/* JSON Import Modal */}
-      <Modal visible={importModalVisible} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Import Ranches</Text>
-              <TouchableOpacity onPress={() => setImportModalVisible(false)}>
-                <MaterialCommunityIcons name="close-circle" size={28} color="#64748B" />
-              </TouchableOpacity>
-            </View>
-            <TextInput
-              mode="outlined"
-              multiline
-              numberOfLines={8}
-              value={importJsonText}
-              onChangeText={setImportJsonText}
-              style={{ backgroundColor: '#F8FAFC', fontSize: 12, marginBottom: 16 }}
-              outlineColor="#CBD5E1"
-              activeOutlineColor="#2E5D36"
-            />
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <Button mode="outlined" onPress={() => setImportModalVisible(false)} style={{ flex: 1 }} textColor="#64748B">
-                Cancel
-              </Button>
-              <Button mode="contained" onPress={handleImportRanches} style={{ flex: 1, backgroundColor: '#2E5D36' }}>
-                Import
-              </Button>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      {/* Add Ranch Modal */}
+      <Modal visible={addRanchModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.formTitle}>Add New Ranch</Text>
+            <Text style={styles.formSubtitle}>Ranch acreage will be computed automatically from its blocks.</Text>
 
-      {/* Add Tank Modal (from list view) */}
-      <Modal visible={addTankModalVisible && viewMode === 'list'} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Tank to {selectedRanch?.name || 'Ranch'}</Text>
-              <TouchableOpacity onPress={() => setAddTankModalVisible(false)}>
-                <MaterialCommunityIcons name="close-circle" size={28} color="#64748B" />
-              </TouchableOpacity>
-            </View>
             <TextInput
-              label="Station Name / Location"
-              value={tankLocationName}
-              onChangeText={setTankLocationName}
+              label="Ranch Name *"
+              value={newRanchName}
+              onChangeText={setNewRanchName}
               mode="outlined"
               style={styles.input}
               outlineColor="#CBD5E1"
               activeOutlineColor="#2E5D36"
             />
             <TextInput
-              label="Capacity (Gallons)"
+              label="County *"
+              value={newRanchCounty}
+              onChangeText={setNewRanchCounty}
+              mode="outlined"
+              style={styles.input}
+              outlineColor="#CBD5E1"
+              activeOutlineColor="#2E5D36"
+            />
+
+            <View style={styles.modalButtonsRow}>
+              <Button
+                mode="outlined"
+                onPress={() => setAddRanchModalVisible(false)}
+                style={styles.cancelBtn}
+                textColor="#64748B"
+              >
+                Cancel
+              </Button>
+              <Button
+                mode="contained"
+                onPress={handleCreateRanch}
+                loading={submittingRanch}
+                style={styles.submitBtn}
+                buttonColor="#2E5D36"
+              >
+                Create Ranch
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Add Block Modal */}
+      <Modal visible={addBlockModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.formTitle}>
+              Add Block to {targetRanchForBlock?.name}
+            </Text>
+            <Text style={styles.formSubtitle}>Enter planted unit details.</Text>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 380 }}>
+              <TextInput
+                label="Block ID (e.g. N-4, Block 12) *"
+                value={blkId}
+                onChangeText={setBlkId}
+                mode="outlined"
+                style={styles.input}
+                outlineColor="#CBD5E1"
+                activeOutlineColor="#2E5D36"
+              />
+              <TextInput
+                label="Crop (Almond, Pistachio, Grape) *"
+                value={blkCrop}
+                onChangeText={setBlkCrop}
+                mode="outlined"
+                style={styles.input}
+                outlineColor="#CBD5E1"
+                activeOutlineColor="#2E5D36"
+              />
+              <TextInput
+                label="Variety (e.g. Nonpareil, Golden Hills) *"
+                value={blkVariety}
+                onChangeText={setBlkVariety}
+                mode="outlined"
+                style={styles.input}
+                outlineColor="#CBD5E1"
+                activeOutlineColor="#2E5D36"
+              />
+              <TextInput
+                label="Rootstock (e.g. Nemaguard, UCB-1)"
+                value={blkRootstock}
+                onChangeText={setBlkRootstock}
+                mode="outlined"
+                style={styles.input}
+                outlineColor="#CBD5E1"
+                activeOutlineColor="#2E5D36"
+              />
+              <TextInput
+                label="Acreage (e.g. 40) *"
+                value={blkAcres}
+                onChangeText={setBlkAcres}
+                keyboardType="numeric"
+                mode="outlined"
+                style={styles.input}
+                outlineColor="#CBD5E1"
+                activeOutlineColor="#2E5D36"
+              />
+              <TextInput
+                label="Planting Year (e.g. 2018)"
+                value={blkPlantingYear}
+                onChangeText={setBlkPlantingYear}
+                keyboardType="numeric"
+                mode="outlined"
+                style={styles.input}
+                outlineColor="#CBD5E1"
+                activeOutlineColor="#2E5D36"
+              />
+              <TextInput
+                label="Irrigation Type (Drip, Micro-sprinkler)"
+                value={blkIrrigation}
+                onChangeText={setBlkIrrigation}
+                mode="outlined"
+                style={styles.input}
+                outlineColor="#CBD5E1"
+                activeOutlineColor="#2E5D36"
+              />
+              <TextInput
+                label="Fertigation Set or Valve (e.g. Set 1, Valve 14B)"
+                value={blkFertigationSet}
+                onChangeText={setBlkFertigationSet}
+                mode="outlined"
+                style={styles.input}
+                outlineColor="#CBD5E1"
+                activeOutlineColor="#2E5D36"
+              />
+              <TextInput
+                label="APN(s) (comma-separated, e.g. 045-120-032, 045-120-033)"
+                value={blkApns}
+                onChangeText={setBlkApns}
+                mode="outlined"
+                style={styles.input}
+                outlineColor="#CBD5E1"
+                activeOutlineColor="#2E5D36"
+              />
+            </ScrollView>
+
+            <View style={styles.modalButtonsRow}>
+              <Button
+                mode="outlined"
+                onPress={() => setAddBlockModalVisible(false)}
+                style={styles.cancelBtn}
+                textColor="#64748B"
+              >
+                Cancel
+              </Button>
+              <Button
+                mode="contained"
+                onPress={handleCreateBlock}
+                loading={submittingBlock}
+                style={styles.submitBtn}
+                buttonColor="#2E5D36"
+              >
+                Save Block
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Add Tank Modal (Plain form, no map!) */}
+      <Modal visible={addTankModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.formTitle}>
+              Add Tank to {targetRanchForTank?.name}
+            </Text>
+            <Text style={styles.formSubtitle}>Plain form entry for ranch injection station.</Text>
+
+            <TextInput
+              label="Tank Name (e.g. Station Tank #1) *"
+              value={tankName}
+              onChangeText={setTankName}
+              mode="outlined"
+              style={styles.input}
+              outlineColor="#CBD5E1"
+              activeOutlineColor="#2E5D36"
+            />
+            <TextInput
+              label="Capacity in Gallons (e.g. 1000) *"
               value={tankCapacity}
               onChangeText={setTankCapacity}
               keyboardType="numeric"
@@ -825,17 +689,35 @@ export const RanchesScreen = () => {
               outlineColor="#CBD5E1"
               activeOutlineColor="#2E5D36"
             />
-            <Button
-              mode="contained"
-              buttonColor="#2E5D36"
-              onPress={handleAddTankPin}
-              loading={addingTank}
-              disabled={addingTank}
-              style={{ borderRadius: 10, paddingVertical: 4 }}
-              icon="map-marker-plus"
-            >
-              Add Tank
-            </Button>
+            <TextInput
+              label="Location Description (e.g. North Well Pump 2)"
+              value={tankLocation}
+              onChangeText={setTankLocation}
+              mode="outlined"
+              style={styles.input}
+              outlineColor="#CBD5E1"
+              activeOutlineColor="#2E5D36"
+            />
+
+            <View style={styles.modalButtonsRow}>
+              <Button
+                mode="outlined"
+                onPress={() => setAddTankModalVisible(false)}
+                style={styles.cancelBtn}
+                textColor="#64748B"
+              >
+                Cancel
+              </Button>
+              <Button
+                mode="contained"
+                onPress={handleCreateTank}
+                loading={submittingTank}
+                style={styles.submitBtn}
+                buttonColor="#2E5D36"
+              >
+                Save Tank
+              </Button>
+            </View>
           </View>
         </View>
       </Modal>
@@ -849,291 +731,431 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   scrollContent: {
-    paddingBottom: 120,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 96,
   },
   header: {
-    paddingTop: 60,
-    paddingBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
   },
   title: {
+    fontSize: 22,
+    fontWeight: '800',
     color: '#0F172A',
-    fontWeight: 'bold',
   },
   subtitle: {
+    fontSize: 12,
     color: '#64748B',
     marginTop: 2,
-    fontSize: 14,
   },
-  topActionsRow: {
+  addRanchBtn: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 14,
-  },
-  topBtn: {
-    borderRadius: 8,
-  },
-  emptyContainer: {
     alignItems: 'center',
-    marginTop: 80,
+    backgroundColor: '#2E5D36',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    minHeight: 48, // 48px tap target
   },
-  emptyText: {
-    color: '#64748B',
-    fontSize: 16,
-    marginTop: 12,
+  addRanchBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 12,
+    marginLeft: 4,
   },
-  card: {
+  ranchSection: {
+    marginBottom: 24,
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    marginBottom: 16,
+    borderRadius: 20,
+    padding: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
   },
-  cardHidden: {
-    opacity: 0.65,
-    borderColor: '#FCA5A5',
-  },
-  cardCover: {
-    height: 140,
-    width: '100%',
-  },
-  row: {
+  ranchBanner: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  ranchTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  ranchCountyText: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  acreageBadge: {
+    backgroundColor: '#E8F5E9',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 12,
     alignItems: 'center',
   },
-  tankBadgeRow: {
+  acreageNumber: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#2E5D36',
+  },
+  acreageUnit: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#2E5D36',
+    textTransform: 'uppercase',
+  },
+  blocksHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 6,
-    gap: 4,
+    justifyContent: 'space-between',
+    marginBottom: 8,
   },
-  tankBadgeText: {
+  blocksSectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  addInlineBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    minHeight: 48,
+  },
+  addInlineBtnText: {
     fontSize: 12,
     color: '#2E5D36',
-    fontWeight: '600',
+    fontWeight: '700',
+    marginLeft: 4,
   },
-  toggleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  tableContainer: {
     backgroundColor: '#F8FAFC',
-    padding: 10,
-    borderRadius: 8,
-    marginTop: 12,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
-  mapHeader: {
+  tableHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingTop: 60,
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
   },
-  backBtn: {
-    padding: 6,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 8,
+  tableColHeader: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+    textTransform: 'uppercase',
   },
-  mapTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+  tableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    minHeight: 48, // 48px min target
+  },
+  noBorder: {
+    borderBottomWidth: 0,
+  },
+  blockIdBadge: {
+    backgroundColor: '#E2E8F0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  blockIdBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  cropVarietyText: {
+    fontSize: 13,
+    fontWeight: '700',
     color: '#0F172A',
   },
-  mapSubTitle: {
-    fontSize: 12,
-    color: '#64748B',
-  },
-  dragHintBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EDE9FE',
-    borderRadius: 10,
-    padding: 10,
-    marginTop: 12,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: '#DDD6FE',
-  },
-  dragHintText: {
-    flex: 1,
-    color: '#5B21B6',
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  canvasInstruction: {
-    color: '#64748B',
-    fontSize: 13,
-    marginTop: 12,
-    marginBottom: 10,
-  },
-  canvasWrapper: {
-    height: MAP_HEIGHT,
-    borderRadius: 16,
-    overflow: 'hidden',
-    position: 'relative',
-    backgroundColor: '#0F172A',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  canvasImage: {
-    width: '100%',
-    height: '100%',
-    position: 'absolute',
-  },
-  canvasGridOverlay: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    // subtle grid pattern via border
-  },
-  pinMarker: {
-    position: 'absolute',
-    backgroundColor: '#2E5D36',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    zIndex: 10,
-  },
-  pinMarkerActive: {
-    backgroundColor: '#10B981',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 3,
-  },
-  pinCallout: {
-    position: 'absolute',
-    top: 34,
-    left: -20,
-    right: -20,
-    backgroundColor: 'rgba(15, 23, 42, 0.85)',
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-    borderRadius: 4,
-    alignItems: 'center',
-  },
-  pinCalloutText: {
-    color: '#FFFFFF',
-    fontSize: 9,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  telemetryCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    marginTop: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  telemetryGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  telemetryItem: {
-    alignItems: 'center',
-  },
-  tLabel: {
+  rootstockText: {
     fontSize: 11,
     color: '#64748B',
-    marginBottom: 4,
   },
-  tVal: {
-    fontSize: 14,
-    fontWeight: 'bold',
+  acresText: {
+    fontSize: 13,
+    fontWeight: '700',
     color: '#0F172A',
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#0F172A',
+  plantedYearText: {
+    fontSize: 12,
+    color: '#64748B',
   },
-  tankListItem: {
+  tanksContainer: {
+    gap: 8,
+  },
+  tankCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    padding: 14,
+    backgroundColor: '#F8FAFC',
     borderRadius: 12,
-    marginBottom: 10,
+    padding: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
-  pinCoordBox: {
+  tankIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tankName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  tankLocation: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  tankMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F0FDF4',
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
+    marginTop: 2,
   },
-  modalBackdrop: {
+  tankCapacityText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#1D4ED8',
+  },
+  tankTelemetryText: {
+    fontSize: 11,
+    color: '#059669',
+    marginLeft: 4,
+    fontWeight: '600',
+  },
+  noItemsBox: {
+    paddingVertical: 14,
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+  },
+  noItemsText: {
+    fontSize: 12,
+    color: '#94A3B8',
+  },
+  emptyCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  emptyContent: {
+    alignItems: 'center',
+    paddingVertical: 32,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#334155',
+    marginTop: 10,
+  },
+  emptyDesc: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 4,
+    paddingHorizontal: 20,
+  },
+  modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
-  modalSheet: {
+  modalContent: {
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    padding: 24,
+    padding: 20,
     maxHeight: '90%',
   },
   modalHeader: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    alignItems: 'center',
     marginBottom: 16,
   },
+  modalBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  modalBadge: {
+    backgroundColor: '#2E5D36',
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    marginRight: 8,
+  },
+  modalBadgeText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  modalRanchName: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '600',
+  },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '800',
     color: '#0F172A',
   },
-  input: {
-    backgroundColor: '#FFF',
-    marginBottom: 14,
-  },
-  imagePickerBox: {
-    height: 140,
-    borderRadius: 12,
-    overflow: 'hidden',
-    position: 'relative',
-    backgroundColor: '#F1F5F9',
-  },
-  imagePreview: {
-    width: '100%',
-    height: '100%',
-  },
-  imagePickerOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(15, 23, 42, 0.4)',
-    justifyContent: 'center',
+  modalCloseBtn: {
+    padding: 6,
+    minHeight: 48,
+    minWidth: 48,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  detailGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    backgroundColor: '#F8FAFC',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  detailItem: {
+    width: '47%',
+  },
+  detailLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+    textTransform: 'uppercase',
+  },
+  detailValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 2,
+  },
+  apnContainer: {
+    marginTop: 8,
+  },
+  apnTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+    marginBottom: 6,
+  },
+  apnChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  apnChip: {
+    backgroundColor: '#E2E8F0',
+  },
+  apnChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#1E293B',
+  },
+  timelineSection: {
+    marginTop: 8,
+  },
+  timelineTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  timelineEmptyText: {
+    fontSize: 12,
+    color: '#94A3B8',
+    fontStyle: 'italic',
+  },
+  timelineItem: {
+    flexDirection: 'row',
+    marginBottom: 12,
+    paddingLeft: 4,
+  },
+  timelineDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#2E5D36',
+    marginTop: 5,
+    marginRight: 10,
+  },
+  timelineContent: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    padding: 10,
+    borderRadius: 8,
+  },
+  timelineHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  timelineProduct: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  timelineDate: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  timelineGallons: {
+    fontSize: 12,
+    color: '#475569',
+    marginTop: 2,
+  },
+  timelineNotes: {
+    fontSize: 11,
+    color: '#64748B',
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
+  formTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 2,
+  },
+  formSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginBottom: 12,
+  },
+  input: {
+    marginBottom: 10,
+    backgroundColor: '#FFFFFF',
+  },
+  modalButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 14,
+  },
+  cancelBtn: {
+    borderColor: '#CBD5E1',
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  submitBtn: {
+    borderRadius: 8,
+    minHeight: 48,
+    justifyContent: 'center',
   },
 });

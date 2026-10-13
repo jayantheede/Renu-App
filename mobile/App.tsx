@@ -1,12 +1,38 @@
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
-import { useColorScheme, View, StyleSheet, Platform } from 'react-native';
+import { useColorScheme, View, StyleSheet, Platform, Alert } from 'react-native';
 import { Provider as PaperProvider } from 'react-native-paper';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { lightTheme, darkTheme } from './src/theme/theme';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAuthStore } from './src/store/useAuthStore';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+
+// Web Polyfill for React Native Alert.alert to support confirmation dialogs and buttons
+if (Platform.OS === 'web' && typeof window !== 'undefined') {
+  Alert.alert = (title: string, message?: string, buttons?: any[]) => {
+    const text = [title, message].filter(Boolean).join('\n\n');
+    if (!buttons || buttons.length <= 1) {
+      window.alert(text);
+      if (buttons && buttons[0] && typeof buttons[0].onPress === 'function') {
+        buttons[0].onPress();
+      }
+    } else {
+      const confirmed = window.confirm(text);
+      if (confirmed) {
+        const actionBtn = buttons.find((b: any) => b.style !== 'cancel' && b.text?.toLowerCase() !== 'cancel') || buttons[buttons.length - 1];
+        if (actionBtn && typeof actionBtn.onPress === 'function') {
+          actionBtn.onPress();
+        }
+      } else {
+        const cancelBtn = buttons.find((b: any) => b.style === 'cancel' || b.text?.toLowerCase() === 'cancel');
+        if (cancelBtn && typeof cancelBtn.onPress === 'function') {
+          cancelBtn.onPress();
+        }
+      }
+    }
+  };
+}
 
 export default function App() {
   const colorScheme = useColorScheme();
@@ -16,8 +42,32 @@ export default function App() {
   useEffect(() => {
     initialize();
 
-    // On Web, inject @font-face rules so vector icons never render as broken ☒ glyphs
+    // Register Web App Manifest, Service Worker & Font Fallbacks for Offline PWA
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      // 1. Add manifest link if not present
+      if (!document.querySelector('link[rel="manifest"]')) {
+        const manifestLink = document.createElement('link');
+        manifestLink.rel = 'manifest';
+        manifestLink.href = '/manifest.json';
+        document.head.appendChild(manifestLink);
+      }
+
+      // 2. Add Apple mobile web app capable meta tag
+      if (!document.querySelector('meta[name="apple-mobile-web-app-capable"]')) {
+        const meta = document.createElement('meta');
+        meta.name = 'apple-mobile-web-app-capable';
+        meta.content = 'yes';
+        document.head.appendChild(meta);
+      }
+
+      // 3. Register service worker for offline caching
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch((err) => {
+          console.warn('Service worker registration failed:', err);
+        });
+      }
+
+      // 4. Offline vector icon font fallback
       const styleId = 'expo-vector-icons-web-fonts';
       if (!document.getElementById(styleId)) {
         const style = document.createElement('style');
@@ -25,33 +75,15 @@ export default function App() {
         style.type = 'text/css';
         style.appendChild(document.createTextNode(`
           @font-face {
-            font-family: 'ionicons';
-            src: url('https://cdnjs.cloudflare.com/ajax/libs/ionicons/7.4.0/fonts/ionicons.woff2') format('woff2'),
-                 url('https://cdnjs.cloudflare.com/ajax/libs/ionicons/7.4.0/fonts/ionicons.ttf') format('truetype');
-            font-display: swap;
-          }
-          @font-face {
             font-family: 'Ionicons';
-            src: url('https://cdnjs.cloudflare.com/ajax/libs/ionicons/7.4.0/fonts/ionicons.woff2') format('woff2'),
-                 url('https://cdnjs.cloudflare.com/ajax/libs/ionicons/7.4.0/fonts/ionicons.ttf') format('truetype');
-            font-display: swap;
-          }
-          @font-face {
-            font-family: 'material-community';
-            src: url('https://cdnjs.cloudflare.com/ajax/libs/MaterialDesign-Webfont/7.4.47/fonts/materialdesignicons-webfont.woff2') format('woff2'),
-                 url('https://cdnjs.cloudflare.com/ajax/libs/MaterialDesign-Webfont/7.4.47/fonts/materialdesignicons-webfont.ttf') format('truetype');
+            src: local('Ionicons'),
+                 url('/assets/Ionicons.ttf') format('truetype');
             font-display: swap;
           }
           @font-face {
             font-family: 'MaterialCommunityIcons';
-            src: url('https://cdnjs.cloudflare.com/ajax/libs/MaterialDesign-Webfont/7.4.47/fonts/materialdesignicons-webfont.woff2') format('woff2'),
-                 url('https://cdnjs.cloudflare.com/ajax/libs/MaterialDesign-Webfont/7.4.47/fonts/materialdesignicons-webfont.ttf') format('truetype');
-            font-display: swap;
-          }
-          @font-face {
-            font-family: 'Material Design Icons';
-            src: url('https://cdnjs.cloudflare.com/ajax/libs/MaterialDesign-Webfont/7.4.47/fonts/materialdesignicons-webfont.woff2') format('woff2'),
-                 url('https://cdnjs.cloudflare.com/ajax/libs/MaterialDesign-Webfont/7.4.47/fonts/materialdesignicons-webfont.ttf') format('truetype');
+            src: local('MaterialCommunityIcons'),
+                 url('/assets/MaterialCommunityIcons.ttf') format('truetype');
             font-display: swap;
           }
         `));

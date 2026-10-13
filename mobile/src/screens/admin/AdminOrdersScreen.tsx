@@ -1,205 +1,264 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, ActivityIndicator, RefreshControl, Alert, Modal, TouchableOpacity, Share, Platform } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, StyleSheet, ScrollView, RefreshControl, Alert, Modal, TouchableOpacity } from 'react-native';
 import { Text, Button, Chip, TextInput, Divider } from 'react-native-paper';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import {
-  acceptOrderAndEmail,
-  payOrder,
-  updateOrderTracking,
-  exportData,
-  importData,
-  fetchAdminOrders,
-  cancelOrder
+  fetchDeliveries,
+  submitDelivery,
+  updateDeliveryStatus,
+  updateDelivery,
+  submitInvoice,
+  fetchProducts,
+  fetchRanches
 } from '../../api/client';
 
 export const AdminOrdersScreen = () => {
-  const [orders, setOrders] = useState<any[]>([]);
+  const [deliveries, setDeliveries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [productsList, setProductsList] = useState<any[]>([]);
+  const [ranchesList, setRanchesList] = useState<any[]>([]);
 
-  // Tracking Modal State
-  const [trackingModalVisible, setTrackingModalVisible] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  // Filter States
+  const [statusFilter, setStatusFilter] = useState<'All' | 'Scheduled' | 'Out for delivery' | 'Delivered' | 'Cancelled'>('All');
+  const [customerFilter, setCustomerFilter] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Cancel Modal State
+  // Create Delivery Order Modal
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [newCustomerName, setNewCustomerName] = useState('Sierra Agri Group');
+  const [newCustomerEmail, setNewCustomerEmail] = useState('customer@renu.com');
+  const [newProduct, setNewProduct] = useState('Biome Care');
+  const [newGallons, setNewGallons] = useState('');
+  const [newRanchId, setNewRanchId] = useState('');
+  const [newTankId, setNewTankId] = useState('');
+  const [newBlocks, setNewBlocks] = useState<string[]>([]);
+  const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0]);
+  const [newWindow, setNewWindow] = useState('Morning (8:00 AM - 12:00 PM)');
+  const [newGateCode, setNewGateCode] = useState('#4821');
+  const [newWhoToCall, setNewWhoToCall] = useState('John Miller (559-555-0199)');
+  const [newNotes, setNewNotes] = useState('');
+  const [creating, setCreating] = useState(false);
+
+  // Reschedule Modal
+  const [rescheduleModalVisible, setRescheduleModalVisible] = useState(false);
+  const [deliveryToReschedule, setDeliveryToReschedule] = useState<any>(null);
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleWindow, setRescheduleWindow] = useState('');
+  const [rescheduling, setRescheduling] = useState(false);
+
+  // Cancel with Reason Modal
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
-  const [orderToCancel, setOrderToCancel] = useState<any>(null);
-  const [cancelReason, setCancelReason] = useState('');
-  const [cancelLoading, setCancelLoading] = useState(false);
+  const [deliveryToCancel, setDeliveryToCancel] = useState<any>(null);
+  const [cancelReasonInput, setCancelReasonInput] = useState('');
+  const [cancelling, setCancelling] = useState(false);
 
-  // Import Modal State
-  const [importModalVisible, setImportModalVisible] = useState(false);
-  const [importJsonText, setImportJsonText] = useState('');
+  // Mark Delivered & Invoice Details Modal
+  const [deliveredModalVisible, setDeliveredModalVisible] = useState(false);
+  const [deliveryToMark, setDeliveryToMark] = useState<any>(null);
+  const [actualGallons, setActualGallons] = useState('');
+  const [invoiceNumber, setInvoiceNumber] = useState('');
+  const [invoiceAmount, setInvoiceAmount] = useState('');
+  const [invoiceDate, setInvoiceDate] = useState('');
+  const [invoiceDueDate, setInvoiceDueDate] = useState('');
+  const [markingDelivered, setMarkingDelivered] = useState(false);
 
-  const fetchOrders = async () => {
+  const loadData = useCallback(async () => {
     try {
-      const data = await fetchAdminOrders();
-      setOrders(Array.isArray(data) ? data : []);
+      const [dels, prods, ranches] = await Promise.all([
+        fetchDeliveries().catch(() => []),
+        fetchProducts().catch(() => []),
+        fetchRanches().catch(() => [])
+      ]);
+      setDeliveries(Array.isArray(dels) ? dels : []);
+      setProductsList(Array.isArray(prods) ? prods : []);
+      setRanchesList(Array.isArray(ranches) ? ranches : []);
+
+      if (ranches && ranches.length > 0 && !newRanchId) {
+        setNewRanchId(ranches[0].id);
+        setNewTankId(ranches[0].tanks?.[0]?.id || '');
+      }
     } catch (e: any) {
-      console.error('Fetch orders error:', e);
-      // Fallback in case of network issue
-      try {
-        const BACKEND_URL = (process.env.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
-        const r = await fetch(`${BACKEND_URL}/api/admin/orders`);
-        const d = await r.json();
-        if (Array.isArray(d)) setOrders(d);
-      } catch (err) {}
+      console.error('Fetch error:', e);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [newRanchId]);
 
   useEffect(() => {
-    fetchOrders();
-  }, []);
+    loadData();
+  }, [loadData]);
 
-  const handleAcceptOrder = async (id: string) => {
-    setActionLoadingId(id);
-    try {
-      await acceptOrderAndEmail(id);
-      Alert.alert(
-        'Order Accepted & Payment Link Emailed',
-        'Customer was notified via email with payment instructions and secure checkout link.'
-      );
-      fetchOrders();
-    } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to accept order');
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
-  const handlePayOrder = async (id: string) => {
-    setActionLoadingId(id);
-    try {
-      const res = await payOrder(id);
-      Alert.alert(
-        'Payment Confirmed & Invoice Issued',
-        `Invoice #${res.invoice?.invoiceNumber || 'INV-2026-X'} has been generated, emailed to customer, and stored in Invoices.`
-      );
-      fetchOrders();
-    } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to process payment');
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
-  const handleUpdateStep = async (orderId: string, status: string, step: number) => {
-    try {
-      await updateOrderTracking(orderId, status, step);
-      Alert.alert('Tracking Updated', `Order status progressed to "${status}" (Step ${step}/5)`);
-      fetchOrders();
-      if (selectedOrder && selectedOrder.id === orderId) {
-        setSelectedOrder((prev: any) => ({
-          ...prev,
-          status,
-          trackingStep: step,
-          trackingTimeline: prev.trackingTimeline?.map((t: any, idx: number) =>
-            idx < step ? { ...t, done: true } : t
-          )
-        }));
-      }
-    } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to update tracking');
-    }
-  };
-
-  const handleExportOrders = async () => {
-    try {
-      const res = await exportData('orders');
-      const jsonStr = JSON.stringify(res.data, null, 2);
-      if (Platform.OS === 'web') {
-        const blob = new Blob([jsonStr], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `renu_orders_${Date.now()}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-      } else {
-        await Share.share({
-          title: 'Export Renu Orders',
-          message: jsonStr
-        });
-      }
-    } catch (e: any) {
-      Alert.alert('Export Failed', e.message || 'Could not export orders');
-    }
-  };
-
-  const handleImportOrders = async () => {
-    try {
-      const parsed = JSON.parse(importJsonText);
-      const items = Array.isArray(parsed) ? parsed : [parsed];
-      await importData('orders', items);
-      Alert.alert('Success', `Imported ${items.length} order records successfully`);
-      setImportModalVisible(false);
-      setImportJsonText('');
-      fetchOrders();
-    } catch (e: any) {
-      Alert.alert('Invalid Format', 'Please enter valid JSON array of order objects.');
-    }
-  };
-
-  const openTrackingModal = (order: any) => {
-    setSelectedOrder(order);
-    setTrackingModalVisible(true);
-  };
-
-  const openCancelModal = (order: any) => {
-    setOrderToCancel(order);
-    setCancelReason('');
-    setCancelModalVisible(true);
-  };
-
-  const handleCancelOrder = async () => {
-    if (!orderToCancel) return;
-    if (!cancelReason.trim()) {
-      Alert.alert('Comment Required', 'Please enter a cancellation comment or reason before confirming.');
+  // Handle Create Order
+  const handleCreateOrder = async () => {
+    const gal = parseFloat(newGallons);
+    if (isNaN(gal) || gal <= 0) {
+      Alert.alert('Validation Error', 'Please enter valid gallons.');
       return;
     }
-    setCancelLoading(true);
+    setCreating(true);
     try {
-      const res = await cancelOrder(orderToCancel.id, cancelReason.trim());
-      Alert.alert(
-        'Order Cancelled',
-        res.refunded
-          ? `Order #${orderToCancel.orderId} cancelled. Refund of $${res.refundAmount?.toLocaleString()} initiated successfully.`
-          : `Order #${orderToCancel.orderId} cancelled successfully.`
-      );
-      setCancelModalVisible(false);
-      setOrderToCancel(null);
-      setCancelReason('');
-      fetchOrders();
+      const ranchObj = ranchesList.find(r => r.id === newRanchId);
+      const tankObj = ranchObj?.tanks?.find((t: any) => t.id === newTankId);
+
+      await submitDelivery({
+        customerName: newCustomerName,
+        customerEmail: newCustomerEmail,
+        product: newProduct,
+        productName: newProduct,
+        gallons: gal,
+        ranchId: newRanchId,
+        ranchName: ranchObj?.name || 'Ranch',
+        tankId: newTankId,
+        tankName: tankObj?.name || 'Tank',
+        blocks: newBlocks,
+        date: newDate,
+        deliveryWindow: newWindow,
+        gateCode: newGateCode.trim(),
+        whoToCall: newWhoToCall.trim(),
+        notes: newNotes.trim(),
+        status: 'Scheduled'
+      });
+
+      Alert.alert('Success', 'Delivery order scheduled. Customer received email notification.');
+      setCreateModalVisible(false);
+      setNewGallons('');
+      loadData();
     } catch (e: any) {
-      Alert.alert('Cancellation Error', e.message || 'Failed to cancel order');
+      Alert.alert('Error', e.message || 'Failed to create order');
     } finally {
-      setCancelLoading(false);
+      setCreating(false);
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'PENDING':
-        return { bg: '#FEF3C7', color: '#B45309', label: 'Pending Review' };
-      case 'AWAITING_PAYMENT':
-      case 'ACCEPTED':
-        return { bg: '#DBEAFE', color: '#1D4ED8', label: 'Awaiting Payment' };
-      case 'PAID':
-        return { bg: '#DCFCE7', color: '#15803D', label: 'Paid & Blending' };
-      case 'DISPATCHED':
-        return { bg: '#F3E8FF', color: '#7E22CE', label: 'Dispatched / En Route' };
-      case 'DELIVERED':
-        return { bg: '#E0F2FE', color: '#0369A1', label: 'Delivered to Tank' };
-      case 'CANCELLED':
-        return { bg: '#FEE2E2', color: '#DC2626', label: 'Order Cancelled' };
-      default:
-        return { bg: '#F1F5F9', color: '#475569', label: status };
+  // Handle Mark Out For Delivery
+  const handleMarkOutForDelivery = async (del: any) => {
+    try {
+      await updateDeliveryStatus(del.id || del.orderId, 'Out for delivery');
+      Alert.alert('Dispatched', `Delivery ${del.orderId || del.id} is now Out for Delivery. Customer received email notification.`);
+      loadData();
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to update status');
     }
   };
+
+  // Open Delivered Modal
+  const openDeliveredModal = (del: any) => {
+    const today = new Date().toISOString().split('T')[0];
+    const due = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
+    const invNum = `INV-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 900) + 100)}`;
+
+    setDeliveryToMark(del);
+    setActualGallons(String(del.gallons || ''));
+    setInvoiceNumber(invNum);
+    setInvoiceAmount('');
+    setInvoiceDate(today);
+    setInvoiceDueDate(due);
+    setDeliveredModalVisible(true);
+  };
+
+  // Complete Delivered
+  const handleConfirmDelivered = async () => {
+    if (!deliveryToMark) return;
+    const gal = parseFloat(actualGallons);
+    if (isNaN(gal) || gal <= 0) {
+      Alert.alert('Validation Error', 'Please enter valid delivered gallons.');
+      return;
+    }
+    setMarkingDelivered(true);
+    try {
+      await updateDeliveryStatus(deliveryToMark.id || deliveryToMark.orderId, 'Delivered', {
+        deliveredGallons: gal,
+        deliveredDate: new Date().toISOString().split('T')[0]
+      });
+
+      if (invoiceNumber.trim() && invoiceAmount.trim()) {
+        const amt = parseFloat(invoiceAmount);
+        if (!isNaN(amt) && amt > 0) {
+          await submitInvoice({
+            invoiceNumber: invoiceNumber.trim(),
+            invoiceDate: invoiceDate || new Date().toISOString().split('T')[0],
+            dueDate: invoiceDueDate || new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+            amount: amt,
+            customerId: deliveryToMark.customerId,
+            customerEmail: deliveryToMark.customerEmail,
+            customerName: deliveryToMark.customerName,
+            deliveryId: deliveryToMark.id || deliveryToMark.orderId,
+            product: deliveryToMark.productName || deliveryToMark.product,
+            gallons: gal,
+            blocks: deliveryToMark.blocks || [],
+            status: 'Open',
+            pdfData: 'JVBERi0xLjQKJeLjz9MKMSAwIG9iajw8L1R5cGUvQ2F0YWxvZy9QYWdlcyAyIDAgUj4+ZW5kb2JqCg=='
+          });
+        }
+      }
+
+      setDeliveredModalVisible(false);
+      Alert.alert('Delivered', 'Delivery marked Delivered and invoice recorded.');
+      loadData();
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to complete delivery');
+    } finally {
+      setMarkingDelivered(false);
+    }
+  };
+
+  // Reschedule
+  const handleReschedule = async () => {
+    if (!deliveryToReschedule || !rescheduleDate) return;
+    setRescheduling(true);
+    try {
+      await updateDelivery(deliveryToReschedule.id || deliveryToReschedule.orderId, {
+        date: rescheduleDate,
+        deliveryWindow: rescheduleWindow || deliveryToReschedule.deliveryWindow
+      });
+      Alert.alert('Rescheduled', 'Delivery date and window updated.');
+      setRescheduleModalVisible(false);
+      loadData();
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to reschedule');
+    } finally {
+      setRescheduling(false);
+    }
+  };
+
+  // Cancel with Reason (Admin Only)
+  const handleCancelWithReason = async () => {
+    if (!deliveryToCancel || !cancelReasonInput.trim()) {
+      Alert.alert('Validation Error', 'A cancellation reason is required.');
+      return;
+    }
+    setCancelling(true);
+    try {
+      await updateDeliveryStatus(deliveryToCancel.id || deliveryToCancel.orderId, 'Cancelled', {
+        cancelReason: cancelReasonInput.trim()
+      });
+      Alert.alert('Cancelled', 'Delivery cancelled with reason recorded.');
+      setCancelModalVisible(false);
+      setCancelReasonInput('');
+      loadData();
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to cancel delivery');
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  // Filter deliveries
+  const filteredDeliveries = deliveries.filter(d => {
+    if (statusFilter !== 'All' && d.status !== statusFilter) return false;
+    if (customerFilter && !d.customerName?.toLowerCase().includes(customerFilter.toLowerCase()) && !d.customerEmail?.toLowerCase().includes(customerFilter.toLowerCase())) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const match = (d.orderId && d.orderId.toLowerCase().includes(q)) ||
+                    (d.product && d.product.toLowerCase().includes(q)) ||
+                    (d.ranchName && d.ranchName.toLowerCase().includes(q)) ||
+                    (d.customerName && d.customerName.toLowerCase().includes(q));
+      if (!match) return false;
+    }
+    return true;
+  });
 
   return (
     <View style={styles.container}>
@@ -207,643 +266,479 @@ export const AdminOrdersScreen = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchOrders(); }} />
+          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor="#2E5D36" />
         }
       >
-        {/* Header with Title & Export/Import Controls */}
+        {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text variant="headlineMedium" style={styles.title}>Orders Management</Text>
-            <Text variant="bodyMedium" style={styles.subtitle}>Review orders, trigger payments & live delivery tracking</Text>
+            <Text style={styles.title}>Deliveries Management</Text>
+            <Text style={styles.subtitle}>Scheduled, in transit, delivered & cancelled</Text>
           </View>
-          <View style={styles.topActionsRow}>
-            <Button
-              mode="outlined"
-              icon="download"
-              onPress={handleExportOrders}
-              style={styles.actionBtnSmall}
-              textColor="#2E5D36"
-            >
-              Export
-            </Button>
-            <Button
-              mode="contained"
-              icon="upload"
-              onPress={() => {
-                setImportJsonText(JSON.stringify([{
-                  id: `ord-${Date.now()}`,
-                  orderId: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
-                  customerEmail: 'grower@demo.com',
-                  product: 'Biome Care',
-                  qty: '15 Gal',
-                  amt: 1860,
-                  status: 'PENDING',
-                  date: new Date().toISOString().split('T')[0]
-                }], null, 2));
-                setImportModalVisible(true);
-              }}
-              style={[styles.actionBtnSmall, { backgroundColor: '#2E5D36' }]}
-              textColor="#FFFFFF"
-            >
-              Import
-            </Button>
-          </View>
+          <TouchableOpacity onPress={() => setCreateModalVisible(true)} style={styles.createBtn}>
+            <Ionicons name="add" size={18} color="#FFF" />
+            <Text style={styles.createBtnText}>New Order</Text>
+          </TouchableOpacity>
         </View>
 
-        {loading ? (
-          <ActivityIndicator color="#2E5D36" style={{ marginTop: 40 }} size="large" />
-        ) : orders.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <MaterialCommunityIcons name="clipboard-text-outline" size={56} color="#94A3B8" />
-            <Text style={styles.emptyText}>No orders found.</Text>
+        {/* Filter Pills */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+          {(['All', 'Scheduled', 'Out for delivery', 'Delivered', 'Cancelled'] as const).map(st => (
+            <TouchableOpacity
+              key={st}
+              onPress={() => setStatusFilter(st)}
+              style={[styles.filterChip, statusFilter === st && styles.filterChipActive]}
+            >
+              <Text style={[styles.filterChipText, statusFilter === st && styles.filterChipTextActive]}>
+                {st}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {/* Search Input */}
+        <TextInput
+          placeholder="Filter by customer, ranch, product, or ID..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          mode="outlined"
+          dense
+          left={<TextInput.Icon icon="magnify" />}
+          style={styles.searchInput}
+        />
+
+        {/* Deliveries Count */}
+        <Text style={styles.countText}>
+          Showing {filteredDeliveries.length} {statusFilter === 'All' ? 'Total Deliveries' : `${statusFilter} Deliveries`}
+        </Text>
+
+        {filteredDeliveries.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <MaterialCommunityIcons name="truck-outline" size={36} color="#94A3B8" />
+            <Text style={styles.emptyText}>No delivery records match the current filters.</Text>
           </View>
         ) : (
-          orders.map(order => {
-            const badge = getStatusBadge(order.status);
-            const isPending = order.status === 'PENDING';
-            const isAwaitingPay = order.status === 'AWAITING_PAYMENT' || order.status === 'ACCEPTED';
-            const isPaid = order.status === 'PAID';
-            const isDispatched = order.status === 'DISPATCHED';
-            const isLoading = actionLoadingId === order.id;
+          filteredDeliveries.map(del => {
+            const isScheduled = del.status === 'Scheduled';
+            const isOut = del.status === 'Out for delivery';
+            const isDelivered = del.status === 'Delivered';
+            const isCancelled = del.status === 'Cancelled';
 
             return (
-              <View key={order.id} style={styles.card}>
-                <View style={styles.row}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <MaterialCommunityIcons name="cube-send" size={22} color="#2E5D36" style={{ marginRight: 8 }} />
-                    <Text style={styles.id}>Order #{order.orderId}</Text>
+              <View key={del.id || del.orderId} style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.orderId}>{del.orderId || del.id} • {del.date}</Text>
+                    <Text style={styles.customerName}>{del.customerName || 'Customer'}</Text>
                   </View>
                   <Chip
                     compact
-                    style={[styles.chip, { backgroundColor: badge.bg }]}
-                    textStyle={{ color: badge.color, fontWeight: 'bold', fontSize: 12 }}
+                    style={{
+                      backgroundColor: isDelivered ? '#DCFCE7' : isOut ? '#DBEAFE' : isCancelled ? '#FEE2E2' : '#FEF3C7'
+                    }}
+                    textStyle={{
+                      color: isDelivered ? '#166534' : isOut ? '#1D4ED8' : isCancelled ? '#DC2626' : '#B45309',
+                      fontWeight: '800',
+                      fontSize: 11
+                    }}
                   >
-                    {badge.label}
+                    {del.status}
                   </Chip>
                 </View>
 
-                <View style={styles.divider} />
-
-                <Text style={styles.detail}>
-                  <Text style={styles.detailLabel}>Customer: </Text>
-                  {order.customerEmail || 'customer@renu.com'}
-                </Text>
-                <Text style={styles.detail}>
-                  <Text style={styles.detailLabel}>Product: </Text>
-                  {order.product} ({order.qty})
-                </Text>
-                <Text style={styles.detail}>
-                  <Text style={styles.detailLabel}>Amount: </Text>
-                  ${order.amt?.toLocaleString()}
-                </Text>
-                <Text style={styles.detail}>
-                  <Text style={styles.detailLabel}>Order Date: </Text>
-                  {order.date}
-                </Text>
-
-                {/* Email Notification Status */}
-                {order.paymentEmailSent && (
-                  <View style={styles.emailBadge}>
-                    <MaterialCommunityIcons name="email-check" size={16} color="#15803D" style={{ marginRight: 6 }} />
-                    <Text style={styles.emailBadgeText}>Payment Request Delivered to Customer</Text>
-                  </View>
-                )}
-
-                {/* Invoiced Status */}
-                {order.invoiceId && (
-                  <View style={styles.invoiceBadge}>
-                    <MaterialCommunityIcons name="receipt" size={16} color="#0369A1" style={{ marginRight: 6 }} />
-                    <Text style={styles.invoiceBadgeText}>Official Invoice Generated & Emailed</Text>
-                  </View>
-                )}
-
-                {/* Cancellation & Refund Info */}
-                {order.status === 'CANCELLED' && (
-                  <View style={styles.cancelledBox}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                      <MaterialCommunityIcons name="cancel" size={18} color="#DC2626" style={{ marginRight: 6 }} />
-                      <Text style={{ fontWeight: 'bold', color: '#DC2626', fontSize: 13 }}>Order Cancelled</Text>
-                    </View>
-                    {order.cancelReason && (
-                      <Text style={{ fontSize: 13, color: '#334155', marginBottom: 4 }}>
-                        <Text style={{ fontWeight: '600' }}>Reason: </Text>
-                        {order.cancelReason}
-                      </Text>
-                    )}
-                    {order.refundAmount !== undefined && (
-                      <Text style={{ fontSize: 13, color: order.refundAmount > 0 ? '#15803D' : '#64748B', fontWeight: '600' }}>
-                        {order.refundAmount > 0
-                          ? `✓ Refund of $${order.refundAmount.toLocaleString()} Processed`
-                          : 'No payment collected (No refund needed)'}
-                      </Text>
-                    )}
-                  </View>
-                )}
-
-                {/* Action Buttons Row */}
-                <View style={styles.buttonStack}>
-                  {isPending && (
-                    <Button
-                      mode="contained"
-                      icon="email-fast"
-                      loading={isLoading}
-                      disabled={isLoading}
-                      onPress={() => handleAcceptOrder(order.id)}
-                      style={styles.actionBtn}
-                      buttonColor="#2E5D36"
-                    >
-                      Accept & Send Payment Email
-                    </Button>
-                  )}
-
-                  {isAwaitingPay && (
-                    <Button
-                      mode="contained"
-                      icon="credit-card-check"
-                      loading={isLoading}
-                      disabled={isLoading}
-                      onPress={() => handlePayOrder(order.id)}
-                      style={[styles.actionBtn, { backgroundColor: '#15803D' }]}
-                    >
-                      Confirm Payment & Issue Invoice
-                    </Button>
-                  )}
-
-                  {isPaid && (
-                    <Button
-                      mode="contained"
-                      icon="truck-delivery"
-                      onPress={() => handleUpdateStep(order.id, 'DISPATCHED', 4)}
-                      style={[styles.actionBtn, { backgroundColor: '#7E22CE' }]}
-                    >
-                      Mark Dispatched for Delivery
-                    </Button>
-                  )}
-
-                  {isDispatched && (
-                    <Button
-                      mode="contained"
-                      icon="check-decagram"
-                      onPress={() => handleUpdateStep(order.id, 'DELIVERED', 5)}
-                      style={[styles.actionBtn, { backgroundColor: '#0369A1' }]}
-                    >
-                      Confirm Injection & Delivery
-                    </Button>
-                  )}
-
-                  {/* Always Available Tracking Stepper Button */}
-                  <Button
-                    mode="outlined"
-                    icon="map-marker-path"
-                    onPress={() => openTrackingModal(order)}
-                    style={styles.trackingBtn}
-                    textColor="#2E5D36"
-                  >
-                    View Live Tracking Timeline
-                  </Button>
-
-                  {/* Cancel Order Button */}
-                  {order.status !== 'CANCELLED' && order.status !== 'DELIVERED' && (
-                    <Button
-                      mode="outlined"
-                      icon="close-circle-outline"
-                      textColor="#DC2626"
-                      style={styles.cancelBtn}
-                      onPress={() => openCancelModal(order)}
-                    >
-                      Cancel Order & Refund
-                    </Button>
-                  )}
+                {/* Product & Volume (NO customer price) */}
+                <View style={styles.productBanner}>
+                  <Text style={styles.productName}>{del.productName || del.product}</Text>
+                  <Text style={styles.volumeText}>{del.gallons} Gallons</Text>
                 </View>
+
+                {/* Ranch & Tank Destination */}
+                <View style={styles.destBox}>
+                  <Text style={styles.destText}>
+                    <Text style={{ fontWeight: '700' }}>Destination: </Text>
+                    {del.ranchName || 'Ranch'} — {del.tankName || 'Tank'}
+                  </Text>
+                  {del.blocks && del.blocks.length > 0 && (
+                    <Text style={styles.destText}>
+                      <Text style={{ fontWeight: '700' }}>Blocks: </Text>
+                      {del.blocks.join(', ')}
+                    </Text>
+                  )}
+                  <Text style={styles.destText}>
+                    <Text style={{ fontWeight: '700' }}>Window: </Text>
+                    {del.deliveryWindow || del.date}
+                  </Text>
+                  {del.gateCode ? (
+                    <Text style={styles.destText}>
+                      <Text style={{ fontWeight: '700' }}>Gate Code: </Text>
+                      {del.gateCode}
+                    </Text>
+                  ) : null}
+                  {del.whoToCall ? (
+                    <Text style={styles.destText}>
+                      <Text style={{ fontWeight: '700' }}>Call on Arrival: </Text>
+                      {del.whoToCall}
+                    </Text>
+                  ) : null}
+                </View>
+
+                {/* Cancelled Reason */}
+                {isCancelled && del.cancelReason && (
+                  <View style={styles.cancelBox}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#DC2626' }}>Cancellation Reason:</Text>
+                    <Text style={{ fontSize: 12, color: '#7F1D1D', marginTop: 2 }}>{del.cancelReason}</Text>
+                  </View>
+                )}
+
+                {/* Delivered Info */}
+                {isDelivered && (
+                  <View style={styles.deliveredBox}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#166534' }}>
+                      Delivered {del.deliveredGallons || del.gallons} gal on {del.deliveredDate || del.date}
+                    </Text>
+                    {del.invoiceNumber && (
+                      <Text style={{ fontSize: 12, color: '#14532D', marginTop: 2 }}>
+                        Linked Invoice: {del.invoiceNumber}
+                      </Text>
+                    )}
+                  </View>
+                )}
+
+                {/* 3-Step Timeline (Scheduled -> Out for delivery -> Delivered) */}
+                <View style={styles.timelineRow}>
+                  <View style={[styles.timelineDot, styles.timelineDotDone]}>
+                    <Ionicons name="checkmark" size={10} color="#FFF" />
+                  </View>
+                  <Text style={styles.timelineLbl}>Scheduled</Text>
+                  <View style={[styles.timelineLine, (isOut || isDelivered) && styles.timelineLineDone]} />
+
+                  <View style={[styles.timelineDot, (isOut || isDelivered) && styles.timelineDotDone]}>
+                    {(isOut || isDelivered) && <Ionicons name="checkmark" size={10} color="#FFF" />}
+                  </View>
+                  <Text style={styles.timelineLbl}>Out for delivery</Text>
+                  <View style={[styles.timelineLine, isDelivered && styles.timelineLineDone]} />
+
+                  <View style={[styles.timelineDot, isDelivered && styles.timelineDotDone]}>
+                    {isDelivered && <Ionicons name="checkmark" size={10} color="#FFF" />}
+                  </View>
+                  <Text style={styles.timelineLbl}>Delivered</Text>
+                </View>
+
+                {/* Admin Operations Buttons */}
+                {!isDelivered && !isCancelled && (
+                  <View style={styles.actionRow}>
+                    {isScheduled && (
+                      <Button
+                        mode="outlined"
+                        onPress={() => handleMarkOutForDelivery(del)}
+                        textColor="#1D4ED8"
+                        style={{ borderColor: '#1D4ED8', flex: 1, minHeight: 44, justifyContent: 'center' }}
+                      >
+                        Dispatch (Out)
+                      </Button>
+                    )}
+
+                    <Button
+                      mode="contained"
+                      onPress={() => openDeliveredModal(del)}
+                      buttonColor="#2E5D36"
+                      style={{ flex: 1, minHeight: 44, justifyContent: 'center' }}
+                    >
+                      Mark Delivered
+                    </Button>
+
+                    <Button
+                      mode="text"
+                      onPress={() => {
+                        setDeliveryToReschedule(del);
+                        setRescheduleDate(del.date);
+                        setRescheduleWindow(del.deliveryWindow || '');
+                        setRescheduleModalVisible(true);
+                      }}
+                      textColor="#475569"
+                    >
+                      Reschedule
+                    </Button>
+
+                    <Button
+                      mode="text"
+                      onPress={() => {
+                        setDeliveryToCancel(del);
+                        setCancelReasonInput('');
+                        setCancelModalVisible(true);
+                      }}
+                      textColor="#DC2626"
+                    >
+                      Cancel
+                    </Button>
+                  </View>
+                )}
               </View>
             );
           })
         )}
+
       </ScrollView>
 
-      {/* Live Order Tracking Modal */}
-      <Modal visible={trackingModalVisible} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
+      {/* ================= CREATE DELIVERY ORDER MODAL ================= */}
+      <Modal visible={createModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
             <View style={styles.modalHeader}>
               <View>
-                <Text style={styles.modalTitle}>Order Tracking</Text>
-                <Text style={styles.modalSubtitle}>Order #{selectedOrder?.orderId} • {selectedOrder?.product}</Text>
+                <Text style={styles.modalTitle}>Create Delivery Order</Text>
+                <Text style={styles.modalSubtitle}>Office phone-in order entry</Text>
               </View>
-              <TouchableOpacity onPress={() => setTrackingModalVisible(false)}>
-                <MaterialCommunityIcons name="close-circle" size={28} color="#64748B" />
+              <TouchableOpacity onPress={() => setCreateModalVisible(false)}>
+                <MaterialCommunityIcons name="close" size={24} color="#64748B" />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
-              {[
-                { title: '1. Order Placed', desc: 'Received & validated in agronomist system', key: 1 },
-                { title: '2. Accepted & Payment Link Sent', desc: 'Customer received secure payment link via email', key: 2 },
-                { title: '3. Payment Confirmed & Blending', desc: 'Invoice generated and biological culture batch blending initiated', key: 3 },
-                { title: '4. Dispatched', desc: 'Tank truck en route to ranch location', key: 4 },
-                { title: '5. Delivered & Injected', desc: 'Product injected directly into ranch tank station', key: 5 }
-              ].map((step, idx) => {
-                const currentStep = selectedOrder?.trackingStep || 1;
-                const isCompleted = idx + 1 <= currentStep;
-                const isCurrent = idx + 1 === currentStep;
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <TextInput label="Customer Name" value={newCustomerName} onChangeText={setNewCustomerName} mode="outlined" style={styles.modalInput} />
+              <TextInput label="Customer Email" value={newCustomerEmail} onChangeText={setNewCustomerEmail} mode="outlined" style={styles.modalInput} />
+              <TextInput label="Product" value={newProduct} onChangeText={setNewProduct} mode="outlined" style={styles.modalInput} />
+              <TextInput label="Quantity (Gallons)" value={newGallons} onChangeText={setNewGallons} keyboardType="numeric" mode="outlined" placeholder="e.g. 500" style={styles.modalInput} />
 
-                return (
-                  <View key={step.key} style={styles.stepperRow}>
-                    <View style={styles.stepperLeft}>
-                      <View style={[
-                        styles.stepperDot,
-                        isCompleted ? styles.dotCompleted : styles.dotPending,
-                        isCurrent && styles.dotActive
-                      ]}>
-                        <MaterialCommunityIcons
-                          name={isCompleted ? 'check' : 'circle-outline'}
-                          size={16}
-                          color={isCompleted ? '#FFF' : '#94A3B8'}
-                        />
-                      </View>
-                      {idx < 4 && (
-                        <View style={[
-                          styles.stepperLine,
-                          idx + 1 < currentStep ? styles.lineCompleted : styles.linePending
-                        ]} />
-                      )}
-                    </View>
-                    <View style={styles.stepperContent}>
-                      <Text style={[styles.stepperTitle, isCompleted && styles.stepperTitleCompleted]}>
-                        {step.title}
-                      </Text>
-                      <Text style={styles.stepperDesc}>{step.desc}</Text>
-                    </View>
-                  </View>
-                );
-              })}
+              <Text style={{ fontWeight: '700', fontSize: 13, marginTop: 6, marginBottom: 4 }}>Select Ranch</Text>
+              {ranchesList.map(r => (
+                <TouchableOpacity
+                  key={r.id}
+                  onPress={() => {
+                    setNewRanchId(r.id);
+                    setNewTankId(r.tanks?.[0]?.id || '');
+                  }}
+                  style={[styles.pickerItem, newRanchId === r.id && styles.pickerItemActive]}
+                >
+                  <Text style={{ fontWeight: '700', color: newRanchId === r.id ? '#15803D' : '#1E293B' }}>{r.name}</Text>
+                  <Text style={{ fontSize: 11, color: '#64748B' }}>Tanks: {(r.tanks || []).map((t: any) => t.name).join(', ') || 'None'}</Text>
+                </TouchableOpacity>
+              ))}
+
+              <TextInput label="Requested Delivery Date" value={newDate} onChangeText={setNewDate} mode="outlined" placeholder="YYYY-MM-DD" style={styles.modalInput} />
+              <TextInput label="Delivery Window" value={newWindow} onChangeText={setNewWindow} mode="outlined" style={styles.modalInput} />
+              <TextInput label="Gate Code" value={newGateCode} onChangeText={setNewGateCode} mode="outlined" style={styles.modalInput} />
+              <TextInput label="Who to Call on Arrival" value={newWhoToCall} onChangeText={setNewWhoToCall} mode="outlined" style={styles.modalInput} />
+              <TextInput label="Delivery Notes" value={newNotes} onChangeText={setNewNotes} mode="outlined" multiline numberOfLines={2} style={styles.modalInput} />
             </ScrollView>
 
-            <Button
-              mode="contained"
-              buttonColor="#2E5D36"
-              onPress={() => setTrackingModalVisible(false)}
-              style={{ marginTop: 20, borderRadius: 10 }}
-            >
-              Close Tracking View
-            </Button>
+            <View style={styles.modalActions}>
+              <Button mode="outlined" onPress={() => setCreateModalVisible(false)} textColor="#64748B" style={{ flex: 1, marginRight: 8, minHeight: 48, justifyContent: 'center' }}>Cancel</Button>
+              <Button mode="contained" onPress={handleCreateOrder} loading={creating} buttonColor="#2E5D36" style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}>Schedule Delivery</Button>
+            </View>
           </View>
         </View>
       </Modal>
 
-      {/* JSON Import Modal */}
-      <Modal visible={importModalVisible} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Import Orders</Text>
-              <TouchableOpacity onPress={() => setImportModalVisible(false)}>
-                <MaterialCommunityIcons name="close-circle" size={28} color="#64748B" />
-              </TouchableOpacity>
+      {/* ================= RESCHEDULE MODAL ================= */}
+      <Modal visible={rescheduleModalVisible} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Reschedule Delivery</Text>
+            <Text style={styles.modalSubtitle}>{deliveryToReschedule?.orderId} • {deliveryToReschedule?.customerName}</Text>
+            <TextInput label="New Delivery Date" value={rescheduleDate} onChangeText={setRescheduleDate} mode="outlined" placeholder="YYYY-MM-DD" style={styles.modalInput} />
+            <TextInput label="New Delivery Window" value={rescheduleWindow} onChangeText={setRescheduleWindow} mode="outlined" placeholder="Morning / Afternoon" style={styles.modalInput} />
+            <View style={styles.modalActions}>
+              <Button mode="outlined" onPress={() => setRescheduleModalVisible(false)} textColor="#64748B" style={{ flex: 1, marginRight: 8, minHeight: 48, justifyContent: 'center' }}>Cancel</Button>
+              <Button mode="contained" onPress={handleReschedule} loading={rescheduling} buttonColor="#2E5D36" style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}>Save Date</Button>
             </View>
-            <Text style={{ color: '#64748B', marginBottom: 12 }}>
-              Paste JSON array of orders below to synchronize into system store:
-            </Text>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================= CANCEL MODAL WITH REASON ================= */}
+      <Modal visible={cancelModalVisible} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Cancel Delivery (Admin)</Text>
+            <Text style={styles.modalSubtitle}>Customers cannot cancel; enter reason for office audit.</Text>
             <TextInput
+              label="Cancellation Reason"
+              value={cancelReasonInput}
+              onChangeText={setCancelReasonInput}
               mode="outlined"
               multiline
-              numberOfLines={8}
-              value={importJsonText}
-              onChangeText={setImportJsonText}
-              style={{ backgroundColor: '#F8FAFC', fontSize: 12, marginBottom: 16 }}
-              outlineColor="#CBD5E1"
-              activeOutlineColor="#2E5D36"
+              numberOfLines={3}
+              placeholder="e.g. Grower irrigation scheduled maintenance; rescheduled for next week"
+              style={styles.modalInput}
             />
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <Button
-                mode="outlined"
-                onPress={() => setImportModalVisible(false)}
-                style={{ flex: 1 }}
-                textColor="#64748B"
-              >
-                Cancel
-              </Button>
-              <Button
-                mode="contained"
-                onPress={handleImportOrders}
-                style={{ flex: 1, backgroundColor: '#2E5D36' }}
-              >
-                Submit Import
-              </Button>
+            <View style={styles.modalActions}>
+              <Button mode="outlined" onPress={() => setCancelModalVisible(false)} textColor="#64748B" style={{ flex: 1, marginRight: 8, minHeight: 48, justifyContent: 'center' }}>Back</Button>
+              <Button mode="contained" onPress={handleCancelWithReason} loading={cancelling} buttonColor="#DC2626" style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}>Confirm Cancel</Button>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* Cancel Order Modal with Reason and Refund Confirmation */}
-      <Modal visible={cancelModalVisible} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
+      {/* ================= MARK DELIVERED & INVOICE MODAL ================= */}
+      <Modal visible={deliveredModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
             <View style={styles.modalHeader}>
               <View>
-                <Text style={styles.modalTitle}>Cancel Order</Text>
-                <Text style={styles.modalSubtitle}>Order #{orderToCancel?.orderId} • {orderToCancel?.product}</Text>
+                <Text style={styles.modalTitle}>Mark Delivered</Text>
+                <Text style={styles.modalSubtitle}>{deliveryToMark?.orderId} • {deliveryToMark?.customerName}</Text>
               </View>
-              <TouchableOpacity onPress={() => setCancelModalVisible(false)}>
-                <MaterialCommunityIcons name="close-circle" size={28} color="#64748B" />
+              <TouchableOpacity onPress={() => setDeliveredModalVisible(false)}>
+                <MaterialCommunityIcons name="close" size={24} color="#64748B" />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
-              {/* Refund Notice Box */}
-              {orderToCancel?.status === 'PAID' || orderToCancel?.status === 'DISPATCHED' ? (
-                <View style={[styles.infoBanner, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}>
-                  <MaterialCommunityIcons name="cash-refund" size={22} color="#15803D" style={{ marginRight: 8 }} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontWeight: 'bold', color: '#15803D', fontSize: 14 }}>
-                      Automatic Refund of ${orderToCancel?.amt?.toLocaleString()}
-                    </Text>
-                    <Text style={{ color: '#166534', fontSize: 12, marginTop: 2 }}>
-                      This order has already been paid. Cancelling will automatically initiate a refund of the full amount to the grower.
-                    </Text>
-                  </View>
-                </View>
-              ) : (
-                <View style={[styles.infoBanner, { backgroundColor: '#F1F5F9', borderColor: '#CBD5E1' }]}>
-                  <MaterialCommunityIcons name="information" size={22} color="#475569" style={{ marginRight: 8 }} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontWeight: 'bold', color: '#334155', fontSize: 14 }}>
-                      No Payment Collected
-                    </Text>
-                    <Text style={{ color: '#64748B', fontSize: 12, marginTop: 2 }}>
-                      This order has not been paid. Cancelling will close the order with no refund required.
-                    </Text>
-                  </View>
-                </View>
-              )}
-
-              <Text style={{ fontSize: 14, fontWeight: '600', color: '#1E293B', marginTop: 16, marginBottom: 6 }}>
-                Cancellation Reason / Comment *
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <TextInput label="Actual Delivered Gallons" value={actualGallons} onChangeText={setActualGallons} keyboardType="numeric" mode="outlined" style={styles.modalInput} />
+              
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A', marginTop: 12, marginBottom: 4 }}>
+                Office Invoice Entry (from QuickBooks)
               </Text>
-              <TextInput
-                mode="outlined"
-                multiline
-                numberOfLines={3}
-                placeholder="Write reason for cancellation (e.g. Grower request, Schedule change, Product stock)..."
-                value={cancelReason}
-                onChangeText={setCancelReason}
-                outlineColor="#CBD5E1"
-                activeOutlineColor="#DC2626"
-                style={{ backgroundColor: '#FFF', fontSize: 14 }}
-              />
+              <TextInput label="Invoice Number" value={invoiceNumber} onChangeText={setInvoiceNumber} mode="outlined" style={styles.modalInput} />
+              <TextInput label="Invoice Amount ($)" value={invoiceAmount} onChangeText={setInvoiceAmount} keyboardType="decimal-pad" mode="outlined" placeholder="e.g. 6250.00" style={styles.modalInput} />
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TextInput label="Invoice Date" value={invoiceDate} onChangeText={setInvoiceDate} mode="outlined" style={[styles.modalInput, { flex: 1 }]} />
+                <TextInput label="Due Date" value={invoiceDueDate} onChangeText={setInvoiceDueDate} mode="outlined" style={[styles.modalInput, { flex: 1 }]} />
+              </View>
             </ScrollView>
 
-            <View style={{ flexDirection: 'row', gap: 12, marginTop: 20 }}>
-              <Button
-                mode="outlined"
-                onPress={() => setCancelModalVisible(false)}
-                style={{ flex: 1, borderColor: '#CBD5E1' }}
-                textColor="#64748B"
-              >
-                Keep Order
-              </Button>
-              <Button
-                mode="contained"
-                loading={cancelLoading}
-                disabled={cancelLoading}
-                onPress={handleCancelOrder}
-                style={{ flex: 1, backgroundColor: '#DC2626' }}
-                textColor="#FFFFFF"
-              >
-                Confirm Cancel
-              </Button>
+            <View style={styles.modalActions}>
+              <Button mode="outlined" onPress={() => setDeliveredModalVisible(false)} textColor="#64748B" style={{ flex: 1, marginRight: 8, minHeight: 48, justifyContent: 'center' }}>Cancel</Button>
+              <Button mode="contained" onPress={handleConfirmDelivered} loading={markingDelivered} buttonColor="#2E5D36" style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}>Complete</Button>
             </View>
           </View>
         </View>
       </Modal>
+
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  scrollContent: {
-    paddingBottom: 120,
-    paddingHorizontal: 20,
-  },
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  scrollContent: { paddingBottom: 120, paddingHorizontal: 16 },
   header: {
-    paddingTop: 60,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 54,
     paddingBottom: 16,
   },
-  title: {
-    color: '#0F172A',
-    fontWeight: 'bold',
-  },
-  subtitle: {
-    color: '#64748B',
-    marginTop: 2,
-    fontSize: 14,
-  },
-  topActionsRow: {
+  title: { fontSize: 22, fontWeight: '800', color: '#0F172A' },
+  subtitle: { fontSize: 13, color: '#64748B', marginTop: 2 },
+  createBtn: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 16,
+    alignItems: 'center',
+    backgroundColor: '#2E5D36',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 24,
+    gap: 4,
+    minHeight: 48,
   },
-  actionBtnSmall: {
-    borderRadius: 8,
+  createBtnText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
+  filterChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    marginRight: 8,
+    minHeight: 40,
+    justifyContent: 'center',
+  },
+  filterChipActive: {
+    backgroundColor: '#2E5D36',
     borderColor: '#2E5D36',
   },
-  emptyContainer: {
+  filterChipText: { fontSize: 13, fontWeight: '600', color: '#475569' },
+  filterChipTextActive: { color: '#FFFFFF' },
+  searchInput: { marginBottom: 8, backgroundColor: '#FFFFFF' },
+  countText: { fontSize: 12, color: '#64748B', marginBottom: 12, fontWeight: '500' },
+  emptyCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
     alignItems: 'center',
-    marginTop: 60,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginTop: 10,
   },
-  emptyText: {
-    color: '#64748B',
-    fontSize: 16,
-    marginTop: 12,
-  },
+  emptyText: { fontSize: 13, color: '#64748B', marginTop: 8, textAlign: 'center' },
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
+    padding: 16,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
-    shadowRadius: 8,
+    shadowRadius: 6,
     elevation: 2,
   },
-  row: {
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  orderId: { fontSize: 12, color: '#64748B', fontWeight: '600' },
+  customerName: { fontSize: 16, fontWeight: '800', color: '#0F172A', marginTop: 2 },
+  productBanner: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    padding: 10,
+    borderRadius: 10,
+    marginTop: 10,
   },
-  id: {
-    color: '#0F172A',
-    fontWeight: 'bold',
-    fontSize: 18,
-  },
-  chip: {
-    height: 28,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#F1F5F9',
-    marginVertical: 12,
-  },
-  detail: {
-    color: '#334155',
-    fontSize: 14,
-    marginBottom: 6,
-  },
-  detailLabel: {
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  emailBadge: {
+  productName: { fontWeight: '700', color: '#0F172A', fontSize: 14 },
+  volumeText: { fontWeight: '800', color: '#2E5D36', fontSize: 14 },
+  destBox: { marginTop: 10, gap: 4 },
+  destText: { fontSize: 12, color: '#475569' },
+  cancelBox: { backgroundColor: '#FEF2F2', padding: 8, borderRadius: 8, marginTop: 8 },
+  deliveredBox: { backgroundColor: '#F0FDF4', padding: 8, borderRadius: 8, marginTop: 8 },
+  timelineRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F0FDF4',
-    padding: 8,
-    borderRadius: 8,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-  },
-  emailBadgeText: {
-    color: '#15803D',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  invoiceBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0F9FF',
-    padding: 8,
-    borderRadius: 8,
-    marginTop: 6,
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-  },
-  invoiceBadgeText: {
-    color: '#0369A1',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  buttonStack: {
     marginTop: 14,
-    gap: 8,
+    marginBottom: 8,
+    paddingHorizontal: 4,
   },
-  actionBtn: {
-    borderRadius: 10,
-  },
-  trackingBtn: {
-    borderRadius: 10,
-    borderColor: '#2E5D36',
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
-    justifyContent: 'flex-end',
-  },
-  modalSheet: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    maxHeight: '90%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#0F172A',
-  },
-  modalSubtitle: {
-    fontSize: 13,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  stepperRow: {
-    flexDirection: 'row',
-    marginBottom: 4,
-  },
-  stepperLeft: {
-    alignItems: 'center',
-    width: 32,
-  },
-  stepperDot: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+  timelineDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#CBD5E1',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  dotCompleted: {
-    backgroundColor: '#2E5D36',
-  },
-  dotPending: {
-    backgroundColor: '#E2E8F0',
-  },
-  dotActive: {
-    borderWidth: 2,
-    borderColor: '#10B981',
-  },
-  stepperLine: {
-    width: 2,
-    height: 38,
-  },
-  lineCompleted: {
-    backgroundColor: '#2E5D36',
-  },
-  linePending: {
-    backgroundColor: '#E2E8F0',
-  },
-  stepperContent: {
-    flex: 1,
-    paddingLeft: 12,
-    paddingBottom: 20,
-  },
-  stepperTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  stepperTitleCompleted: {
-    color: '#0F172A',
-  },
-  stepperDesc: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  cancelledBox: {
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    borderRadius: 10,
-    padding: 12,
-    marginTop: 10,
-    marginBottom: 4,
-  },
-  cancelBtn: {
-    borderColor: '#DC2626',
-    borderWidth: 1.5,
-    borderRadius: 10,
-    marginTop: 8,
-    backgroundColor: '#FEF2F2',
-  },
-  infoBanner: {
+  timelineDotDone: { backgroundColor: '#16A34A' },
+  timelineLine: { flex: 1, height: 2, backgroundColor: '#CBD5E1', marginHorizontal: 4 },
+  timelineLineDone: { backgroundColor: '#16A34A' },
+  timelineLbl: { fontSize: 10, color: '#64748B', fontWeight: '600', marginLeft: 4 },
+  actionRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 8,
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingTop: 10,
   },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalContent: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 20 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+  modalTitle: { fontSize: 19, fontWeight: '800', color: '#0F172A' },
+  modalSubtitle: { fontSize: 12, color: '#64748B', marginTop: 2 },
+  modalInput: { marginBottom: 10, backgroundColor: '#FFFFFF' },
+  modalActions: { flexDirection: 'row', marginTop: 10 },
+  pickerItem: {
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 6,
+  },
+  pickerItemActive: { backgroundColor: '#F0FDF4', borderColor: '#2E5D36' },
 });

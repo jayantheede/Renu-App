@@ -10,6 +10,7 @@ export interface User {
   role: UserRole;
   approvalStatus?: 'PENDING' | 'APPROVED' | 'REJECTED' | string;
   avatarUrl?: string;
+  mfaEnabled?: boolean;
   user_metadata?: {
     full_name?: string;
     role?: string;
@@ -102,7 +103,17 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   logout: async () => {
-    await AsyncStorage.multiRemove(['@auth_token', '@auth_user']);
+    try {
+      await AsyncStorage.multiRemove(['@auth_token', '@auth_user']);
+    } catch (e) {
+      console.warn('AsyncStorage logout warning:', e);
+    }
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.removeItem('@auth_token');
+        window.localStorage.removeItem('@auth_user');
+      } catch (e) {}
+    }
     set({ user: null, session: null, token: null, isLoggedIn: false, role: 'client' });
   },
 

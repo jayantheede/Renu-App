@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView, Alert, Modal, Switch } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Alert, Modal, Switch, Platform } from 'react-native';
 import { Text, List, useTheme, Avatar, TextInput, Button, Chip, ActivityIndicator, Divider } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -21,6 +21,17 @@ export const AdminProfileScreen = () => {
   const logout = useAuthStore(state => state.logout);
   const updateUser = useAuthStore(state => state.updateUser);
   const isEmployee = user?.role?.toLowerCase() === 'employee';
+
+  const handleSignOut = () => {
+    if (Platform.OS === 'web') {
+      logout();
+    } else {
+      Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign Out', style: 'destructive', onPress: logout }
+      ]);
+    }
+  };
 
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(user?.name || '');
@@ -247,7 +258,7 @@ export const AdminProfileScreen = () => {
           <List.Item
             title="Sign Out"
             description="End your field staff session safely"
-            onPress={logout}
+            onPress={handleSignOut}
             titleStyle={{ color: '#DC2626', fontWeight: 'bold' }}
             left={props => <List.Icon {...props} icon="logout" color="#DC2626" />}
             style={styles.logoutItem}
@@ -293,7 +304,7 @@ export const AdminProfileScreen = () => {
           <List.Item
             title="Sign Out"
             description="End your admin session safely"
-            onPress={logout}
+            onPress={handleSignOut}
             titleStyle={{ color: '#DC2626', fontWeight: 'bold' }}
             left={props => <List.Icon {...props} icon="logout" color="#DC2626" />}
             style={styles.logoutItem}

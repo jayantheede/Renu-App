@@ -1,34 +1,41 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Alert, TouchableOpacity, Image, Modal } from 'react-native';
-import { Text, TextInput, Button, Chip, Divider, ActivityIndicator } from 'react-native-paper';
-import { Ionicons } from '@expo/vector-icons';
+import { Text, TextInput, Button, Chip, Divider, Switch } from 'react-native-paper';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { submitProduct, fetchProducts, deleteProduct, updateProduct, updateProductPrice } from '../../api/client';
+import { submitProduct, fetchProducts, deleteProduct, updateProduct, fetchFeatureFlags } from '../../api/client';
 
 export const ManageProductsScreen = () => {
   const [name, setName] = useState('');
-  const [price, setPrice] = useState('');
+  const [analysis, setAnalysis] = useState('');
+  const [omriListed, setOmriListed] = useState(true);
   const [desc, setDesc] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [imageFileName, setImageFileName] = useState('');
-  const [showUrlInput, setShowUrlInput] = useState(false);
   const [loading, setLoading] = useState(false);
   const [products, setProducts] = useState<any[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
+  const [documentsFlag, setDocumentsFlag] = useState(false);
 
-  // Edit Price / Product Modal State
+  // Edit Product Modal State (NO PRICE)
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
-  const [editPrice, setEditPrice] = useState('');
   const [editName, setEditName] = useState('');
+  const [editAnalysis, setEditAnalysis] = useState('');
+  const [editOmriListed, setEditOmriListed] = useState(false);
   const [editDesc, setEditDesc] = useState('');
-  const [updatingPrice, setUpdatingPrice] = useState(false);
+  const [editImageUrl, setEditImageUrl] = useState('');
+  const [updating, setUpdating] = useState(false);
 
-  const loadProducts = async () => {
+  const loadData = async () => {
     setLoadingProducts(true);
     try {
-      const data = await fetchProducts();
-      setProducts(Array.isArray(data) ? data : []);
+      const [prods, flags] = await Promise.all([
+        fetchProducts().catch(() => []),
+        fetchFeatureFlags().catch(() => ({}))
+      ]);
+      setProducts(Array.isArray(prods) ? prods : []);
+      setDocumentsFlag(flags?.global?.documents ?? flags?.documents ?? false);
     } catch (e) {
       console.error('Failed to load products', e);
     } finally {
@@ -37,10 +44,10 @@ export const ManageProductsScreen = () => {
   };
 
   useEffect(() => {
-    loadProducts();
+    loadData();
   }, []);
 
-  const handlePickImage = async () => {
+  const handlePickImage = async (isEdit = false) => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -54,58 +61,85 @@ export const ManageProductsScreen = () => {
         const asset = result.assets[0];
         const isPng = asset.mimeType?.includes('png') || asset.uri?.toLowerCase().endsWith('.png');
         const mime = isPng ? 'image/png' : 'image/jpeg';
-        
-        if (asset.base64) {
-          setImageUrl(`data:${mime};base64,${asset.base64}`);
-        } else {
-          setImageUrl(asset.uri);
-        }
+        const dataUri = asset.base64 ? `data:${mime};base64,${asset.base64}` : asset.uri;
 
-        const nameFromUri = asset.uri.split('/').pop() || (isPng ? 'product_image.png' : 'product_image.jpg');
-        setImageFileName(nameFromUri);
+        if (isEdit) {
+          setEditImageUrl(dataUri);
+        } else {
+          setImageUrl(dataUri);
+          const nameFromUri = asset.uri.split('/').pop() || 'product_image.jpg';
+          setImageFileName(nameFromUri);
+        }
       }
     } catch (error: any) {
       Alert.alert('Image Error', 'Failed to select image from device');
     }
   };
 
-  const handleRemoveImage = () => {
-    setImageUrl('');
-    setImageFileName('');
-  };
-
   const handleAddProduct = async () => {
-    if (!name.trim() || !price.trim()) {
-      Alert.alert('Required Fields', 'Please enter a product name and price');
+    if (!name.trim()) {
+      Alert.alert('Required Field', 'Please enter a product name');
       return;
     }
     setLoading(true);
     try {
       await submitProduct({ 
         name: name.trim(), 
-        price: parseFloat(price), 
-        description: desc.trim(), 
+        description: desc.trim(),
+        analysis: analysis.trim() || 'Custom Agricultural Formulation',
+        omriListed: omriListed,
         imageUrl: imageUrl.trim() || undefined 
       });
-      Alert.alert('Success', `${name.trim()} added to storefront successfully!`);
+      Alert.alert('Success', `${name.trim()} added to product catalogue.`);
       setName('');
-      setPrice('');
+      setAnalysis('');
       setDesc('');
       setImageUrl('');
       setImageFileName('');
-      loadProducts();
-    } catch (e) {
-      console.error(e);
-      Alert.alert('Error', 'Failed to add product');
+      setOmriListed(true);
+      loadData();
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to add product');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDeleteProduct = (id: string, prodName: string) => {
+  const openEditModal = (p: any) => {
+    setEditingProduct(p);
+    setEditName(p.name || '');
+    setEditAnalysis(p.analysis || '');
+    setEditOmriListed(p.omriListed ?? true);
+    setEditDesc(p.description || '');
+    setEditImageUrl(p.imageUrl || '');
+    setEditModalVisible(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingProduct || !editName.trim()) return;
+    setUpdating(true);
+    try {
+      await updateProduct(editingProduct.id, {
+        name: editName.trim(),
+        analysis: editAnalysis.trim(),
+        omriListed: editOmriListed,
+        description: editDesc.trim(),
+        imageUrl: editImageUrl || undefined
+      });
+      Alert.alert('Product Updated', `${editName.trim()} specifications saved.`);
+      setEditModalVisible(false);
+      loadData();
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to update product');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleDeleteProduct = (p: any) => {
     Alert.alert(
       'Delete Product',
-      `Are you sure you want to remove "${prodName}" from the storefront?`,
+      `Are you sure you want to remove ${p.name} from the catalogue?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -113,10 +147,10 @@ export const ManageProductsScreen = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await deleteProduct(id);
-              loadProducts();
-            } catch (e) {
-              Alert.alert('Error', 'Failed to delete product');
+              await deleteProduct(p.id);
+              loadData();
+            } catch (e: any) {
+              Alert.alert('Error', e.message || 'Failed to delete product');
             }
           }
         }
@@ -124,307 +158,227 @@ export const ManageProductsScreen = () => {
     );
   };
 
-  const handleOpenEditModal = (prod: any) => {
-    setEditingProduct(prod);
-    setEditPrice(prod.price !== undefined ? String(prod.price) : '');
-    setEditName(prod.name || '');
-    setEditDesc(prod.description || '');
-    setEditModalVisible(true);
-  };
-
-  const handleSavePrice = async () => {
-    if (!editingProduct) return;
-    const parsed = parseFloat(editPrice);
-    if (isNaN(parsed) || parsed < 0) {
-      Alert.alert('Invalid Price', 'Please enter a valid price (greater than or equal to 0).');
-      return;
-    }
-
-    setUpdatingPrice(true);
-    try {
-      await updateProduct(editingProduct.id, {
-        price: parsed,
-        name: editName.trim() || editingProduct.name,
-        description: editDesc.trim(),
-      });
-      Alert.alert('Price Updated', `Price for "${editingProduct.name}" set to $${parsed.toFixed(2)}.`);
-      setEditModalVisible(false);
-      setEditingProduct(null);
-      loadProducts();
-    } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to update product price');
-    } finally {
-      setUpdatingPrice(false);
-    }
-  };
-
-
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        
         {/* Header */}
         <View style={styles.header}>
-          <Text variant="headlineMedium" style={styles.title}>
-            Manage Products
-          </Text>
-          <Text variant="bodyMedium" style={styles.subtitle}>
-            Add and manage items available on the storefront
-          </Text>
+          <Text style={styles.title}>Product Catalogue</Text>
+          <Text style={styles.subtitle}>Maintain product formulations, nutrient analysis & OMRI status</Text>
         </View>
 
-        {/* Product Creation Card */}
+        {/* Add Product Card */}
         <View style={styles.formCard}>
-          <Text style={styles.formSectionTitle}>Product Details</Text>
+          <Text style={styles.cardTitle}>Add New Catalogue Formulation</Text>
 
           <TextInput
             label="Product Name"
             value={name}
             onChangeText={setName}
-            style={styles.input}
             mode="outlined"
-            outlineColor="#CBD5E1"
-            activeOutlineColor="#2E5D36"
-            textColor="#0F172A"
+            placeholder="e.g. Bio-Gro Nitrogen Optimizer"
+            style={styles.input}
           />
 
           <TextInput
-            label="Price ($)"
-            value={price}
-            onChangeText={setPrice}
-            keyboardType="decimal-pad"
-            style={styles.input}
+            label="Guaranteed Analysis / Inoculant Specs"
+            value={analysis}
+            onChangeText={setAnalysis}
             mode="outlined"
-            outlineColor="#CBD5E1"
-            activeOutlineColor="#2E5D36"
-            textColor="#0F172A"
+            placeholder="e.g. 10-0-0 + Microbial Inoculant"
+            style={styles.input}
           />
 
+          <View style={styles.switchRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.switchLabel}>OMRI Listed (Organic Certified)</Text>
+              <Text style={styles.switchSub}>Display organic certification seal in catalogue</Text>
+            </View>
+            <Switch
+              value={omriListed}
+              onValueChange={setOmriListed}
+              color="#2E5D36"
+            />
+          </View>
+
           <TextInput
-            label="Description"
+            label="Description & Agronomic Benefits"
             value={desc}
             onChangeText={setDesc}
+            mode="outlined"
             multiline
             numberOfLines={3}
+            placeholder="e.g. Fast-uptake biological nitrogen catalyst promoting active beneficial soil microbiota."
             style={styles.input}
-            mode="outlined"
-            outlineColor="#CBD5E1"
-            activeOutlineColor="#2E5D36"
-            textColor="#0F172A"
           />
 
-          {/* PNG & JPG Image Upload Section */}
-          <Text style={styles.imageSectionLabel}>Product Media (PNG / JPG)</Text>
+          {/* Image Picker */}
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 4, marginBottom: 12 }}>
+            <Button
+              mode="outlined"
+              onPress={() => handlePickImage(false)}
+              icon="camera"
+              textColor="#2E5D36"
+              style={{ borderColor: '#2E5D36', flex: 1, minHeight: 48, justifyContent: 'center' }}
+            >
+              {imageUrl ? 'Change Photo' : 'Upload Photo'}
+            </Button>
+            {imageUrl ? (
+              <Button
+                mode="text"
+                onPress={() => setImageUrl('')}
+                textColor="#DC2626"
+                style={{ minHeight: 48, justifyContent: 'center' }}
+              >
+                Clear
+              </Button>
+            ) : null}
+          </View>
 
           {imageUrl ? (
-            /* Selected Image Preview */
-            <View style={styles.previewContainer}>
-              <Image source={{ uri: imageUrl }} style={styles.previewImage} resizeMode="cover" />
-              <View style={styles.previewMetaRow}>
-                <View style={{ flex: 1 }}>
-                  <Chip compact style={styles.pngJpgChip} textStyle={styles.pngJpgChipText}>
-                    PNG / JPG READY
-                  </Chip>
-                  {imageFileName ? (
-                    <Text numberOfLines={1} style={styles.fileNameText}>
-                      {imageFileName}
-                    </Text>
-                  ) : null}
-                </View>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  <TouchableOpacity onPress={handlePickImage} style={styles.changeBtn}>
-                    <Ionicons name="swap-horizontal" size={14} color="#2E5D36" />
-                    <Text style={styles.changeBtnText}>Change</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={handleRemoveImage} style={styles.removeBtn}>
-                    <Ionicons name="trash-outline" size={14} color="#DC2626" />
-                    <Text style={styles.removeBtnText}>Remove</Text>
-                  </TouchableOpacity>
-                </View>
+            <Image source={{ uri: imageUrl }} style={styles.previewImage} resizeMode="cover" />
+          ) : null}
+
+          {/* Product Documents (behind documents flag) */}
+          {documentsFlag && (
+            <View style={styles.docsFlagBox}>
+              <MaterialCommunityIcons name="file-certificate" size={20} color="#0369A1" />
+              <View style={{ marginLeft: 8, flex: 1 }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>Product Documents (Active Flag)</Text>
+                <Text style={{ fontSize: 11, color: '#64748B' }}>Labels, SDS and OMRI certificates are attached and available for delivery audits.</Text>
               </View>
             </View>
-          ) : (
-            /* Upload Image Picker Button */
-            <TouchableOpacity onPress={handlePickImage} style={styles.uploadArea}>
-              <View style={styles.uploadIconCircle}>
-                <Ionicons name="image-outline" size={26} color="#2E5D36" />
-              </View>
-              <Text style={styles.uploadMainText}>Upload Image (PNG, JPG)</Text>
-              <Text style={styles.uploadSubText}>Tap to browse photo library or files on your device</Text>
-              <View style={styles.badgeRow}>
-                <Chip compact style={styles.formatChip} textStyle={styles.formatChipText}>.PNG</Chip>
-                <Chip compact style={styles.formatChip} textStyle={styles.formatChipText}>.JPG</Chip>
-                <Chip compact style={styles.formatChip} textStyle={styles.formatChipText}>.JPEG</Chip>
-              </View>
-            </TouchableOpacity>
           )}
 
-          {/* Fallback Image URL Option */}
-          <TouchableOpacity 
-            onPress={() => setShowUrlInput(!showUrlInput)} 
-            style={styles.toggleUrlBtn}
-          >
-            <Ionicons name={showUrlInput ? "chevron-up" : "link-outline"} size={14} color="#64748B" />
-            <Text style={styles.toggleUrlText}>
-              {showUrlInput ? "Hide Direct URL Field" : "Or enter external Image URL instead"}
-            </Text>
-          </TouchableOpacity>
-
-          {showUrlInput && (
-            <TextInput
-              label="Direct Image URL"
-              value={imageUrl}
-              onChangeText={setImageUrl}
-              style={[styles.input, { marginTop: 8 }]}
-              mode="outlined"
-              outlineColor="#CBD5E1"
-              activeOutlineColor="#2E5D36"
-              textColor="#0F172A"
-              placeholder="https://example.com/image.png"
-            />
-          )}
-
-          <Button 
-            mode="contained" 
-            onPress={handleAddProduct} 
+          <Button
+            mode="contained"
+            onPress={handleAddProduct}
             loading={loading}
-            style={styles.button}
-            textColor="#FFF"
             buttonColor="#2E5D36"
+            style={{ marginTop: 8, borderRadius: 12 }}
+            contentStyle={{ minHeight: 48 }}
           >
-            Add Product to Storefront
+            Add to Catalogue
           </Button>
         </View>
 
-        {/* Existing Storefront Products Section */}
-        <View style={styles.existingSection}>
-          <View style={styles.existingHeaderRow}>
-            <Text style={styles.existingTitle}>Storefront Catalog ({products.length})</Text>
-            <TouchableOpacity onPress={loadProducts}>
-              <Ionicons name="refresh" size={18} color="#64748B" />
-            </TouchableOpacity>
-          </View>
+        {/* Existing Products List */}
+        <Text style={[styles.sectionHeading, { marginTop: 24 }]}>
+          Current Catalogue ({products.length})
+        </Text>
 
-          {loadingProducts ? (
-            <ActivityIndicator color="#2E5D36" style={{ marginVertical: 20 }} />
-          ) : products.length === 0 ? (
-            <Text style={styles.emptyCatalogText}>No products currently listed.</Text>
-          ) : (
-            products.map((prod) => (
-              <View key={prod.id} style={styles.productCard}>
-                {prod.imageUrl ? (
-                  <Image source={{ uri: prod.imageUrl }} style={styles.productThumb} resizeMode="cover" />
-                ) : (
-                  <View style={styles.productThumbFallback}>
-                    <Ionicons name="cube-outline" size={24} color="#94A3B8" />
-                  </View>
-                )}
-                <View style={styles.productInfo}>
-                  <Text style={styles.prodName}>{prod.name}</Text>
-                  
-                  {/* Clickable Price Tag with Edit Indicator */}
-                  <TouchableOpacity 
-                    style={styles.priceEditRow} 
-                    onPress={() => handleOpenEditModal(prod)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.prodPrice}>${Number(prod.price).toFixed(2)}</Text>
-                    <View style={styles.editPricePill}>
-                      <Ionicons name="pencil" size={11} color="#2E5D36" />
-                      <Text style={styles.editPricePillText}>Edit</Text>
-                    </View>
-                  </TouchableOpacity>
-
-                  {prod.description ? (
-                    <Text numberOfLines={2} style={styles.prodDesc}>{prod.description}</Text>
-                  ) : null}
-                </View>
-
-                {/* Actions column */}
-                <View style={styles.cardActionsColumn}>
-                  <TouchableOpacity 
-                    onPress={() => handleOpenEditModal(prod)} 
-                    style={styles.editProdBtn}
-                  >
-                    <Ionicons name="pencil-outline" size={17} color="#2E5D36" />
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    onPress={() => handleDeleteProduct(prod.id, prod.name)} 
-                    style={styles.deleteProdBtn}
-                  >
-                    <Ionicons name="trash-outline" size={17} color="#DC2626" />
-                  </TouchableOpacity>
-                </View>
+        {products.map((p) => (
+          <View key={p.id} style={styles.productCard}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <Text style={styles.productName}>{p.name}</Text>
+                {p.analysis ? (
+                  <Text style={styles.productAnalysis}>{p.analysis}</Text>
+                ) : null}
               </View>
-            ))
-          )}
-        </View>
+
+              {p.omriListed ? (
+                <Chip compact style={{ backgroundColor: '#DCFCE7' }} textStyle={{ color: '#166534', fontWeight: '800', fontSize: 10 }}>
+                  OMRI Listed
+                </Chip>
+              ) : (
+                <Chip compact style={{ backgroundColor: '#F1F5F9' }} textStyle={{ color: '#475569', fontSize: 10 }}>
+                  Conventional
+                </Chip>
+              )}
+            </View>
+
+            <Text style={styles.productDesc}>{p.description || 'No description provided.'}</Text>
+
+            <Divider style={{ marginVertical: 12, backgroundColor: '#F1F5F9' }} />
+
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
+              <Button
+                mode="outlined"
+                onPress={() => openEditModal(p)}
+                textColor="#2E5D36"
+                style={{ borderColor: '#2E5D36', minHeight: 44, justifyContent: 'center' }}
+              >
+                Edit Specifications
+              </Button>
+              <Button
+                mode="text"
+                onPress={() => handleDeleteProduct(p)}
+                textColor="#DC2626"
+                style={{ minHeight: 44, justifyContent: 'center' }}
+              >
+                Delete
+              </Button>
+            </View>
+          </View>
+        ))}
 
       </ScrollView>
 
-      {/* Edit Product Price Modal */}
-      <Modal visible={editModalVisible} animationType="fade" transparent onRequestClose={() => setEditModalVisible(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
+      {/* ================= EDIT PRODUCT MODAL (NO PRICE) ================= */}
+      <Modal visible={editModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
             <View style={styles.modalHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.modalTitle}>Edit Product Price</Text>
-                <Text style={styles.modalSubtitle} numberOfLines={1}>{editingProduct?.name || 'Selected Item'}</Text>
+              <View>
+                <Text style={styles.modalTitle}>Edit Product Specifications</Text>
+                <Text style={styles.modalSubtitle}>{editingProduct?.name}</Text>
               </View>
-              <TouchableOpacity onPress={() => setEditModalVisible(false)} style={styles.modalCloseBtn}>
-                <Ionicons name="close" size={20} color="#64748B" />
+              <TouchableOpacity onPress={() => setEditModalVisible(false)}>
+                <MaterialCommunityIcons name="close" size={24} color="#64748B" />
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 380 }}>
-              <View style={styles.currentPriceBanner}>
-                <View style={styles.currentPriceBannerLeft}>
-                  <Text style={styles.currentPriceLabel}>CURRENT LIST PRICE</Text>
-                  <Text style={styles.currentPriceValue}>
-                    ${editingProduct ? Number(editingProduct.price).toFixed(2) : '0.00'}
-                  </Text>
-                </View>
-                <View style={styles.priceIconBubble}>
-                  <Ionicons name="pricetag" size={20} color="#2E5D36" />
-                </View>
-              </View>
-
-              <TextInput
-                label="New Price ($) *"
-                value={editPrice}
-                onChangeText={setEditPrice}
-                keyboardType="decimal-pad"
-                style={styles.modalInput}
-                mode="outlined"
-                outlineColor="#CBD5E1"
-                activeOutlineColor="#2E5D36"
-                textColor="#0F172A"
-                left={<TextInput.Affix text="$ " />}
-              />
-
+            <ScrollView showsVerticalScrollIndicator={false}>
               <TextInput
                 label="Product Name"
                 value={editName}
                 onChangeText={setEditName}
-                style={styles.modalInput}
                 mode="outlined"
-                outlineColor="#CBD5E1"
-                activeOutlineColor="#2E5D36"
-                textColor="#0F172A"
+                style={styles.input}
               />
+
+              <TextInput
+                label="Guaranteed Analysis / Active Ingredients"
+                value={editAnalysis}
+                onChangeText={setEditAnalysis}
+                mode="outlined"
+                style={styles.input}
+              />
+
+              <View style={styles.switchRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.switchLabel}>OMRI Listed</Text>
+                  <Text style={styles.switchSub}>Certified organic input</Text>
+                </View>
+                <Switch
+                  value={editOmriListed}
+                  onValueChange={setEditOmriListed}
+                  color="#2E5D36"
+                />
+              </View>
 
               <TextInput
                 label="Description"
                 value={editDesc}
                 onChangeText={setEditDesc}
-                multiline
-                numberOfLines={2}
-                style={styles.modalInput}
                 mode="outlined"
-                outlineColor="#CBD5E1"
-                activeOutlineColor="#2E5D36"
-                textColor="#0F172A"
+                multiline
+                numberOfLines={3}
+                style={styles.input}
               />
+
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+                <Button
+                  mode="outlined"
+                  onPress={() => handlePickImage(true)}
+                  icon="camera"
+                  textColor="#2E5D36"
+                  style={{ borderColor: '#2E5D36', flex: 1, minHeight: 48, justifyContent: 'center' }}
+                >
+                  Update Photo
+                </Button>
+              </View>
             </ScrollView>
 
             <View style={styles.modalActions}>
@@ -432,411 +386,99 @@ export const ManageProductsScreen = () => {
                 mode="outlined"
                 onPress={() => setEditModalVisible(false)}
                 textColor="#64748B"
-                style={styles.modalCancelBtn}
+                style={{ flex: 1, marginRight: 8, minHeight: 48, justifyContent: 'center' }}
               >
                 Cancel
               </Button>
               <Button
                 mode="contained"
-                onPress={handleSavePrice}
-                loading={updatingPrice}
-                disabled={updatingPrice}
+                onPress={handleSaveEdit}
+                loading={updating}
                 buttonColor="#2E5D36"
-                style={styles.modalSaveBtn}
+                style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}
               >
-                Update Price
+                Save Changes
               </Button>
             </View>
           </View>
         </View>
       </Modal>
+
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  scrollContent: {
-    paddingBottom: 120,
-    paddingHorizontal: 20,
-  },
-  header: {
-    paddingTop: 60,
-    paddingBottom: 20,
-  },
-  title: {
-    color: '#0F172A',
-    fontWeight: 'bold',
-  },
-  subtitle: {
-    color: '#64748B',
-    marginTop: 2,
-  },
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  scrollContent: { paddingBottom: 120, paddingHorizontal: 16 },
+  header: { paddingTop: 54, paddingBottom: 16 },
+  title: { fontSize: 22, fontWeight: '800', color: '#0F172A' },
+  subtitle: { fontSize: 13, color: '#64748B', marginTop: 2 },
   formCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 22,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 3,
-    marginBottom: 24,
-  },
-  formSectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginBottom: 16,
-  },
-  input: {
-    marginBottom: 14,
-    backgroundColor: '#FFFFFF',
-  },
-  imageSectionLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#334155',
-    marginTop: 6,
-    marginBottom: 8,
-  },
-  uploadArea: {
-    borderWidth: 1.5,
-    borderColor: '#CBD5E1',
-    borderStyle: 'dashed',
     borderRadius: 16,
-    padding: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
-    marginBottom: 10,
-  },
-  uploadIconCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#E8F5E9',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-  },
-  uploadMainText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginBottom: 4,
-  },
-  uploadSubText: {
-    fontSize: 12,
-    color: '#64748B',
-    textAlign: 'center',
-    marginBottom: 10,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  formatChip: {
-    backgroundColor: '#F1F5F9',
-    height: 22,
-  },
-  formatChipText: {
-    fontSize: 10,
-    color: '#475569',
-    fontWeight: '600',
-  },
-  previewContainer: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
-    marginBottom: 10,
-  },
-  previewImage: {
-    width: '100%',
-    height: 180,
-    backgroundColor: '#E2E8F0',
-  },
-  previewMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 12,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  pngJpgChip: {
-    backgroundColor: '#DCFCE7',
-    height: 22,
-    alignSelf: 'flex-start',
-  },
-  pngJpgChipText: {
-    color: '#15803D',
-    fontWeight: 'bold',
-    fontSize: 10,
-  },
-  fileNameText: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 3,
-  },
-  changeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
-    backgroundColor: '#E8F5E9',
-  },
-  changeBtnText: {
-    fontSize: 11,
-    color: '#2E5D36',
-    fontWeight: '600',
-  },
-  removeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
-    backgroundColor: '#FEF2F2',
-  },
-  removeBtnText: {
-    fontSize: 11,
-    color: '#DC2626',
-    fontWeight: '600',
-  },
-  toggleUrlBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 6,
-    marginBottom: 8,
-  },
-  toggleUrlText: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '500',
-  },
-  button: {
-    marginTop: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
-
-  /* Catalog */
-  existingSection: {
-    marginBottom: 40,
-  },
-  existingHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  existingTitle: {
-    fontSize: 17,
-    fontWeight: 'bold',
-    color: '#0F172A',
-  },
-  emptyCatalogText: {
-    color: '#94A3B8',
-    fontSize: 14,
-    marginVertical: 10,
-  },
-  productCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 10,
+    padding: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
+    shadowOpacity: 0.04,
     shadowRadius: 6,
     elevation: 2,
   },
-  productThumb: {
-    width: 58,
-    height: 58,
-    borderRadius: 10,
-    backgroundColor: '#F1F5F9',
-  },
-  productThumbFallback: {
-    width: 58,
-    height: 58,
-    borderRadius: 10,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  productInfo: {
-    flex: 1,
-    marginLeft: 12,
-    marginRight: 8,
-  },
-  prodName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  prodPrice: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#2E5D36',
-  },
-  priceEditRow: {
+  cardTitle: { fontSize: 16, fontWeight: '800', color: '#0F172A', marginBottom: 12 },
+  input: { marginBottom: 10, backgroundColor: '#FFFFFF' },
+  switchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 3,
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    marginBottom: 8,
   },
-  editPricePill: {
+  switchLabel: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
+  switchSub: { fontSize: 11, color: '#64748B' },
+  previewImage: {
+    width: '100%',
+    height: 140,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  docsFlagBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  editPricePillText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#166534',
-  },
-  prodDesc: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 3,
-  },
-  cardActionsColumn: {
-    flexDirection: 'column',
-    gap: 8,
-    alignItems: 'center',
-    marginLeft: 4,
-  },
-  editProdBtn: {
-    padding: 7,
-    borderRadius: 8,
-    backgroundColor: '#F0FDF4',
+    backgroundColor: '#F0F9FF',
+    padding: 10,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#BBF7D0',
+    borderColor: '#BAE6FD',
+    marginBottom: 10,
   },
-  deleteProdBtn: {
-    padding: 7,
-    borderRadius: 8,
-    backgroundColor: '#FEF2F2',
+  sectionHeading: { fontSize: 17, fontWeight: '800', color: '#0F172A', marginBottom: 12 },
+  productCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
   },
-
-  /* Modal Styles */
-  modalBackdrop: {
+  productName: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
+  productAnalysis: { fontSize: 12, fontWeight: '700', color: '#2E5D36', marginTop: 2 },
+  productDesc: { fontSize: 13, color: '#475569', marginTop: 6, lineHeight: 18 },
+  modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
     justifyContent: 'center',
-    alignItems: 'center',
     padding: 20,
   },
-  modalCard: {
-    width: '100%',
-    maxWidth: 480,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.15,
-    shadowRadius: 24,
-    elevation: 8,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#0F172A',
-  },
-  modalSubtitle: {
-    fontSize: 13,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  modalCloseBtn: {
-    padding: 4,
-  },
-  currentPriceBanner: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 16,
-  },
-  currentPriceBannerLeft: {},
-  currentPriceLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#166534',
-    letterSpacing: 0.5,
-  },
-  currentPriceValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#15803D',
-    marginTop: 2,
-  },
-  priceIconBubble: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#DCFCE7',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalInput: {
-    marginBottom: 12,
-    backgroundColor: '#FFFFFF',
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 16,
-    paddingTop: 14,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  modalCancelBtn: {
-    flex: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-  },
-  modalSaveBtn: {
-    flex: 1,
-    borderRadius: 10,
-  },
+  modalContent: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 20 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+  modalTitle: { fontSize: 19, fontWeight: '800', color: '#0F172A' },
+  modalSubtitle: { fontSize: 12, color: '#64748B', marginTop: 2 },
+  modalActions: { flexDirection: 'row', marginTop: 12 },
 });

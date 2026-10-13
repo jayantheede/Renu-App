@@ -1,248 +1,328 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, ActivityIndicator, Modal, TouchableOpacity, Alert, Share, Platform } from 'react-native';
-import { Text, Card, Chip, Button, Divider } from 'react-native-paper';
+import {
+  View,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Modal,
+  RefreshControl,
+  Platform,
+} from 'react-native';
+import { Text, Card, Chip, Button, Divider, ActivityIndicator } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { fetchInvoices as fetchInvoicesApi, exportData, importData } from '../api/client';
+import { fetchInvoices } from '../api/client';
 
 export const InvoicesScreen = () => {
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'OPEN' | 'PAID'>('ALL');
 
-  // PDF / Invoice Detail Modal
+  // PDF / Detail Modal
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
 
-  const fetchInvoices = async () => {
-    setLoading(true);
+  const loadInvoices = async () => {
     try {
-      const data = await fetchInvoicesApi();
-      setInvoices(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error('Failed to fetch invoices', error);
+      const data = await fetchInvoices();
+      if (Array.isArray(data)) setInvoices(data);
+    } catch (e) {
+      console.warn('Invoices fetch error:', e);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
   useEffect(() => {
-    fetchInvoices();
+    loadInvoices();
   }, []);
 
-  const openInvoiceDetail = (item: any) => {
-    setSelectedInvoice(item);
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadInvoices();
+  };
+
+  const filteredInvoices = invoices.filter(inv => {
+    if (statusFilter === 'ALL') return true;
+    if (statusFilter === 'OPEN') return inv.status === 'Open' || inv.status === 'Overdue';
+    if (statusFilter === 'PAID') return inv.status === 'Paid';
+    return true;
+  });
+
+  const openInvoiceDetail = (inv: any) => {
+    setSelectedInvoice(inv);
     setDetailModalVisible(true);
   };
 
-  const handleExportInvoices = async () => {
-    try {
-      const res = await exportData('invoices');
-      const jsonStr = JSON.stringify(res.data, null, 2);
-      if (Platform.OS === 'web') {
-        const blob = new Blob([jsonStr], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `renu_invoices_${Date.now()}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-      } else {
-        await Share.share({ title: 'Export Invoices', message: jsonStr });
-      }
-    } catch (e: any) {
-      Alert.alert('Export Failed', e.message || 'Could not export invoices');
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'Paid':
+        return { bg: '#E8F5E9', color: '#15803D', icon: 'check-decagram' };
+      case 'Overdue':
+        return { bg: '#FEE2E2', color: '#B91C1C', icon: 'alert-circle' };
+      case 'Void':
+        return { bg: '#F1F5F9', color: '#64748B', icon: 'cancel' };
+      default:
+        return { bg: '#FEF3C7', color: '#B45309', icon: 'clock-outline' };
     }
   };
 
-  const renderItem = ({ item }: { item: any }) => {
-    const invNumber = item.invoiceNumber || item.invoiceId || 'INV-2026';
-    const amount = item.amount || item.amt || 0;
-    const isPaid = item.status === 'PAID' || item.st === 'paid';
-
-    return (
-      <Card style={styles.card}>
-        <Card.Content>
-          <View style={styles.row}>
-            <View style={styles.headerInfo}>
-              <MaterialCommunityIcons name="receipt-text" size={24} color="#2E5D36" style={{ marginRight: 8 }} />
-              <View>
-                <Text variant="titleMedium" style={{ color: '#0F172A', fontWeight: 'bold' }}>
-                  {invNumber}
-                </Text>
-                <Text variant="bodySmall" style={{ color: '#64748B' }}>
-                  Order #{item.orderId || 'ORD-X'}
-                </Text>
-              </View>
-            </View>
-            <Chip
-              icon={isPaid ? 'check-decagram' : 'clock-outline'}
-              style={isPaid ? styles.paidChip : styles.openChip}
-              textStyle={{ color: isPaid ? '#15803D' : '#D97706', fontWeight: 'bold', fontSize: 12 }}
-            >
-              {isPaid ? 'PAID' : 'PENDING'}
-            </Chip>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.detailsRow}>
-            <View>
-              <Text variant="bodySmall" style={styles.label}>Product & Qty</Text>
-              <Text variant="bodyMedium" style={{ fontWeight: '600', color: '#1E293B' }}>
-                {item.product || 'Agri Bio-Stimulant'} ({item.qty || 'Standard'})
-              </Text>
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text variant="bodySmall" style={styles.label}>Issued Date</Text>
-              <Text variant="bodyMedium" style={{ color: '#64748B' }}>
-                {item.date || (item.dt ? new Date(item.dt).toLocaleDateString() : '2026-10-09')}
-              </Text>
-            </View>
-          </View>
-
-          <View style={[styles.detailsRow, { marginTop: 10, alignItems: 'center' }]}>
-            <View>
-              <Text variant="bodySmall" style={styles.label}>Total Amount</Text>
-              <Text variant="titleLarge" style={{ fontWeight: 'bold', color: '#2E5D36' }}>
-                ${amount.toLocaleString()}
-              </Text>
-            </View>
-            <Button
-              mode="contained"
-              buttonColor="#2E5D36"
-              icon="file-document-outline"
-              onPress={() => openInvoiceDetail(item)}
-              style={{ borderRadius: 8 }}
-            >
-              View Invoice
-            </Button>
-          </View>
-        </Card.Content>
-      </Card>
-    );
+  const handlePrint = () => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.print();
+    }
   };
 
   return (
     <View style={styles.container}>
-      {/* Screen Header */}
+      {/* Header */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.pageTitle}>Invoices</Text>
-          <Text style={styles.subtitle}>Verified billing receipts & tax records</Text>
-        </View>
-        <Button
-          mode="outlined"
-          icon="download"
-          onPress={handleExportInvoices}
-          style={styles.exportBtn}
-          textColor="#2E5D36"
-        >
-          Export
-        </Button>
+        <Text style={styles.pageTitle}>Invoices</Text>
+        <Text style={styles.subtitle}>QuickBooks billing records & payment status</Text>
       </View>
 
-      {loading ? (
-        <ActivityIndicator style={{ marginTop: 40 }} color="#2E5D36" size="large" />
-      ) : invoices.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <MaterialCommunityIcons name="receipt" size={56} color="#94A3B8" />
-          <Text style={styles.emptyText}>No invoices generated yet.</Text>
-          <Text style={{ color: '#94A3B8', fontSize: 13, marginTop: 4, textAlign: 'center' }}>
-            Invoices are automatically created and delivered when orders are paid.
+      {/* Filter Tabs: Open, Paid, All */}
+      <View style={styles.filterTabs}>
+        <TouchableOpacity
+          style={[styles.filterTab, statusFilter === 'OPEN' && styles.filterTabActive]}
+          onPress={() => setStatusFilter('OPEN')}
+        >
+          <Text style={[styles.filterTabText, statusFilter === 'OPEN' && styles.filterTabTextActive]}>
+            Open
           </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={invoices}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          contentContainerStyle={{ paddingBottom: 100 }}
-          onRefresh={fetchInvoices}
-          refreshing={loading}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterTab, statusFilter === 'PAID' && styles.filterTabActive]}
+          onPress={() => setStatusFilter('PAID')}
+        >
+          <Text style={[styles.filterTabText, statusFilter === 'PAID' && styles.filterTabTextActive]}>
+            Paid
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterTab, statusFilter === 'ALL' && styles.filterTabActive]}
+          onPress={() => setStatusFilter('ALL')}
+        >
+          <Text style={[styles.filterTabText, statusFilter === 'ALL' && styles.filterTabTextActive]}>
+            All
+          </Text>
+        </TouchableOpacity>
+      </View>
 
-      {/* Invoice PDF / Receipt Modal */}
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2E5D36" />
+        }
+      >
+        {loading && !refreshing ? (
+          <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+            <ActivityIndicator size="large" color="#2E5D36" />
+            <Text style={{ marginTop: 12, color: '#64748B' }}>Loading invoices...</Text>
+          </View>
+        ) : filteredInvoices.length === 0 ? (
+          <View style={styles.emptyBox}>
+            <MaterialCommunityIcons name="receipt" size={36} color="#94A3B8" />
+            <Text style={styles.emptyText}>No invoices matching selected filter.</Text>
+          </View>
+        ) : (
+          filteredInvoices.map((item: any) => {
+            const badge = getStatusBadge(item.status);
+            const amount = Number(item.amount) || 0;
+
+            return (
+              <Card key={item.id || item.invoiceNumber} style={styles.card}>
+                <Card.Content>
+                  <View style={styles.row}>
+                    <View style={styles.headerInfo}>
+                      <MaterialCommunityIcons name="receipt-text" size={24} color="#2E5D36" style={{ marginRight: 8 }} />
+                      <View>
+                        <Text variant="titleMedium" style={{ color: '#0F172A', fontWeight: '800' }}>
+                          #{item.invoiceNumber}
+                        </Text>
+                        <Text variant="bodySmall" style={{ color: '#64748B' }}>
+                          {item.deliveryId ? `Linked Delivery: #${item.deliveryId}` : 'Direct Farm Billing'}
+                        </Text>
+                      </View>
+                    </View>
+                    <Chip
+                      style={{ backgroundColor: badge.bg }}
+                      textStyle={{ color: badge.color, fontWeight: '700', fontSize: 11 }}
+                      compact
+                    >
+                      {item.status.toUpperCase()}
+                    </Chip>
+                  </View>
+
+                  <View style={styles.divider} />
+
+                  <View style={styles.detailsRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.label}>Product & Qty</Text>
+                      <Text style={styles.valueText} numberOfLines={1}>
+                        {item.product || 'ReNu-Biome Product'} {item.gallons ? `(${item.gallons} Gal)` : ''}
+                      </Text>
+                      {item.blockIds && item.blockIds.length > 0 ? (
+                        <Text style={styles.subValueText}>
+                          Blocks: {item.blockIds.join(', ')}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <View style={{ alignItems: 'flex-end', marginLeft: 12 }}>
+                      <Text style={styles.label}>
+                        {item.status === 'Paid' ? 'Paid Date' : 'Due Date'}
+                      </Text>
+                      <Text style={styles.dateText}>
+                        {item.status === 'Paid' ? (item.paidDate || item.dueDate) : item.dueDate}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={[styles.detailsRow, { marginTop: 14, alignItems: 'center' }]}>
+                    <View>
+                      <Text style={styles.label}>Invoice Amount</Text>
+                      <Text style={styles.amountText}>
+                        ${amount.toLocaleString()}
+                      </Text>
+                    </View>
+                    <Button
+                      mode="contained"
+                      buttonColor="#2E5D36"
+                      icon="file-document-outline"
+                      onPress={() => openInvoiceDetail(item)}
+                      style={styles.openPdfBtn}
+                    >
+                      View PDF
+                    </Button>
+                  </View>
+                </Card.Content>
+              </Card>
+            );
+          })
+        )}
+      </ScrollView>
+
+      {/* Invoice PDF & Detail In-App Modal */}
       <Modal visible={detailModalVisible} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.invoiceDocTitle}>Renu Biome Inc.</Text>
-                <Text style={{ color: '#64748B', fontSize: 12 }}>1250 Agri-Bio Way, Fresno, CA</Text>
-              </View>
-              <TouchableOpacity onPress={() => setDetailModalVisible(false)}>
-                <MaterialCommunityIcons name="close-circle" size={28} color="#64748B" />
-              </TouchableOpacity>
-            </View>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            {selectedInvoice && (
+              <>
+                <View style={styles.modalHeader}>
+                  <View>
+                    <Text style={styles.modalSub}>QuickBooks Export</Text>
+                    <Text style={styles.modalTitle}>Invoice #{selectedInvoice.invoiceNumber}</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setDetailModalVisible(false)}
+                    style={styles.modalCloseBtn}
+                  >
+                    <MaterialCommunityIcons name="close" size={24} color="#64748B" />
+                  </TouchableOpacity>
+                </View>
 
-            <Divider style={{ marginVertical: 14 }} />
+                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+                  {/* Clean Printable Invoice Document */}
+                  <View style={styles.paperInvoice}>
+                    <View style={styles.invoiceHeaderRow}>
+                      <View>
+                        <Text style={styles.docBrand}>ReNu-Biome Inc.</Text>
+                        <Text style={styles.docAddress}>Agricultural Soil Nutrition</Text>
+                        <Text style={styles.docAddress}>Central Valley, CA</Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={styles.docInvoiceBadge}>INVOICE</Text>
+                        <Text style={styles.docInvNum}>#{selectedInvoice.invoiceNumber}</Text>
+                      </View>
+                    </View>
 
-            <View style={styles.metaGrid}>
-              <View>
-                <Text style={styles.docLabel}>INVOICE NUMBER</Text>
-                <Text style={styles.docVal}>{selectedInvoice?.invoiceNumber || 'INV-2026-001'}</Text>
-              </View>
-              <View>
-                <Text style={styles.docLabel}>DATE</Text>
-                <Text style={styles.docVal}>{selectedInvoice?.date || '2026-10-09'}</Text>
-              </View>
-              <View>
-                <Text style={styles.docLabel}>BILLED TO</Text>
-                <Text style={styles.docVal}>{selectedInvoice?.customerEmail || 'customer@renu.com'}</Text>
-              </View>
-              <View>
-                <Text style={styles.docLabel}>STATUS</Text>
-                <Text style={[styles.docVal, { color: '#15803D' }]}>PAID IN FULL</Text>
-              </View>
-            </View>
+                    <Divider style={{ marginVertical: 12 }} />
 
-            <Divider style={{ marginVertical: 14 }} />
+                    <View style={styles.docMetaRow}>
+                      <View>
+                        <Text style={styles.docLabel}>Billed To:</Text>
+                        <Text style={styles.docVal}>{selectedInvoice.customerEmail}</Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={styles.docLabel}>Invoice Date:</Text>
+                        <Text style={styles.docVal}>{selectedInvoice.invoiceDate || '2026-10-09'}</Text>
+                        <Text style={[styles.docLabel, { marginTop: 4 }]}>Due Date:</Text>
+                        <Text style={styles.docVal}>{selectedInvoice.dueDate}</Text>
+                      </View>
+                    </View>
 
-            <Text style={{ fontWeight: '700', color: '#0F172A', marginBottom: 8 }}>LINE ITEMS</Text>
-            <View style={styles.tableRow}>
-              <Text style={{ flex: 2, color: '#334155', fontWeight: '500' }}>
-                {selectedInvoice?.product || 'Biome Care Formula'}
-              </Text>
-              <Text style={{ flex: 1, textAlign: 'center', color: '#64748B' }}>
-                {selectedInvoice?.qty || '10 Gal'}
-              </Text>
-              <Text style={{ flex: 1, textAlign: 'right', fontWeight: 'bold', color: '#0F172A' }}>
-                ${(selectedInvoice?.amount || selectedInvoice?.amt || 0)?.toLocaleString()}
-              </Text>
-            </View>
+                    {/* Line Items */}
+                    <View style={styles.docTable}>
+                      <View style={styles.docTableHeader}>
+                        <Text style={[styles.docColHeader, { flex: 2 }]}>Description</Text>
+                        <Text style={[styles.docColHeader, { flex: 1, textAlign: 'center' }]}>Gallons</Text>
+                        <Text style={[styles.docColHeader, { flex: 1, textAlign: 'right' }]}>Total</Text>
+                      </View>
 
-            <View style={styles.totalBox}>
-              <Text style={{ color: '#0F172A', fontWeight: 'bold', fontSize: 16 }}>Total Paid:</Text>
-              <Text style={{ color: '#2E5D36', fontWeight: '800', fontSize: 20 }}>
-                ${(selectedInvoice?.amount || selectedInvoice?.amt || 0)?.toLocaleString()}
-              </Text>
-            </View>
+                      <View style={styles.docTableRow}>
+                        <View style={{ flex: 2 }}>
+                          <Text style={styles.docItemName}>
+                            {selectedInvoice.product || 'Agri Bio-Stimulant Inoculant'}
+                          </Text>
+                          {selectedInvoice.blockIds && selectedInvoice.blockIds.length > 0 ? (
+                            <Text style={styles.docItemSub}>
+                              Treated Blocks: {selectedInvoice.blockIds.join(', ')}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <Text style={[styles.docItemQty, { flex: 1, textAlign: 'center' }]}>
+                          {selectedInvoice.gallons || '—'}
+                        </Text>
+                        <Text style={[styles.docItemPrice, { flex: 1, textAlign: 'right' }]}>
+                          ${Number(selectedInvoice.amount).toLocaleString()}
+                        </Text>
+                      </View>
+                    </View>
 
-            <View style={styles.modalActions}>
-              <Button
-                mode="contained"
-                buttonColor="#2E5D36"
-                icon="share-variant"
-                onPress={() => {
-                  Share.share({
-                    title: `Invoice ${selectedInvoice?.invoiceNumber}`,
-                    message: `Renu Biome Invoice #${selectedInvoice?.invoiceNumber} for $${selectedInvoice?.amount?.toLocaleString()} - Verified Paid.`
-                  });
-                }}
-                style={{ flex: 1, borderRadius: 10 }}
-              >
-                Share Invoice
-              </Button>
-              <Button
-                mode="outlined"
-                onPress={() => setDetailModalVisible(false)}
-                style={{ flex: 1, borderRadius: 10, borderColor: '#CBD5E1' }}
-                textColor="#64748B"
-              >
-                Close
-              </Button>
-            </View>
+                    <Divider style={{ marginVertical: 12 }} />
+
+                    {/* Total & Status */}
+                    <View style={styles.docTotalRow}>
+                      <View>
+                        <Text style={styles.docStatusLabel}>Payment Status:</Text>
+                        <Text style={[styles.docStatusValue, { color: getStatusBadge(selectedInvoice.status).color }]}>
+                          {selectedInvoice.status.toUpperCase()}
+                          {selectedInvoice.paidDate ? ` (${selectedInvoice.paidDate})` : ''}
+                        </Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={styles.docTotalLabel}>Total Due:</Text>
+                        <Text style={styles.docTotalAmount}>
+                          ${Number(selectedInvoice.amount).toLocaleString()}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </ScrollView>
+
+                <View style={styles.modalActionRow}>
+                  <Button
+                    mode="outlined"
+                    icon="printer"
+                    onPress={handlePrint}
+                    style={styles.printBtn}
+                    textColor="#1E293B"
+                  >
+                    Print / PDF
+                  </Button>
+                  <Button
+                    mode="contained"
+                    buttonColor="#2E5D36"
+                    onPress={() => setDetailModalVisible(false)}
+                    style={styles.closeBtn}
+                  >
+                    Close
+                  </Button>
+                </View>
+              </>
+            )}
           </View>
         </View>
       </Modal>
@@ -254,45 +334,66 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',
-    paddingHorizontal: 20,
   },
   header: {
-    paddingTop: 60,
-    paddingBottom: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
   },
   pageTitle: {
-    fontWeight: 'bold',
+    fontSize: 22,
+    fontWeight: '800',
     color: '#0F172A',
-    fontSize: 26,
   },
   subtitle: {
+    fontSize: 12,
     color: '#64748B',
-    fontSize: 13,
     marginTop: 2,
   },
-  exportBtn: {
-    borderRadius: 8,
-    borderColor: '#2E5D36',
+  filterTabs: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 8,
   },
-  card: {
-    marginBottom: 16,
+  filterTab: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    minHeight: 48, // 48px touch target
+    justifyContent: 'center',
+  },
+  filterTabActive: {
+    backgroundColor: '#1E293B',
+    borderColor: '#1E293B',
+  },
+  filterTabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  filterTabTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 96,
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   row: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
   headerInfo: {
     flexDirection: 'row',
@@ -308,88 +409,214 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   label: {
+    fontSize: 11,
+    fontWeight: '600',
     color: '#64748B',
-    marginBottom: 3,
+    textTransform: 'uppercase',
   },
-  openChip: {
-    backgroundColor: '#FEF3C7',
-    height: 28,
+  valueText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginTop: 2,
   },
-  paidChip: {
-    backgroundColor: '#DCFCE7',
-    height: 28,
+  subValueText: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
   },
-  emptyContainer: {
-    alignItems: 'center',
-    marginTop: 80,
-  },
-  emptyText: {
-    textAlign: 'center',
+  dateText: {
+    fontSize: 13,
     color: '#0F172A',
     fontWeight: '600',
-    fontSize: 16,
-    marginTop: 12,
+    marginTop: 2,
   },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+  amountText: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#2E5D36',
+    marginTop: 2,
+  },
+  openPdfBtn: {
+    borderRadius: 8,
+    minHeight: 48,
     justifyContent: 'center',
-    padding: 20,
   },
-  modalCard: {
+  emptyBox: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginTop: 20,
+  },
+  emptyText: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: '90%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    marginBottom: 14,
   },
-  invoiceDocTitle: {
+  modalSub: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#2E5D36',
+    textTransform: 'uppercase',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  modalCloseBtn: {
+    minHeight: 48,
+    minWidth: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  paperInvoice: {
+    backgroundColor: '#FAFAF9',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E7E5E4',
+  },
+  invoiceHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  docBrand: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#2E5D36',
+  },
+  docAddress: {
+    fontSize: 11,
+    color: '#78716C',
+  },
+  docInvoiceBadge: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#78716C',
+    letterSpacing: 1,
+  },
+  docInvNum: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  docMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  docLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#78716C',
+    textTransform: 'uppercase',
+  },
+  docVal: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1C1917',
+  },
+  docTable: {
+    marginTop: 8,
+  },
+  docTableHeader: {
+    flexDirection: 'row',
+    backgroundColor: '#E7E5E4',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 4,
+  },
+  docColHeader: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#44403C',
+    textTransform: 'uppercase',
+  },
+  docTableRow: {
+    flexDirection: 'row',
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+  },
+  docItemName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1C1917',
+  },
+  docItemSub: {
+    fontSize: 10,
+    color: '#78716C',
+    marginTop: 2,
+  },
+  docItemQty: {
+    fontSize: 12,
+    color: '#44403C',
+  },
+  docItemPrice: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1C1917',
+  },
+  docTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  docStatusLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#78716C',
+  },
+  docStatusValue: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  docTotalLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#78716C',
+    textTransform: 'uppercase',
+  },
+  docTotalAmount: {
     fontSize: 20,
     fontWeight: '800',
     color: '#2E5D36',
   },
-  metaGrid: {
+  modalActionRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
-  },
-  docLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748B',
-    marginBottom: 2,
-  },
-  docVal: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#0F172A',
-  },
-  tableRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  totalBox: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    padding: 14,
-    borderRadius: 10,
+    gap: 10,
     marginTop: 16,
   },
-  modalActions: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 20,
+  printBtn: {
+    flex: 1,
+    minHeight: 48,
+    justifyContent: 'center',
+    borderColor: '#CBD5E1',
+  },
+  closeBtn: {
+    flex: 1,
+    minHeight: 48,
+    justifyContent: 'center',
   },
 });

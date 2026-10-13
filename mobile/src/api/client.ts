@@ -25,12 +25,10 @@ export const getApiBaseUrl = async (): Promise<string> => {
     }
   }
 
-  // React Native app: use EXPO_PUBLIC_RENDER_BACKEND_URL if set, else EXPO_PUBLIC_API_URL
   const RENDER_URL = process.env.EXPO_PUBLIC_RENDER_BACKEND_URL;
   const RAW_URL = (RENDER_URL || process.env.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
   return RAW_URL.endsWith('/api') ? RAW_URL : `${RAW_URL}/api`;
 };
-
 
 export const setCustomApiUrl = async (url: string) => {
   if (!url || !url.trim()) {
@@ -43,7 +41,7 @@ export const setCustomApiUrl = async (url: string) => {
 export const apiClient = async (endpoint: string, options: RequestInit = {}) => {
   const token = await AsyncStorage.getItem('@auth_token');
   const baseUrl = await getApiBaseUrl();
-  
+
   const headers: Record<string, any> = {
     'Content-Type': 'application/json',
     ...options.headers,
@@ -60,14 +58,11 @@ export const apiClient = async (endpoint: string, options: RequestInit = {}) => 
       headers,
     });
   } catch (error: any) {
-    console.error(`[Network Error] Failed to reach ${baseUrl}${endpoint}:`, error.message);
-    throw new Error(
-      `Cannot connect to backend server at ${baseUrl}.\n\nPlease ensure your local backend is running on port 3000, or verify the deployed server URL.`
-    );
+    console.warn(`[Network Offline / Error] ${endpoint}:`, error.message);
+    throw error;
   }
 
   if (response.status === 401) {
-    // Handle token expiration globally (e.g., clear storage, trigger logout)
     await AsyncStorage.removeItem('@auth_token');
     throw new Error('Unauthorized');
   }
@@ -80,83 +75,324 @@ export const apiClient = async (endpoint: string, options: RequestInit = {}) => 
   return data;
 };
 
-// Phase 2: Auth Methods
+// -----------------------------------------------------------------------
+// Offline Caching Helper
+// -----------------------------------------------------------------------
+async function getCachedOrFetch<T>(cacheKey: string, fetcher: () => Promise<T>): Promise<T> {
+  try {
+    const result = await fetcher();
+    if (result) {
+      AsyncStorage.setItem(cacheKey, JSON.stringify(result)).catch(() => {});
+    }
+    return result;
+  } catch (err) {
+    // Attempt to load from offline cache
+    try {
+      const cached = await AsyncStorage.getItem(cacheKey);
+      if (cached) {
+        return JSON.parse(cached) as T;
+      }
+    } catch (cacheErr) {}
+    throw err;
+  }
+}
+
+// -----------------------------------------------------------------------
+// Auth Methods
+// -----------------------------------------------------------------------
 export const login = async (email: string, password: string) => {
   const res = await apiClient('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
   });
   if (res.token) {
+    await AsyncStorage.setItem('@auth_token', res.token);
     await AsyncStorage.setItem('userToken', res.token);
   }
   return res;
 };
 
-// Phase 4: Dashboard Methods
-export const fetchGrowerDashboard = () => apiClient('/app/grower/dashboard');
-export const fetchManagerDashboard = () => apiClient('/app/manager/dashboard');
-export const fetchOwnerDashboard = () => apiClient('/app/owner/dashboard');
-export const fetchCEODashboard = () => apiClient('/app/ceo/dashboard');
+export const verifyMfa = async (email: string, code: string) => {
+  const res = await apiClient('/auth/verify-mfa', {
+    method: 'POST',
+    body: JSON.stringify({ email, code }),
+  });
+  if (res.token) {
+    await AsyncStorage.setItem('@auth_token', res.token);
+    await AsyncStorage.setItem('userToken', res.token);
+  }
+  return res;
+};
 
-// Phase 8: Invoice Methods
-export const fetchInvoices = () => apiClient('/app/invoices');
+export const resendMfa = (email: string) => apiClient('/auth/resend-mfa', {
+  method: 'POST',
+  body: JSON.stringify({ email }),
+});
 
-export const fetchRanches = () => apiClient('/app/ranches');
-export const submitRanch = (data: any) => apiClient('/app/ranches', { method: 'POST', body: JSON.stringify(data) });
-
-export const submitTankSetup = (data: any) => apiClient('/app/tank-setups', { method: 'POST', body: JSON.stringify(data) });
+export const toggleMfa = (email: string, enabled: boolean) => apiClient('/auth/toggle-mfa', {
+  method: 'POST',
+  body: JSON.stringify({ email, enabled }),
+});
 
 export const updateProfile = (data: any) => apiClient('/app/profile', { method: 'PUT', body: JSON.stringify(data) });
 
-export const fetchOrders = () => apiClient('/app/orders');
-export const submitOrder = (data: any) => apiClient('/app/orders', { method: 'POST', body: JSON.stringify(data) });
+// -----------------------------------------------------------------------
+// Dashboards
+// -----------------------------------------------------------------------
+export const fetchGrowerDashboard = () => apiClient('/app/grower/dashboard');
+export const fetchAdminDashboard = () => apiClient('/app/admin/dashboard');
 
-export const fetchMessages = () => apiClient('/app/messages');
-export const sendMessage = (data: { title: string; body: string; toEmail?: string }) =>
-  apiClient('/app/messages', { method: 'POST', body: JSON.stringify(data) });
-export const fetchProducts = () => apiClient('/app/products');
+// -----------------------------------------------------------------------
+// Ranches, Blocks & Tanks (with offline cache)
+// -----------------------------------------------------------------------
+export const fetchRanches = async () => {
+  return getCachedOrFetch('@cache_ranches', () => apiClient('/app/ranches'));
+};
 
-// Admin Methods
-export const fetchAdminApprovals = () => apiClient('/app/admin/approvals');
-export const approveCustomer = (id: string, status: string) => apiClient(`/app/admin/approvals/customer/${id}`, { method: 'POST', body: JSON.stringify({ status }) });
-export const approveRanch = (id: string, status: string) => apiClient(`/app/admin/approvals/ranch/${id}`, { method: 'POST', body: JSON.stringify({ status }) });
-export const approveTank = (id: string, status: string) => apiClient(`/app/admin/approvals/tank/${id}`, { method: 'POST', body: JSON.stringify({ status }) });
-export const acceptAdminOrder = (id: string) => apiClient(`/app/admin/orders/${id}/accept`, { method: 'POST' });
-export const acceptOrderAndEmail = (id: string) => apiClient(`/app/admin/orders/${id}/accept-and-email`, { method: 'POST' });
-export const payOrder = (id: string) => apiClient(`/app/orders/${id}/pay`, { method: 'POST' });
-export const updateOrderTracking = (id: string, status: string, step: number) => apiClient(`/app/admin/orders/${id}/tracking`, { method: 'PUT', body: JSON.stringify({ status, step }) });
-export const fetchAdminOrders = () => apiClient('/app/admin/orders');
-export const cancelOrder = (id: string, reason: string) => apiClient(`/app/orders/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) });
+export const submitRanch = async (data: any) => {
+  const res = await apiClient('/app/ranches', { method: 'POST', body: JSON.stringify(data) });
+  fetchRanches().catch(() => {});
+  return res;
+};
+
+export const updateRanch = async (id: string, data: any) => {
+  const res = await apiClient(`/app/ranches/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  fetchRanches().catch(() => {});
+  return res;
+};
+
+export const deleteRanch = async (id: string) => {
+  const res = await apiClient(`/app/ranches/${id}`, { method: 'DELETE' });
+  fetchRanches().catch(() => {});
+  return res;
+};
+
+// Blocks
+export const submitBlock = async (ranchId: string, blockData: any) => {
+  const res = await apiClient(`/app/ranches/${ranchId}/blocks`, { method: 'POST', body: JSON.stringify(blockData) });
+  fetchRanches().catch(() => {});
+  return res;
+};
+
+export const updateBlock = async (blockId: string, blockData: any) => {
+  const res = await apiClient(`/app/blocks/${blockId}`, { method: 'PUT', body: JSON.stringify(blockData) });
+  fetchRanches().catch(() => {});
+  return res;
+};
+
+export const deleteBlock = async (blockId: string) => {
+  const res = await apiClient(`/app/blocks/${blockId}`, { method: 'DELETE' });
+  fetchRanches().catch(() => {});
+  return res;
+};
+
+// Tanks
+export const submitTankSetup = async (data: any) => {
+  const res = await apiClient(`/app/ranches/${data.ranchId}/tanks`, { method: 'POST', body: JSON.stringify(data) });
+  fetchRanches().catch(() => {});
+  return res;
+};
+
+export const updateTank = async (tankId: string, data: any) => {
+  const res = await apiClient(`/app/tanks/${tankId}`, { method: 'PUT', body: JSON.stringify(data) });
+  fetchRanches().catch(() => {});
+  return res;
+};
+
+export const deleteTank = async (tankId: string) => {
+  const res = await apiClient(`/app/tanks/${tankId}`, { method: 'DELETE' });
+  fetchRanches().catch(() => {});
+  return res;
+};
+
+// -----------------------------------------------------------------------
+// Deliveries (with offline cache)
+// -----------------------------------------------------------------------
+export const fetchDeliveries = async () => {
+  return getCachedOrFetch('@cache_deliveries', () => apiClient('/app/deliveries'));
+};
+
+export const fetchOrders = fetchDeliveries; // Backward compatibility alias
+
+export const submitDelivery = async (data: any) => {
+  const res = await apiClient('/app/deliveries', { method: 'POST', body: JSON.stringify(data) });
+  fetchDeliveries().catch(() => {});
+  return res;
+};
+
+export const submitOrder = submitDelivery; // Backward compatibility alias
+
+export const updateDeliveryStatus = async (
+  id: string,
+  status: 'Scheduled' | 'Out for delivery' | 'Delivered' | 'Cancelled',
+  extra?: { deliveredGallons?: number; deliveredDate?: string; cancelReason?: string }
+) => {
+  const res = await apiClient(`/app/deliveries/${id}/status`, {
+    method: 'PUT',
+    body: JSON.stringify({ status, ...extra })
+  });
+  fetchDeliveries().catch(() => {});
+  return res;
+};
+
+export const updateDelivery = async (id: string, data: any) => {
+  const res = await apiClient(`/app/deliveries/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  fetchDeliveries().catch(() => {});
+  return res;
+};
+
+export const fetchAdminOrders = fetchDeliveries;
+
+// -----------------------------------------------------------------------
+// Invoices (Hand-entered from QuickBooks, with offline cache)
+// -----------------------------------------------------------------------
+export const fetchInvoices = async () => {
+  return getCachedOrFetch('@cache_invoices', () => apiClient('/app/invoices'));
+};
+
+export const submitInvoice = async (data: any) => {
+  const res = await apiClient('/app/invoices', { method: 'POST', body: JSON.stringify(data) });
+  fetchInvoices().catch(() => {});
+  return res;
+};
+
+export const markInvoicePaid = async (id: string, paymentDate?: string) => {
+  const res = await apiClient(`/app/invoices/${id}/pay`, {
+    method: 'PUT',
+    body: JSON.stringify({ paymentDate })
+  });
+  fetchInvoices().catch(() => {});
+  return res;
+};
+
+export const voidInvoice = async (id: string) => {
+  const res = await apiClient(`/app/invoices/${id}/void`, { method: 'PUT' });
+  fetchInvoices().catch(() => {});
+  return res;
+};
+
+export const updateInvoice = async (id: string, data: any) => {
+  const res = await apiClient(`/app/invoices/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  fetchInvoices().catch(() => {});
+  return res;
+};
+
+// -----------------------------------------------------------------------
+// Year-End Purchase Summary & Reports
+// -----------------------------------------------------------------------
+export const fetchYearEndSummary = async (year: number, customerId?: string) => {
+  const q = customerId ? `?year=${year}&customerId=${encodeURIComponent(customerId)}` : `?year=${year}`;
+  return apiClient(`/app/reports/year-end-summary${q}`);
+};
+
+export const exportReportCsv = async (type: 'deliveries' | 'invoices', startDate: string, endDate: string) => {
+  const baseUrl = await getApiBaseUrl();
+  const token = await AsyncStorage.getItem('@auth_token');
+  const url = `${baseUrl}/app/reports/csv?type=${type}&startDate=${startDate}&endDate=${endDate}`;
+  const res = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {}
+  });
+  return res.text();
+};
+
+// -----------------------------------------------------------------------
+// Feature Flags
+// -----------------------------------------------------------------------
+export const fetchFeatureFlags = async (customerId?: string) => {
+  const q = customerId ? `?customerId=${encodeURIComponent(customerId)}` : '';
+  return getCachedOrFetch(`@cache_feature_flags_${customerId || 'global'}`, () =>
+    apiClient(`/app/feature-flags${q}`)
+  );
+};
+
+export const saveFeatureFlags = async (data: { global?: any; customerId?: string; customerOverrides?: any }) => {
+  return apiClient('/app/feature-flags', { method: 'POST', body: JSON.stringify(data) });
+};
+
+// -----------------------------------------------------------------------
+// Admin Customer Management
+// -----------------------------------------------------------------------
+export const fetchAdminCustomers = async () => {
+  return apiClient('/admin/customers');
+};
+
+export const createAdminCustomer = async (data: {
+  name: string;
+  email: string;
+  password?: string;
+  phone?: string;
+  role?: string;
+}) => {
+  return apiClient('/admin/customers', { method: 'POST', body: JSON.stringify(data) });
+};
+
+export const resetCustomerPassword = async (id: string, password: string) => {
+  return apiClient(`/admin/customers/${id}/reset-password`, {
+    method: 'PUT',
+    body: JSON.stringify({ password })
+  });
+};
+
+export const updateCustomer = async (id: string, data: any) => {
+  return apiClient(`/admin/customers/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+};
+
+// -----------------------------------------------------------------------
+// Products (NO PRICE)
+// -----------------------------------------------------------------------
+export const fetchProducts = async () => {
+  return apiClient('/app/products');
+};
+
+export const submitProduct = async (data: {
+  name: string;
+  description: string;
+  analysis?: string;
+  omriCertified?: boolean;
+  omriListed?: boolean;
+  imageUrl?: string;
+}) => {
+  return apiClient('/app/admin/products', { method: 'POST', body: JSON.stringify(data) });
+};
+
+export const updateProduct = async (id: string, data: any) => {
+  return apiClient(`/app/admin/products/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+};
+
+export const deleteProduct = async (id: string) => {
+  return apiClient(`/app/admin/products/${id}`, { method: 'DELETE' });
+};
+
+// -----------------------------------------------------------------------
+// Admin Approvals, Notifications & Misc
+// -----------------------------------------------------------------------
+export const fetchCustomers = fetchAdminCustomers;
+export const fetchAdminApprovals = () => apiClient('/admin/approvals');
+export const approveCustomer = (id: string, status: string) => apiClient(`/admin/approvals/customer/${id}`, { method: 'POST', body: JSON.stringify({ status }) });
+export const approveRanch = (id: string, status: string) => apiClient(`/admin/approvals/ranch/${id}`, { method: 'POST', body: JSON.stringify({ status }) });
+export const approveTank = (id: string, status: string) => apiClient(`/admin/approvals/tank/${id}`, { method: 'POST', body: JSON.stringify({ status }) });
+export const fetchAdminNotifications = () => apiClient('/app/admin/notifications');
+export const markNotificationsRead = () => apiClient('/app/admin/notifications/mark-read', { method: 'POST' });
+export const exportData = (entity: string) => apiClient(`/app/export/${entity}`);
+export const importData = (entity: string, items: any[]) => apiClient(`/app/import/${entity}`, { method: 'POST', body: JSON.stringify({ items }) });
+
+// Backward compatibility stubs for legacy screens
+export const payOrder = (id: string) => updateDeliveryStatus(id, 'Delivered');
+export const cancelOrder = (id: string, reason: string) => updateDeliveryStatus(id, 'Cancelled', { cancelReason: reason });
+export const updateOrderTracking = (id: string, status: any, step: number) => updateDeliveryStatus(id, status);
+export const acceptAdminOrder = (id: string) => updateDeliveryStatus(id, 'Out for delivery');
+export const acceptOrderAndEmail = (id: string) => updateDeliveryStatus(id, 'Out for delivery');
 export const submitApplicationLog = (data: any) => apiClient('/app/utilization', { method: 'POST', body: JSON.stringify(data) });
-
-export const submitProduct = (data: any) => apiClient('/app/admin/products', { method: 'POST', body: JSON.stringify(data) });
-export const updateProduct = (id: string, data: any) => apiClient(`/app/admin/products/${id}`, { method: 'PUT', body: JSON.stringify(data) });
-export const updateProductPrice = (id: string, price: number) => apiClient(`/app/admin/products/${id}`, { method: 'PUT', body: JSON.stringify({ price }) });
-export const deleteProduct = (id: string) => apiClient(`/app/admin/products/${id}`, { method: 'DELETE' });
-export const fetchPlatformSettings = () => apiClient('/app/admin/settings');
-export const savePlatformSettings = (settings: any) => apiClient('/app/admin/settings', { method: 'POST', body: JSON.stringify(settings) });
-export const fetchAuditLogs = () => apiClient('/app/admin/audit-logs');
-export const resetSystemCache = () => apiClient('/app/admin/reset-cache', { method: 'POST' });
-export const updateCustomer = (id: string, data: any) => apiClient(`/app/admin/customers/${id}`, { method: 'PUT', body: JSON.stringify(data) });
-
-// Tasks & Agronomy Field Operations
 export const fetchTasks = () => apiClient('/app/tasks');
 export const createAdminTask = (data: any) => apiClient('/app/admin/tasks', { method: 'POST', body: JSON.stringify(data) });
 export const updateTaskStatus = (id: string, status: string, empEmail?: string) => apiClient(`/app/tasks/${id}/status`, { method: 'PUT', body: JSON.stringify({ status, empEmail }) });
-
-// Lab Results & Grower Assignments
 export const fetchLabResults = () => apiClient('/app/lab-results');
 export const submitLabResult = (data: any) => apiClient('/app/lab-results', { method: 'POST', body: JSON.stringify(data) });
 export const assignGrowerToEmployee = (customerId: string, employeeEmail: string) => apiClient('/app/admin/assign-grower', { method: 'POST', body: JSON.stringify({ customerId, employeeEmail }) });
 export const toggleRanchVisibility = (ranchId: string, hidden: boolean) => apiClient(`/app/ranches/${ranchId}/visibility`, { method: 'PUT', body: JSON.stringify({ hidden }) });
-
-// Notifications
-export const fetchAdminNotifications = () => apiClient('/app/admin/notifications');
-export const markNotificationsRead = () => apiClient('/app/admin/notifications/mark-read', { method: 'POST' });
-
-// Universal Export / Import
-export const exportData = (entity: string) => apiClient(`/app/export/${entity}`);
-export const importData = (entity: string, items: any[]) => apiClient(`/app/import/${entity}`, { method: 'POST', body: JSON.stringify({ items }) });
-
-
-
+export const fetchPlatformSettings = () => apiClient('/app/admin/settings');
+export const savePlatformSettings = (settings: any) => apiClient('/app/admin/settings', { method: 'POST', body: JSON.stringify(settings) });
+export const fetchAuditLogs = () => apiClient('/app/admin/audit-logs');
+export const resetSystemCache = () => apiClient('/app/admin/reset-cache', { method: 'POST' });
+export const fetchMessages = () => apiClient('/app/messages');
+export const sendMessage = (data: any) => apiClient('/app/messages', { method: 'POST', body: JSON.stringify(data) });

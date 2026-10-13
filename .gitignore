@@ -4,5 +4,6 @@
 data_store.json
 backend/data_store.json
 .DS_Store
+**/.DS_Store
 dist/
 backend/dist/
