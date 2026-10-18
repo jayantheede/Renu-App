@@ -39,6 +39,8 @@ export const RanchesScreen = () => {
   const [newRanchName, setNewRanchName] = useState('');
   const [newRanchCounty, setNewRanchCounty] = useState('Fresno');
   const [submittingRanch, setSubmittingRanch] = useState(false);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
 
   // Add Block Modal
   const [addBlockModalVisible, setAddBlockModalVisible] = useState(false);
@@ -71,6 +73,22 @@ export const RanchesScreen = () => {
       ]);
       if (Array.isArray(rData)) setRanches(rData);
       if (Array.isArray(dData)) setDeliveries(dData);
+
+      if (isAdmin) {
+        try {
+          const BACKEND_URL = (process.env.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
+          const cRes = await fetch(`${BACKEND_URL}/api/admin/customers`);
+          const cData = await cRes.json();
+          if (Array.isArray(cData)) {
+            setCustomers(cData);
+            if (cData.length > 0) {
+              setSelectedCustomerId(prev => prev || cData[0].id);
+            }
+          }
+        } catch (err) {
+          console.warn('Failed to load customers in RanchesScreen:', err);
+        }
+      }
     } catch (e) {
       console.warn('Ranches load error:', e);
     } finally {
@@ -101,10 +119,19 @@ export const RanchesScreen = () => {
     }
     setSubmittingRanch(true);
     try {
-      await submitRanch({ name: newRanchName.trim(), county: newRanchCounty.trim() });
+      const chosenCustomer = isAdmin ? customers.find(c => c.id === selectedCustomerId) : null;
+      await submitRanch({ 
+        name: newRanchName.trim(), 
+        county: newRanchCounty.trim() || 'Fresno County',
+        location: newRanchCounty.trim() || 'Fresno County',
+        customerId: chosenCustomer?.id,
+        customerEmail: chosenCustomer?.email
+      });
+      const savedName = newRanchName.trim();
       setAddRanchModalVisible(false);
       setNewRanchName('');
       loadAll();
+      Alert.alert('Ranch Created', `Ranch "${savedName}" was added successfully!`);
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to create ranch');
     } finally {
@@ -500,6 +527,38 @@ export const RanchesScreen = () => {
           <View style={styles.modalContent}>
             <Text style={styles.formTitle}>Add New Ranch</Text>
             <Text style={styles.formSubtitle}>Ranch acreage will be computed automatically from its blocks.</Text>
+
+            {isAdmin && customers.length > 0 && (
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#1E293B', marginBottom: 6 }}>
+                  Assign to Customer / Grower *
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row', marginBottom: 4 }}>
+                  {customers.map((c: any) => {
+                    const isSelected = selectedCustomerId === c.id;
+                    return (
+                      <TouchableOpacity
+                        key={c.id}
+                        onPress={() => setSelectedCustomerId(c.id)}
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          borderRadius: 20,
+                          backgroundColor: isSelected ? '#2E5D36' : '#F1F5F9',
+                          marginRight: 8,
+                          borderWidth: 1,
+                          borderColor: isSelected ? '#2E5D36' : '#CBD5E1'
+                        }}
+                      >
+                        <Text style={{ color: isSelected ? '#FFFFFF' : '#334155', fontSize: 12, fontWeight: isSelected ? '700' : '500' }}>
+                          {c.name || c.email}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
 
             <TextInput
               label="Ranch Name *"

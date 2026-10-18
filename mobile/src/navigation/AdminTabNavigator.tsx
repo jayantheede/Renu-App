@@ -7,6 +7,7 @@ import { AdminCustomersScreen } from '../screens/admin/AdminCustomersScreen';
 import { AdminInvoicesScreen } from '../screens/admin/AdminInvoicesScreen';
 import { ManageProductsScreen } from '../screens/admin/ManageProductsScreen';
 import { AdminFeatureFlagsScreen } from '../screens/admin/AdminFeatureFlagsScreen';
+import { RanchesScreen } from '../screens/RanchesScreen';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from 'react-native-paper';
 import { useAuthStore } from '../store/useAuthStore';
@@ -70,6 +71,7 @@ const CustomTabBar = ({ state, descriptors, navigation }: any) => {
           if (route.name === 'AdminDashboard') iconName = isFocused ? 'calendar' : 'calendar-outline';
           if (route.name === 'AdminOrders') iconName = isFocused ? 'bus' : 'bus-outline';
           if (route.name === 'AdminCustomers') iconName = isFocused ? 'people' : 'people-outline';
+          if (route.name === 'AdminRanches') iconName = isFocused ? 'leaf' : 'leaf-outline';
           if (route.name === 'AdminInvoices') iconName = isFocused ? 'receipt' : 'receipt-outline';
           if (route.name === 'ManageProducts') iconName = isFocused ? 'cube' : 'cube-outline';
           if (route.name === 'AdminFeatureFlags') iconName = isFocused ? 'settings' : 'settings-outline';
@@ -104,6 +106,7 @@ export const AdminTabNavigator = () => {
       <Tab.Screen name="AdminDashboard" component={AdminDashboardScreen} options={{ title: 'Today' }} />
       <Tab.Screen name="AdminOrders" component={AdminOrdersScreen} options={{ title: 'Deliveries' }} />
       <Tab.Screen name="AdminCustomers" component={AdminCustomersScreen} options={{ title: 'Customers' }} />
+      <Tab.Screen name="AdminRanches" component={RanchesScreen} options={{ title: 'Ranches' }} />
       <Tab.Screen name="AdminInvoices" component={AdminInvoicesScreen} options={{ title: 'Invoices' }} />
       <Tab.Screen name="ManageProducts" component={ManageProductsScreen} options={{ title: 'Products' }} />
       <Tab.Screen name="AdminFeatureFlags" component={AdminFeatureFlagsScreen} options={{ title: 'Settings' }} />

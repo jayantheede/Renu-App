@@ -186,24 +186,25 @@ router.get('/ranches', async (req: AuthenticatedRequest, res) => {
 
 router.post('/ranches', async (req: AuthenticatedRequest, res) => {
   try {
-    const { name, county, customerId, customerEmail } = req.body;
-    if (!name || !county) {
-      return res.status(400).json({ error: 'Ranch name and county are required' });
+    const { name, county, location, customerId, customerEmail } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Ranch name is required' });
     }
+    const finalCounty = (county || location || 'Fresno County').trim();
     const user = req.user!;
-    const targetCustId = (user.role === 'admin' && customerId) ? customerId : user.id;
-    const targetCustEmail = (user.role === 'admin' && customerEmail) ? customerEmail : user.email;
+    const targetCustId = (user.role === 'admin' && customerId) ? customerId : (customerId || user.id);
+    const targetCustEmail = (user.role === 'admin' && customerEmail) ? customerEmail : (customerEmail || user.email);
 
     const ranch = createRanch({
-      name,
-      county,
+      name: name.trim(),
+      county: finalCounty,
       customerId: targetCustId,
       customerEmail: targetCustEmail
     });
 
     addAuditLog({
       action: 'RANCH_CREATED',
-      details: `Ranch "${name}" created in ${county} County`,
+      details: `Ranch "${name.trim()}" created in ${finalCounty}`,
       actor: user.email,
       category: 'RANCHES'
     });

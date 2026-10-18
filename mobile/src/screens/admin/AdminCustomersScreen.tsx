@@ -194,19 +194,25 @@ export const AdminCustomersScreen = () => {
 
   // Add Ranch
   const handleAddRanch = async () => {
-    if (!ranchName.trim() || !activeCustomer) return;
+    if (!ranchName.trim() || !activeCustomer) {
+      Alert.alert('Required', 'Please enter a ranch name and choose a customer.');
+      return;
+    }
     setSavingRanch(true);
     try {
       await submitRanch({
         name: ranchName.trim(),
-        location: ranchLocation.trim() || 'Central Valley, CA',
+        location: ranchLocation.trim() || 'Fresno County, CA',
+        county: ranchLocation.trim() || 'Fresno County',
         customerId: activeCustomer.id,
         customerEmail: activeCustomer.email
       });
+      const savedName = ranchName.trim();
       setRanchName('');
       setRanchLocation('');
       setAddRanchModalVisible(false);
       await loadData();
+      Alert.alert('Ranch Added', `Ranch "${savedName}" was successfully added to ${activeCustomer.name || activeCustomer.email}.`);
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to add ranch');
     } finally {
@@ -361,13 +367,30 @@ export const AdminCustomersScreen = () => {
             <Text style={styles.title}>Customers & Accounts</Text>
             <Text style={styles.subtitle}>Maintain growers, ranches, blocks & logins</Text>
           </View>
-          <TouchableOpacity 
-            onPress={() => setCreateCustomerModalVisible(true)} 
-            style={styles.addBtn}
-          >
-            <Ionicons name="person-add-outline" size={18} color="#FFF" />
-            <Text style={styles.addBtnText}>Add Customer</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity 
+              onPress={() => {
+                if (customers.length > 0 && !activeCustomer) {
+                  setActiveCustomer(customers[0]);
+                }
+                setRanchName('');
+                setRanchLocation('Fresno County, CA');
+                setAddRanchModalVisible(true);
+              }} 
+              style={[styles.addBtn, { backgroundColor: '#15803D' }]}
+            >
+              <MaterialCommunityIcons name="plus" size={18} color="#FFF" />
+              <Text style={styles.addBtnText}>Add Ranch</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              onPress={() => setCreateCustomerModalVisible(true)} 
+              style={styles.addBtn}
+            >
+              <Ionicons name="person-add-outline" size={18} color="#FFF" />
+              <Text style={styles.addBtnText}>Add Customer</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Customer Cards List */}
@@ -700,8 +723,44 @@ export const AdminCustomersScreen = () => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Add Ranch</Text>
+            <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 12 }}>
+              Assign to: <Text style={{ fontWeight: '700', color: '#1E293B' }}>{activeCustomer?.name || activeCustomer?.email || 'Select Customer'}</Text>
+            </Text>
+
+            {customers.length > 1 && (
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569', marginBottom: 6 }}>
+                  Choose Customer / Grower:
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row', marginBottom: 4 }}>
+                  {customers.map((c: any) => {
+                    const isSelected = activeCustomer?.id === c.id;
+                    return (
+                      <TouchableOpacity
+                        key={c.id}
+                        onPress={() => setActiveCustomer(c)}
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          borderRadius: 20,
+                          backgroundColor: isSelected ? '#2E5D36' : '#F1F5F9',
+                          marginRight: 8,
+                          borderWidth: 1,
+                          borderColor: isSelected ? '#2E5D36' : '#CBD5E1'
+                        }}
+                      >
+                        <Text style={{ color: isSelected ? '#FFFFFF' : '#334155', fontSize: 12, fontWeight: isSelected ? '700' : '500' }}>
+                          {c.name || c.email}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
+
             <TextInput
-              label="Ranch Name"
+              label="Ranch Name *"
               value={ranchName}
               onChangeText={setRanchName}
               mode="outlined"
@@ -709,7 +768,7 @@ export const AdminCustomersScreen = () => {
               style={styles.modalInput}
             />
             <TextInput
-              label="Location / County"
+              label="Location / County *"
               value={ranchLocation}
               onChangeText={setRanchLocation}
               mode="outlined"
