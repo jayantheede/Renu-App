@@ -309,6 +309,10 @@ export const AdminProfileScreen = () => {
             left={props => <List.Icon {...props} icon="logout" color="#DC2626" />}
             style={styles.logoutItem}
           />
+          
+          <Text style={styles.footerBranding}>
+            A product By SRavanga AI Smart Solutions
+          </Text>
         </View>
       )}
 
@@ -705,5 +709,14 @@ const styles = StyleSheet.create({
   auditActorText: {
     fontSize: 11,
     color: '#64748B',
+  },
+  footerBranding: {
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#94A3B8',
+    letterSpacing: 0.5,
+    marginTop: 24,
+    marginBottom: 8,
   },
 });

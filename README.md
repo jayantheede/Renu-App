@@ -1,5 +1,7 @@
 # Renu Biome Customer Portal
 
+> **A product By SRavanga AI Smart Solutions**
+
 A complete, production-ready cross-platform mobile app (iOS + Android) built with React Native (Expo) and TypeScript. It serves as a companion portal for Renu Biome customers (growers/distributors) to view orders, track product utilization, and manage payments.
 
 ## Architecture

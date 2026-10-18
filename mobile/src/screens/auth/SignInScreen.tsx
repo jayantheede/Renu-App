@@ -262,8 +262,8 @@ export const SignInScreen = ({ navigation }: any) => {
 
           </GlassCard>
 
-          <Text style={styles.watermark} numberOfLines={1}>
-            ReNu-Biome Agriculture Platform
+          <Text style={styles.watermark} numberOfLines={1} adjustsFontSizeToFit>
+            A product By SRavanga AI Smart Solutions
           </Text>
         </ScrollView>
       </View>

@@ -253,7 +253,7 @@ export const SignUpScreen = ({ navigation }: any) => {
           </GlassCard>
 
           <Text style={styles.watermark} numberOfLines={1} adjustsFontSizeToFit>
-            Designed By SRavanga AI Smart Solutions
+            A product By SRavanga AI Smart Solutions
           </Text>
 
         </ScrollView>

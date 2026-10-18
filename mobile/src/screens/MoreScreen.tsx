@@ -370,6 +370,10 @@ export const MoreScreen = () => {
         />
       </List.Section>
 
+      <Text style={styles.footerBranding}>
+        A product By SRavanga AI Smart Solutions
+      </Text>
+
       {/* ==================== NOTIFICATIONS MODAL ==================== */}
       <Modal visible={notificationsModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
@@ -908,5 +912,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#4B5563',
     lineHeight: 18,
+  },
+  footerBranding: {
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#94A3B8',
+    letterSpacing: 0.5,
+    marginTop: 24,
+    marginBottom: 8,
   },
 });
