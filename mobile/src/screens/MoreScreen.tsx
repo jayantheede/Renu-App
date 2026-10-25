@@ -295,14 +295,14 @@ export const MoreScreen = () => {
             />
             <View style={styles.actionRow}>
               <Button mode="text" onPress={() => { setIsEditing(false); setName(user?.name||''); setAvatarUrl(user?.avatarUrl||''); }} textColor="#6B7280" style={{ minHeight: 48, justifyContent: 'center' }}>Cancel</Button>
-              <Button mode="contained" onPress={handleSaveProfile} loading={saving} buttonColor="#2E5D36" style={{ minHeight: 48, justifyContent: 'center' }}>Save Changes</Button>
+              <Button mode="contained" onPress={handleSaveProfile} loading={saving} buttonColor="#0C6054" style={{ minHeight: 48, justifyContent: 'center' }}>Save Changes</Button>
             </View>
           </View>
         ) : (
           <View style={styles.profileInfo}>
             <Text variant="headlineSmall" style={{ fontWeight: 'bold' }}>{user?.name}</Text>
             <Text variant="bodyMedium" style={{ color: '#666', marginBottom: 12 }}>{user?.email}</Text>
-            <Button mode="outlined" onPress={() => setIsEditing(true)} textColor="#2E5D36" style={{ borderColor: '#2E5D36', minHeight: 48, justifyContent: 'center' }}>
+            <Button mode="outlined" onPress={() => setIsEditing(true)} textColor="#0C6054" style={{ borderColor: '#0C6054', minHeight: 48, justifyContent: 'center' }}>
               Edit Profile
             </Button>
           </View>
@@ -316,7 +316,7 @@ export const MoreScreen = () => {
         <List.Item
           title="Notifications"
           description="Push & email alerts"
-          left={props => <List.Icon {...props} icon="bell-outline" color="#2E5D36" />}
+          left={props => <List.Icon {...props} icon="bell-outline" color="#0C6054" />}
           right={props => <List.Icon {...props} icon="chevron-right" color="#94A3B8" />}
           onPress={() => setNotificationsModalVisible(true)}
           style={styles.clickableItem}
@@ -327,7 +327,7 @@ export const MoreScreen = () => {
         <List.Item
           title="Security"
           description="Password & 2FA"
-          left={props => <List.Icon {...props} icon="shield-outline" color="#2E5D36" />}
+          left={props => <List.Icon {...props} icon="shield-outline" color="#0C6054" />}
           right={props => <List.Icon {...props} icon="chevron-right" color="#94A3B8" />}
           onPress={() => setSecurityModalVisible(true)}
           style={styles.clickableItem}
@@ -338,7 +338,7 @@ export const MoreScreen = () => {
         <List.Item
           title="Year-End Purchase Summary"
           description="Deliveries and invoices statement for tax accountant"
-          left={props => <List.Icon {...props} icon="file-document-outline" color="#2E5D36" />}
+          left={props => <List.Icon {...props} icon="file-document-outline" color="#0C6054" />}
           right={props => <List.Icon {...props} icon="chevron-right" color="#94A3B8" />}
           onPress={() => {
             setYearEndModalVisible(true);
@@ -352,7 +352,7 @@ export const MoreScreen = () => {
         <List.Item
           title="Help Center"
           description="Direct telephone & email support"
-          left={props => <List.Icon {...props} icon="help-circle-outline" color="#2E5D36" />}
+          left={props => <List.Icon {...props} icon="help-circle-outline" color="#0C6054" />}
           right={props => <List.Icon {...props} icon="chevron-right" color="#94A3B8" />}
           onPress={() => setHelpModalVisible(true)}
           style={styles.clickableItem}
@@ -371,7 +371,7 @@ export const MoreScreen = () => {
       </List.Section>
 
       <Text style={styles.footerBranding}>
-        A product By SRavanga AI Smart Solutions
+        ReNu-Biome — Farmer's Pride · Grower Portal
       </Text>
 
       {/* ==================== NOTIFICATIONS MODAL ==================== */}
@@ -397,7 +397,7 @@ export const MoreScreen = () => {
                 <Switch
                   value={pushEnabled}
                   onValueChange={setPushEnabled}
-                  trackColor={{ false: '#E2E8F0', true: '#2E5D36' }}
+                  trackColor={{ false: '#E2E8F0', true: '#0C6054' }}
                   thumbColor="#FFFFFF"
                 />
               </View>
@@ -412,7 +412,7 @@ export const MoreScreen = () => {
                 <Switch
                   value={emailAlerts}
                   onValueChange={setEmailAlerts}
-                  trackColor={{ false: '#E2E8F0', true: '#2E5D36' }}
+                  trackColor={{ false: '#E2E8F0', true: '#0C6054' }}
                   thumbColor="#FFFFFF"
                 />
               </View>
@@ -427,7 +427,7 @@ export const MoreScreen = () => {
                 <Switch
                   value={tankLevelAlerts}
                   onValueChange={setTankLevelAlerts}
-                  trackColor={{ false: '#E2E8F0', true: '#2E5D36' }}
+                  trackColor={{ false: '#E2E8F0', true: '#0C6054' }}
                   thumbColor="#FFFFFF"
                 />
               </View>
@@ -442,7 +442,7 @@ export const MoreScreen = () => {
                 <Switch
                   value={agronomyAlerts}
                   onValueChange={setAgronomyAlerts}
-                  trackColor={{ false: '#E2E8F0', true: '#2E5D36' }}
+                  trackColor={{ false: '#E2E8F0', true: '#0C6054' }}
                   thumbColor="#FFFFFF"
                 />
               </View>
@@ -460,7 +460,7 @@ export const MoreScreen = () => {
               <Button 
                 mode="contained" 
                 onPress={handleSaveNotifications} 
-                buttonColor="#2E5D36" 
+                buttonColor="#0C6054" 
                 style={{ flex: 1, marginLeft: 8 }}
               >
                 Save Preferences
@@ -493,7 +493,7 @@ export const MoreScreen = () => {
                 <Switch
                   value={twoFactorAuth}
                   onValueChange={setTwoFactorAuth}
-                  trackColor={{ false: '#E2E8F0', true: '#2E5D36' }}
+                  trackColor={{ false: '#E2E8F0', true: '#0C6054' }}
                   thumbColor="#FFFFFF"
                 />
               </View>
@@ -548,7 +548,7 @@ export const MoreScreen = () => {
               <Button 
                 mode="contained" 
                 onPress={handleSaveSecurity} 
-                buttonColor="#2E5D36" 
+                buttonColor="#0C6054" 
                 style={{ flex: 1, marginLeft: 8 }}
               >
                 Save Settings
@@ -621,7 +621,7 @@ export const MoreScreen = () => {
               <Button 
                 mode="contained" 
                 onPress={() => setHelpModalVisible(false)} 
-                buttonColor="#2E5D36" 
+                buttonColor="#0C6054" 
                 style={{ flex: 1, minHeight: 48, justifyContent: 'center' }}
               >
                 Close Help Center
@@ -655,9 +655,9 @@ export const MoreScreen = () => {
                     paddingHorizontal: 16,
                     paddingVertical: 8,
                     borderRadius: 20,
-                    backgroundColor: selectedYear === year ? '#2E5D36' : '#F1F5F9',
+                    backgroundColor: selectedYear === year ? '#0C6054' : '#F1F5F9',
                     borderWidth: 1,
-                    borderColor: selectedYear === year ? '#2E5D36' : '#CBD5E1',
+                    borderColor: selectedYear === year ? '#0C6054' : '#CBD5E1',
                     minHeight: 40,
                     justifyContent: 'center',
                   }}
@@ -707,7 +707,7 @@ export const MoreScreen = () => {
                       <View key={d.id || idx} style={{ paddingVertical: 8, borderBottomWidth: idx === yearEndData.deliveries.length - 1 ? 0 : 1, borderBottomColor: '#E2E8F0' }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                           <Text style={{ fontWeight: '700', fontSize: 13, color: '#0F172A' }}>{d.productName || d.product}</Text>
-                          <Text style={{ fontWeight: '700', fontSize: 13, color: '#2E5D36' }}>{Number(d.gallons).toLocaleString()} gal</Text>
+                          <Text style={{ fontWeight: '700', fontSize: 13, color: '#0C6054' }}>{Number(d.gallons).toLocaleString()} gal</Text>
                         </View>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 3 }}>
                           <Text style={{ fontSize: 12, color: '#64748B' }}>{d.date} • {d.ranchName || 'Ranch'} ({d.tankName || 'Tank'})</Text>
@@ -751,8 +751,8 @@ export const MoreScreen = () => {
                 mode="outlined" 
                 onPress={downloadYearEndCsv} 
                 icon="file-delimited-outline"
-                textColor="#2E5D36" 
-                style={{ flex: 1, borderColor: '#2E5D36', minHeight: 48, justifyContent: 'center' }}
+                textColor="#0C6054" 
+                style={{ flex: 1, borderColor: '#0C6054', minHeight: 48, justifyContent: 'center' }}
               >
                 Export CSV
               </Button>
@@ -760,7 +760,7 @@ export const MoreScreen = () => {
                 mode="contained" 
                 onPress={handlePrintYearEnd} 
                 icon="printer"
-                buttonColor="#2E5D36" 
+                buttonColor="#0C6054" 
                 style={{ flex: 1, minHeight: 48, justifyContent: 'center' }}
               >
                 Print / PDF
@@ -776,10 +776,10 @@ export const MoreScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
-  pageTitle: { fontWeight: 'bold', color: '#2E5D36', marginBottom: 24, marginTop: 40 },
+  pageTitle: { fontWeight: 'bold', color: '#0C6054', marginBottom: 24, marginTop: 40 },
   profileSection: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 24, marginBottom: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 3 },
   avatarContainer: { alignItems: 'center', marginBottom: 16 },
-  avatar: { backgroundColor: '#2E5D36' },
+  avatar: { backgroundColor: '#0C6054' },
   profileInfo: { alignItems: 'center' },
   editForm: { marginTop: 8 },
   input: { marginBottom: 12, backgroundColor: '#FFF' },
@@ -900,7 +900,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 8,
     borderLeftWidth: 3,
-    borderLeftColor: '#2E5D36',
+    borderLeftColor: '#0C6054',
   },
   faqQ: {
     fontSize: 13,

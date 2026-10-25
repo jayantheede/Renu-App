@@ -12,8 +12,9 @@ export const AdminFeatureFlagsScreen = () => {
   const [customers, setCustomers] = useState<any[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('global');
 
-  // The 11 Deferred Flags (Global Default)
+  // The 12 Feature Flags (Global Default)
   const [globalFlags, setGlobalFlags] = useState<{ [key: string]: boolean }>({
+    ordering: false,
     payments: false,
     recommendations: false,
     labResults: false,
@@ -49,6 +50,11 @@ export const AdminFeatureFlagsScreen = () => {
   };
 
   const flagDescriptions: { [key: string]: { title: string; desc: string; icon: string } } = {
+    ordering: {
+      title: 'Customer Self-Ordering',
+      desc: 'Allows growers to submit purchase orders, cart, and tank refill requests directly in-app',
+      icon: 'cart-outline'
+    },
     payments: {
       title: 'Payments',
       desc: 'Pay invoices in-app by ACH & card; status sync back to QuickBooks',
@@ -204,7 +210,7 @@ export const AdminFeatureFlagsScreen = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor="#2E5D36" />
+          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor="#0C6054" />
         }
       >
         {/* Header */}
@@ -268,7 +274,7 @@ export const AdminFeatureFlagsScreen = () => {
                 <Switch
                   value={active}
                   onValueChange={() => handleToggleFlag(key)}
-                  color="#2E5D36"
+                  color="#0C6054"
                 />
               </View>
             );
@@ -278,7 +284,7 @@ export const AdminFeatureFlagsScreen = () => {
             mode="contained"
             onPress={handleSaveFlags}
             loading={saving}
-            buttonColor="#2E5D36"
+            buttonColor="#0C6054"
             style={{ marginTop: 14, borderRadius: 12 }}
             contentStyle={{ minHeight: 48 }}
           >
@@ -337,8 +343,8 @@ export const AdminFeatureFlagsScreen = () => {
             onPress={handleExportReport}
             loading={exportingReport}
             icon="file-download-outline"
-            textColor="#2E5D36"
-            style={{ borderColor: '#2E5D36', borderRadius: 12, marginTop: 8 }}
+            textColor="#0C6054"
+            style={{ borderColor: '#0C6054', borderRadius: 12, marginTop: 8 }}
             contentStyle={{ minHeight: 48 }}
           >
             Download {reportType === 'deliveries' ? 'Deliveries' : 'Invoices'} CSV

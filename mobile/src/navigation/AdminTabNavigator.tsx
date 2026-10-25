@@ -135,9 +135,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-around',
     paddingHorizontal: 4,
-    backgroundColor: '#0F2318',
+    backgroundColor: '#083F38',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   tabButton: {
     flex: 1,
@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   iconLabelFocused: {
-    color: '#4ADE80',
+    color: '#F07E42',
     fontWeight: '800',
   }
 });

@@ -127,6 +127,92 @@ self.addEventListener('fetch', (e) => {});
 
 // Static assets from mobile assets folder
 app.use('/assets', express.static(path.join(__dirname, '../../mobile/assets')));
+app.use('/brand', express.static(path.join(__dirname, '../../mobile/assets/brand')));
+
+// Standalone /install route for direct browser and QR access
+app.get('/install', (req, res) => {
+  res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Install ReNu-Biome Grower Portal</title>
+  <link rel="icon" type="image/png" href="/brand/renu-biome-app-icon-64.png">
+  <link rel="manifest" href="/manifest.json">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #F8FAFC; color: #0F172A; display: flex; justify-content: center; padding: 24px 16px; }
+    .card { background: #FFFFFF; max-width: 480px; width: 100%; border-radius: 18px; padding: 28px 24px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); border: 1px solid #E2E8F0; text-align: center; }
+    .logo { max-width: 220px; height: auto; margin-bottom: 4px; }
+    .tagline { font-style: italic; color: #64748B; font-size: 14px; margin-bottom: 8px; }
+    .badge { display: inline-block; background: #F0FDFA; color: #0C6054; border: 1px solid #99F6E4; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 800; letter-spacing: 1px; margin-bottom: 16px; }
+    h1 { font-size: 20px; font-weight: 800; margin-bottom: 8px; color: #0F172A; }
+    p.desc { font-size: 13px; color: #64748B; line-height: 1.5; margin-bottom: 20px; }
+    .instruction-box { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 14px; padding: 18px 16px; text-align: left; margin-bottom: 20px; }
+    .instruction-header { font-size: 15px; font-weight: 700; color: #0C6054; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .step { display: flex; gap: 10px; margin-bottom: 12px; font-size: 13px; line-height: 1.4; color: #334155; }
+    .step-num { background: #0C6054; color: white; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 11px; flex-shrink: 0; }
+    .qr-container { margin: 16px 0; text-align: center; }
+    .qr-img { width: 180px; height: 180px; border-radius: 12px; border: 1px solid #E2E8F0; padding: 6px; background: white; }
+    .qr-url { font-weight: 700; color: #0C6054; font-size: 13px; margin-top: 6px; }
+    .btn { display: block; width: 100%; background: #0C6054; color: white; text-decoration: none; font-weight: 700; padding: 12px; border-radius: 10px; text-align: center; font-size: 14px; margin-top: 8px; border: none; cursor: pointer; }
+    .btn:hover { background: #083F38; }
+    .footer { font-size: 11px; color: #94A3B8; margin-top: 20px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <img src="/brand/renu-biome-logo-teal-orange-for-light-backgrounds.png" class="logo" alt="ReNu-Biome Logo">
+    <div class="tagline">Farmer's Pride</div>
+    <div class="badge">GROWER PORTAL</div>
+    <h1>Install ReNu-Biome App</h1>
+    <p class="desc">Add the portal to your home screen for instant 1-tap access to delivery schedules, tank levels, and nutrition programs.</p>
+
+    <div id="device-instructions" class="instruction-box">
+      <!-- Injected by script based on device -->
+    </div>
+
+    <a href="/" class="btn">Launch Grower Portal</a>
+    <div class="footer">
+      Questions or need assistance? Email support@renu-biome.com or call (559) 555-0199.
+    </div>
+  </div>
+
+  <script>
+    const ua = navigator.userAgent || '';
+    const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isAndroid = /Android/.test(ua);
+    const box = document.getElementById('device-instructions');
+
+    if (isIOS) {
+      box.innerHTML = \`
+        <div class="instruction-header">📱 iPhone & iPad (Safari)</div>
+        <div class="step"><div class="step-num">1</div><div>Tap the <strong>Share</strong> button at the bottom of Safari (square with up arrow).</div></div>
+        <div class="step"><div class="step-num">2</div><div>Scroll down and tap <strong>Add to Home Screen</strong>.</div></div>
+        <div class="step"><div class="step-num">3</div><div>Tap <strong>Add</strong> in the top right. ReNu-Biome will appear on your home screen.</div></div>
+      \`;
+    } else if (isAndroid) {
+      box.innerHTML = \`
+        <div class="instruction-header">🤖 Android (Chrome)</div>
+        <div class="step"><div class="step-num">1</div><div>Tap the browser menu (<strong>⋮</strong> three dots) in Chrome.</div></div>
+        <div class="step"><div class="step-num">2</div><div>Select <strong>Install app</strong> or <strong>Add to Home screen</strong>.</div></div>
+        <div class="step"><div class="step-num">3</div><div>Tap <strong>Add</strong> to confirm.</div></div>
+      \`;
+    } else {
+      box.innerHTML = \`
+        <div class="instruction-header">📷 Scan to Install on Mobile</div>
+        <p style="font-size:12px;color:#64748B;margin-bottom:12px;">Open your phone camera and point it at the QR code below:</p>
+        <div class="qr-container">
+          <img src="/brand/renu-biome-install-qr-300dpi.png" class="qr-img" alt="ReNu-Biome Install QR">
+          <div class="qr-url">app.renu-biome.com/install</div>
+        </div>
+        <p style="font-size:11px;color:#94A3B8;margin-top:8px;">Or on desktop Chrome/Edge, click the install icon in the address bar.</p>
+      \`;
+    }
+  </script>
+</body>
+</html>\`);
+});
 
 // Auth Routes (Custom OTP Flow)
 app.post('/api/auth/send-otp', async (req, res) => {
@@ -381,6 +467,22 @@ app.post('/api/auth/resend-mfa', async (req, res) => {
   }
 });
 
+app.post(['/api/auth/forgot-password', '/api/app/auth/forgot-password'], async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+    const norm = email.toLowerCase().trim();
+    const user = await findUserByEmail(norm);
+    console.log(`[Forgot Password] Password reset requested for: ${norm} (User exists: ${Boolean(user)})`);
+    return res.json({
+      success: true,
+      message: 'If an account exists for this email, password reset instructions have been dispatched.'
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to process password reset request' });
+  }
+});
+
 app.post('/api/auth/toggle-mfa', async (req, res) => {
   try {
     const { email, enabled } = req.body;
@@ -630,7 +732,7 @@ app.get(['/api/orders', '/api/app/orders', '/api/admin/orders', '/api/app/admin/
 app.post(['/api/orders', '/api/app/orders'], async (req, res) => {
   try {
     const { items, total, customerEmail, product, qty } = req.body;
-    const prodName = product || (items && items[0]?.product) || 'Biome Care';
+    const prodName = product || (items && items[0]?.product) || 'ReNu N-32% K-28% Blend';
     const quantity = qty || (items && items[0]?.qty) || '10 Gal';
     const amount = total || 1000;
     const email = customerEmail || 'customer@renu.com';

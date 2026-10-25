@@ -1,476 +1,702 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Image, FlatList, Dimensions, TextInput, RefreshControl } from 'react-native';
-import { Text, ActivityIndicator } from 'react-native-paper';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useAuthStore } from '../store/useAuthStore';
-import { fetchProducts, submitOrder } from '../api/client';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, RefreshControl, Linking, Modal } from 'react-native';
+import { Text, ActivityIndicator, Chip, Button, Divider } from 'react-native-paper';
+import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useAuthStore } from '../store/useAuthStore';
+import { fetchProducts, fetchFeatureFlags } from '../api/client';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
-const FALLBACK_PRODUCTS = [
-  { id: 'prod-1', name: 'Biome Care', description: 'Fermentation-based liquid designed to improve soil health and water-holding capacity.', price: 120.00, imageUrl: 'https://via.placeholder.com/400x300/15803D/FFFFFF?text=Biome+Care' },
-  { id: 'prod-2', name: 'N-CARE', description: 'Green nitrification inhibitor that extends nitrogen shelf life by up to 8 weeks and reduces leaching.', price: 250.00, imageUrl: 'https://via.placeholder.com/400x300/10B981/FFFFFF?text=N-CARE' },
-  { id: 'prod-3', name: 'K-RUSH', description: 'Specialized formula for frost prevention and enhancing fruit quality.', price: 180.00, imageUrl: 'https://via.placeholder.com/400x300/FACC15/000000?text=K-RUSH' },
-  { id: 'prod-4', name: 'Bee Bloom', description: 'Pheromone blend to promote bee health and optimize pollination.', price: 85.00, imageUrl: 'https://via.placeholder.com/400x300/F59E0B/000000?text=Bee+Bloom' }
+const DEFAULT_REAL_PRODUCTS = [
+  {
+    id: 'prod-renu-n32-k28',
+    name: 'ReNu N-32% K-28% Blend',
+    description: 'High-efficiency liquid nitrogen and potassium formulation for bloom and vegetative shoot development. Engineered with biological complexing agents to maximize uptake while preventing leaching.',
+    analysis: '32% N, 0% P2O5, 28% K2O, 0% Ca, 0% B, 0% Zn',
+    densityLbGal: 10.8,
+    omriListed: true,
+    countsTowardN: true,
+    nPercent: 32,
+    p2o5Percent: 0,
+    k2oPercent: 28,
+    caPercent: 0,
+    bPercent: 0,
+    znPercent: 0
+  },
+  {
+    id: 'prod-renu-n32-k24',
+    name: 'ReNu N-32% K-24% Blend',
+    description: 'Balanced crop nutrient solution tailored for orchards on heavier loam soils requiring steady nitrogen release with calibrated potassium feeding.',
+    analysis: '32% N, 0% P2O5, 24% K2O, 0% Ca, 0% B, 0% Zn',
+    densityLbGal: 10.7,
+    omriListed: true,
+    countsTowardN: true,
+    nPercent: 32,
+    p2o5Percent: 0,
+    k2oPercent: 24,
+    caPercent: 0,
+    bPercent: 0,
+    znPercent: 0
+  },
+  {
+    id: 'prod-renu-n32-k28-b-zn',
+    name: 'ReNu N-32% K-28% Blend + B Zn',
+    description: 'Flagship pre-bloom and nut sizing blend fortified with chelated boron (0.25% B) and zinc (0.50% Zn) for enhanced pollen tube elongation and early canopy establishment.',
+    analysis: '32% N, 0% P2O5, 28% K2O, 0% Ca, 0.25% B, 0.5% Zn',
+    densityLbGal: 10.9,
+    omriListed: true,
+    countsTowardN: true,
+    nPercent: 32,
+    p2o5Percent: 0,
+    k2oPercent: 28,
+    caPercent: 0,
+    bPercent: 0.25,
+    znPercent: 0.50
+  },
+  {
+    id: 'prod-renu-fruit-care',
+    name: 'ReNu Fruit Care',
+    description: 'Bio-available calcium acetate and marine polysaccharide foliar spray. Strengthens cell walls, reduces hull split nut disorders, and improves firmness and shelf life.',
+    analysis: '0% N, 0% P2O5, 0% K2O, 8% Ca, 0% B, 0% Zn',
+    densityLbGal: 9.8,
+    omriListed: true,
+    countsTowardN: false,
+    nPercent: 0,
+    p2o5Percent: 0,
+    k2oPercent: 0,
+    caPercent: 8,
+    bPercent: 0,
+    znPercent: 0
+  },
+  {
+    id: 'prod-renu-0-0-29-k-acetate',
+    name: 'ReNu 0-0-29 Potassium Acetate',
+    description: 'Ultra-pure liquid potassium acetate for rapid foliar and drip absorption during kernel fill and hull split without chloride or nitrate salt accumulation.',
+    analysis: '0% N, 0% P2O5, 29% K2O, 0% Ca, 0% B, 0% Zn',
+    densityLbGal: 11.1,
+    omriListed: true,
+    countsTowardN: false,
+    nPercent: 0,
+    p2o5Percent: 0,
+    k2oPercent: 29,
+    caPercent: 0,
+    bPercent: 0,
+    znPercent: 0
+  },
+  {
+    id: 'prod-renu-n6-k16-ca20',
+    name: 'ReNu N-6% K-16% Ca-20% Blend',
+    description: 'Triple-action post-bloom structural formulation delivering bioavailable calcium, potassium, and starter nitrogen for cell division and shell development.',
+    analysis: '6% N, 0% P2O5, 16% K2O, 20% Ca, 0% B, 0% Zn',
+    densityLbGal: 11.4,
+    omriListed: true,
+    countsTowardN: true,
+    nPercent: 6,
+    p2o5Percent: 0,
+    k2oPercent: 16,
+    caPercent: 20,
+    bPercent: 0,
+    znPercent: 0
+  },
+  {
+    id: 'prod-renu-bloom-foliars-boron',
+    name: 'Bloom foliars + boron',
+    description: 'Targeted floral spray applied at 10-20% bloom. Enhances bee attraction, pollen germination, and fruit set in almonds, stone fruit, and pistachios.',
+    analysis: '5% N, 0% P2O5, 5% K2O, 0% Ca, 2% B, 1% Zn',
+    densityLbGal: 10.2,
+    omriListed: true,
+    countsTowardN: true,
+    nPercent: 5,
+    p2o5Percent: 0,
+    k2oPercent: 5,
+    caPercent: 0,
+    bPercent: 2.0,
+    znPercent: 1.0
+  }
 ];
 
 export const ShopScreen = () => {
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>(DEFAULT_REAL_PRODUCTS);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [viewMode, setViewMode] = useState<'list' | 'detail' | 'cart' | 'checkout' | 'success'>('list');
+  const [orderingEnabled, setOrderingEnabled] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
-  const [quantity, setQuantity] = useState(1);
-  const [isProcessing, setIsProcessing] = useState(false);
-  
-  // Payment State
-  const [cardNumber, setCardNumber] = useState('');
-  const [expiry, setExpiry] = useState('');
-  const [cvc, setCvc] = useState('');
-  
-  // Cart State
-  const [cart, setCart] = useState<Array<{ product: any, qty: number }>>([]);
-  
+  const [detailVisible, setDetailVisible] = useState(false);
+  const [orderModalVisible, setOrderModalVisible] = useState(false);
+  const [requestedGallons, setRequestedGallons] = useState('1000');
+  const [notes, setNotes] = useState('');
+
   const user = useAuthStore(state => state.user);
 
-  const loadProducts = () => {
-    fetchProducts()
-      .then(data => {
-        if (Array.isArray(data) && data.length > 0) {
-          setProducts(data);
-        } else {
-          setProducts(FALLBACK_PRODUCTS);
-        }
-      })
-      .catch(e => {
-        console.error(e);
-        setProducts(FALLBACK_PRODUCTS);
-      })
-      .finally(() => {
-        setLoading(false);
-        setRefreshing(false);
-      });
+  const loadData = async () => {
+    try {
+      const [prods, flags] = await Promise.all([
+        fetchProducts().catch(() => []),
+        fetchFeatureFlags().catch(() => ({}))
+      ]);
+      if (Array.isArray(prods) && prods.length > 0) {
+        setProducts(prods);
+      } else {
+        setProducts(DEFAULT_REAL_PRODUCTS);
+      }
+      const isOrdering = Boolean(flags?.global?.ordering ?? flags?.ordering);
+      setOrderingEnabled(isOrdering);
+    } catch (e) {
+      console.warn('Failed to fetch product data:', e);
+      setProducts(DEFAULT_REAL_PRODUCTS);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   };
 
   useEffect(() => {
-    loadProducts();
+    loadData();
   }, []);
 
-  const handleProductSelect = (product: any) => {
-    setSelectedProduct(product);
-    setQuantity(1);
-    setViewMode('detail');
+  const openProductDetail = (prod: any) => {
+    setSelectedProduct(prod);
+    setDetailVisible(true);
   };
 
-  const addToCart = () => {
-    const existing = cart.find(item => item.product.id === selectedProduct.id);
-    if (existing) {
-      setCart(cart.map(item => item.product.id === selectedProduct.id ? { ...item, qty: item.qty + quantity } : item));
-    } else {
-      setCart([...cart, { product: selectedProduct, qty: quantity }]);
-    }
-    setViewMode('list');
-  };
-  
-  const removeFromCart = (id: string) => {
-    setCart(cart.filter(item => item.product.id !== id));
-  };
-  
-  const updateCartQty = (id: string, newQty: number) => {
-    if (newQty < 1) return removeFromCart(id);
-    setCart(cart.map(item => item.product.id === id ? { ...item, qty: newQty } : item));
+  const handleContactOffice = () => {
+    Linking.openURL('mailto:support@renu-biome.com?subject=ReNu-Biome%20Product%20Order%20Inquiry');
   };
 
-  const handleCheckout = () => {
-    setViewMode('checkout');
-  };
-  
-  const processPayment = () => {
-    setIsProcessing(true);
-
-    // Sync order to backend
-    submitOrder({
-      items: cart.map(item => ({
-        product: item.product.name,
-        qty: `${item.qty} Gal`,
-        price: item.product.price
-      })),
-      total: cartTotal,
-      customerEmail: user?.email || 'customer@renu.com'
-    }).catch(e => console.warn('Order sync warning', e));
-
-    setTimeout(() => {
-      setIsProcessing(false);
-      setCart([]);
-      setCardNumber('');
-      setExpiry('');
-      setCvc('');
-      setViewMode('success');
-    }, 1500);
-  };
-  
-  const cartTotal = cart.reduce((acc, item) => acc + (item.product.price * item.qty), 0);
-  const totalItems = cart.reduce((acc, item) => acc + item.qty, 0);
-
-  const renderHeaderWithCart = (title: string, subtitle?: string, showBack = false) => (
-    <LinearGradient colors={['#1F4D36', '#2A6B45']} style={styles.header}>
-      <View style={styles.headerTopRow}>
-        {showBack ? (
-          <TouchableOpacity onPress={() => setViewMode(viewMode === 'checkout' ? 'cart' : 'list')} style={styles.backBtnSmall}>
-            <MaterialCommunityIcons name="chevron-left" size={26} color="#FFF" />
-          </TouchableOpacity>
-        ) : <View style={{ width: 34 }} />}
-        
-        <TouchableOpacity style={styles.cartIconWrapper} onPress={() => setViewMode('cart')}>
-          <MaterialCommunityIcons name="shopping-outline" size={24} color="#FFF" />
-          {totalItems > 0 && (
-            <View style={styles.cartBadge}>
-              <Text style={styles.cartBadgeText}>{totalItems}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
-      <Text style={styles.headerTitle}>{title}</Text>
-      {subtitle && <Text style={styles.headerSubtitle}>{subtitle}</Text>}
-    </LinearGradient>
-  );
-
-  const renderList = () => (
+  return (
     <View style={styles.container}>
-      {renderHeaderWithCart('Agricultural Inputs', 'Premium grade supplies for maximum yield')}
-      
-      {loading ? (
-        <ActivityIndicator style={{ marginTop: 40 }} color="#10B981" />
-      ) : (
-        <FlatList
-          data={products}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          numColumns={2}
-          columnWrapperStyle={styles.rowWrapper}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => {
-                setRefreshing(true);
-                loadProducts();
-              }}
-              tintColor="#2E5D36"
-            />
-          }
-          renderItem={({ item: prod }) => (
-            <TouchableOpacity style={styles.productCard} onPress={() => handleProductSelect(prod)}>
-              <Image source={{ uri: prod.imageUrl || 'https://via.placeholder.com/150' }} style={styles.productImage} />
-              <View style={styles.productInfo}>
-                <Text style={styles.productName} numberOfLines={1}>{prod.name}</Text>
-                <Text style={styles.productPrice}>${prod.price?.toFixed(2)}</Text>
-              </View>
-              <TouchableOpacity style={styles.addBtnSmall} onPress={() => handleProductSelect(prod)}>
-                <MaterialCommunityIcons name="plus" size={20} color="#FFF" />
-              </TouchableOpacity>
-            </TouchableOpacity>
-          )}
-        />
-      )}
-    </View>
-  );
-
-  const renderDetail = () => (
-    <View style={styles.container}>
-      <View style={styles.detailHeaderActions}>
-        <TouchableOpacity style={styles.actionCircle} onPress={() => setViewMode('list')}>
-          <MaterialCommunityIcons name="close" size={24} color="#111827" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.actionCircle} onPress={() => setViewMode('cart')}>
-          <MaterialCommunityIcons name="shopping-outline" size={22} color="#111827" />
-          {totalItems > 0 && (
-            <View style={[styles.cartBadge, { top: -2, right: -2 }]}>
-              <Text style={styles.cartBadgeText}>{totalItems}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
-      
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 50 }}>
-        <Image source={{ uri: selectedProduct?.imageUrl || 'https://via.placeholder.com/400x300' }} style={styles.detailImage} />
-        
-        <View style={styles.detailContent}>
-          <Text style={styles.detailName}>{selectedProduct?.name}</Text>
-          <Text style={styles.detailPrice}>${selectedProduct?.price?.toFixed(2)} / unit</Text>
-          
-          <View style={styles.divider} />
-          <Text style={styles.sectionTitle}>Product Overview</Text>
-          <Text style={styles.detailDesc}>{selectedProduct?.description}</Text>
-          <View style={styles.divider} />
-          
-          <Text style={styles.sectionTitle}>Select Quantity</Text>
-          <View style={styles.qtyContainer}>
-            <TouchableOpacity style={styles.qtyBtn} onPress={() => setQuantity(Math.max(1, quantity - 1))}>
-              <MaterialCommunityIcons name="minus" size={24} color="#15803D" />
-            </TouchableOpacity>
-            <Text style={styles.qtyText}>{quantity}</Text>
-            <TouchableOpacity style={styles.qtyBtn} onPress={() => setQuantity(quantity + 1)}>
-              <MaterialCommunityIcons name="plus" size={24} color="#15803D" />
-            </TouchableOpacity>
-          </View>
+      {/* Brand Header */}
+      <LinearGradient colors={['#083F38', '#0C6054']} style={styles.header}>
+        <View style={styles.headerContent}>
+          <Text style={styles.brandTag}>FARMER'S PRIDE</Text>
+          <Text style={styles.headerTitle}>Product Catalogue</Text>
+          <Text style={styles.headerSubtitle}>
+            Agricultural Biologicals & Liquid Nutrient Formulations
+          </Text>
         </View>
-      </ScrollView>
-      
-      <View style={styles.bottomBar}>
-        <View style={styles.priceSummaryRow}>
-          <Text style={styles.summaryLabel}>Total:</Text>
-          <Text style={styles.summaryValue}>${(selectedProduct?.price * quantity).toFixed(2)}</Text>
-        </View>
-        <TouchableOpacity style={styles.checkoutBtn} onPress={addToCart}>
-          <Text style={styles.checkoutBtnText}>Add to Cart</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+      </LinearGradient>
 
-  const renderCart = () => (
-    <View style={styles.container}>
-      {renderHeaderWithCart('Shopping Cart', `${totalItems} items`, true)}
-      
-      {cart.length === 0 ? (
-        <View style={styles.emptyCart}>
-          <MaterialCommunityIcons name="cart-remove" size={60} color="#D1D5DB" />
-          <Text style={styles.emptyCartText}>Your cart is empty.</Text>
-          <TouchableOpacity style={styles.continueBtn} onPress={() => setViewMode('list')}>
-            <Text style={styles.continueBtnText}>Continue Shopping</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <>
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 15 }}>
-            {cart.map((item, index) => (
-              <View key={index} style={styles.cartItem}>
-                <Image source={{ uri: item.product.imageUrl }} style={styles.cartImg} />
-                <View style={styles.cartItemInfo}>
-                  <Text style={styles.cartItemName}>{item.product.name}</Text>
-                  <Text style={styles.cartItemPrice}>${item.product.price?.toFixed(2)}</Text>
-                  
-                  <View style={styles.cartQtyRow}>
-                    <TouchableOpacity style={styles.cartQtyBtn} onPress={() => updateCartQty(item.product.id, item.qty - 1)}>
-                      <MaterialCommunityIcons name="minus" size={16} color="#44403C" />
-                    </TouchableOpacity>
-                    <Text style={styles.cartQtyText}>{item.qty}</Text>
-                    <TouchableOpacity style={styles.cartQtyBtn} onPress={() => updateCartQty(item.product.id, item.qty + 1)}>
-                      <MaterialCommunityIcons name="plus" size={16} color="#44403C" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-                <View style={styles.cartItemTotal}>
-                  <Text style={styles.cartItemTotalText}>${(item.product.price * item.qty).toFixed(2)}</Text>
-                  <TouchableOpacity onPress={() => removeFromCart(item.product.id)}>
-                    <MaterialCommunityIcons name="trash-can-outline" size={22} color="#EF4444" style={{ marginTop: 15 }} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))}
-          </ScrollView>
-          
-          <View style={styles.bottomBarCart}>
-            <View style={styles.cartTotalRow}>
-              <Text style={styles.cartTotalLabel}>Subtotal</Text>
-              <Text style={styles.cartTotalLabel}>${cartTotal.toFixed(2)}</Text>
-            </View>
-            <View style={styles.cartTotalRow}>
-              <Text style={styles.cartTotalLabel}>Tax & Fees</Text>
-              <Text style={styles.cartTotalLabel}>Calculated at checkout</Text>
-            </View>
-            <View style={[styles.cartTotalRow, { borderTopWidth: 1, borderTopColor: '#E7E5E4', paddingTop: 15, marginTop: 15 }]}>
-              <Text style={styles.cartTotalGrand}>Grand Total</Text>
-              <Text style={styles.cartTotalGrandValue}>${cartTotal.toFixed(2)}</Text>
-            </View>
-            
-            <TouchableOpacity style={styles.checkoutBtn} onPress={handleCheckout}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-                <MaterialCommunityIcons name="lock" size={18} color="#FFF" style={{ marginRight: 8 }} />
-                <Text style={styles.checkoutBtnText}>Checkout Securely</Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-        </>
-      )}
-    </View>
-  );
-
-  const renderCheckout = () => (
-    <View style={styles.container}>
-      {renderHeaderWithCart('Secure Checkout', 'Complete your purchase', true)}
-      
-  <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 100 }}>
-        <View style={styles.paymentCard}>
-          <Text style={styles.sectionTitle}>Payment Details</Text>
-          
-          <Text style={styles.inputLabel}>Card Number</Text>
-          <View style={styles.inputWrapper}>
-            <MaterialCommunityIcons name="credit-card-outline" size={20} color="#9CA3AF" style={styles.inputIcon} />
-            <TextInput style={styles.inputField} placeholder="**** **** **** 4242" value={cardNumber} onChangeText={setCardNumber} keyboardType="numeric" maxLength={19} />
-          </View>
-          
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <View style={{ flex: 1, marginRight: 15 }}>
-              <Text style={styles.inputLabel}>Expiry</Text>
-              <View style={styles.inputWrapper}>
-                <MaterialCommunityIcons name="calendar-blank" size={20} color="#9CA3AF" style={styles.inputIcon} />
-                <TextInput style={styles.inputField} placeholder="MM/YY" value={expiry} onChangeText={setExpiry} maxLength={5} />
-              </View>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              loadData();
+            }}
+            tintColor="#0C6054"
+          />
+        }
+      >
+        {/* Ordering Feature Flag Notice (A2.5 / Finding 5) */}
+        {!orderingEnabled ? (
+          <View style={styles.orderingFlagBanner}>
+            <View style={styles.flagIconBox}>
+              <MaterialCommunityIcons name="information" size={24} color="#0C6054" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.inputLabel}>CVC</Text>
-              <View style={styles.inputWrapper}>
-                <MaterialCommunityIcons name="lock-outline" size={20} color="#9CA3AF" style={styles.inputIcon} />
-                <TextInput style={styles.inputField} placeholder="123" value={cvc} onChangeText={setCvc} keyboardType="numeric" maxLength={4} secureTextEntry />
+              <Text style={styles.flagTitle}>Ordering Managed via Dispatch</Text>
+              <Text style={styles.flagText}>
+                Direct in-app ordering is currently disabled behind the operations feature flag. All tank deliveries and refills are scheduled directly with your ReNu-Biome field representative and dispatch team.
+              </Text>
+              <TouchableOpacity onPress={handleContactOffice} style={styles.contactSupportBtn}>
+                <Ionicons name="mail" size={16} color="#0C6054" />
+                <Text style={styles.contactSupportText}>Email Dispatch · support@renu-biome.com</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <View style={[styles.orderingFlagBanner, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}>
+            <View style={[styles.flagIconBox, { backgroundColor: '#DCFCE7' }]}>
+              <MaterialCommunityIcons name="cart-check" size={24} color="#166534" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.flagTitle, { color: '#166534' }]}>Direct Ordering Active</Text>
+              <Text style={[styles.flagText, { color: '#166534' }]}>
+                Select a formulation below to submit a delivery dispatch request to your ranch tanks.
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Product Count & Notice */}
+        <View style={styles.catalogMetaRow}>
+          <Text style={styles.catalogCount}>7 Registered Formulations</Text>
+          <Text style={styles.noPricingNotice}>Chemical Analyses Listed · Invoices via QuickBooks</Text>
+        </View>
+
+        {/* Product Cards */}
+        {products.map(prod => (
+          <TouchableOpacity
+            key={prod.id || prod.name}
+            style={styles.card}
+            onPress={() => openProductDetail(prod)}
+            activeOpacity={0.85}
+          >
+            <View style={styles.cardTop}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.productName}>{prod.name}</Text>
+                <Text style={styles.analysisText}>{prod.analysis || 'Custom Nutrient Blend'}</Text>
+              </View>
+              {prod.omriListed && (
+                <View style={styles.omriBadge}>
+                  <MaterialCommunityIcons name="leaf" size={12} color="#166534" />
+                  <Text style={styles.omriBadgeText}>OMRI</Text>
+                </View>
+              )}
+            </View>
+
+            <Text style={styles.productDesc} numberOfLines={2}>
+              {prod.description}
+            </Text>
+
+            {/* Nutrient Analysis Chips */}
+            <View style={styles.chipRow}>
+              {prod.nPercent !== undefined && (
+                <View style={[styles.nutrientChip, prod.countsTowardN && styles.nAccountingChip]}>
+                  <Text style={styles.nutrientChipLabel}>N</Text>
+                  <Text style={styles.nutrientChipVal}>{prod.nPercent}%</Text>
+                </View>
+              )}
+              {prod.p2o5Percent !== undefined && (
+                <View style={styles.nutrientChip}>
+                  <Text style={styles.nutrientChipLabel}>P₂O₅</Text>
+                  <Text style={styles.nutrientChipVal}>{prod.p2o5Percent}%</Text>
+                </View>
+              )}
+              {prod.k2oPercent !== undefined && (
+                <View style={[styles.nutrientChip, { backgroundColor: '#FFF7ED', borderColor: '#FFEDD5' }]}>
+                  <Text style={[styles.nutrientChipLabel, { color: '#C2410C' }]}>K₂O</Text>
+                  <Text style={[styles.nutrientChipVal, { color: '#9A3412' }]}>{prod.k2oPercent}%</Text>
+                </View>
+              )}
+              {prod.caPercent > 0 && (
+                <View style={styles.nutrientChip}>
+                  <Text style={styles.nutrientChipLabel}>Ca</Text>
+                  <Text style={styles.nutrientChipVal}>{prod.caPercent}%</Text>
+                </View>
+              )}
+              {prod.bPercent > 0 && (
+                <View style={styles.nutrientChip}>
+                  <Text style={styles.nutrientChipLabel}>B</Text>
+                  <Text style={styles.nutrientChipVal}>{prod.bPercent}%</Text>
+                </View>
+              )}
+              {prod.znPercent > 0 && (
+                <View style={styles.nutrientChip}>
+                  <Text style={styles.nutrientChipLabel}>Zn</Text>
+                  <Text style={styles.nutrientChipVal}>{prod.znPercent}%</Text>
+                </View>
+              )}
+              {prod.densityLbGal && (
+                <View style={[styles.nutrientChip, { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0' }]}>
+                  <Text style={styles.nutrientChipVal}>{prod.densityLbGal} lb/gal</Text>
+                </View>
+              )}
+            </View>
+
+            <View style={styles.cardFooter}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                {prod.countsTowardN ? (
+                  <Text style={styles.complianceTag}>Counts toward N regulation</Text>
+                ) : (
+                  <Text style={[styles.complianceTag, { color: '#64748B' }]}>Non-nitrogen application</Text>
+                )}
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Text style={styles.viewSpecText}>View Spec Sheet</Text>
+                <Ionicons name="chevron-forward" size={14} color="#0C6054" />
               </View>
             </View>
-          </View>
-          
-          <Text style={styles.inputLabel}>Name on Card</Text>
-          <View style={styles.inputWrapper}>
-            <MaterialCommunityIcons name="account-outline" size={20} color="#9CA3AF" style={styles.inputIcon} />
-            <TextInput style={styles.inputField} placeholder="John Doe" />
-          </View>
-        </View>
-
-        <View style={styles.orderSummaryCard}>
-          <Text style={styles.sectionTitle}>Order Summary</Text>
-          {cart.map((item, idx) => (
-            <View key={idx} style={styles.summaryRow}>
-              <Text style={styles.summaryItemText}>{item.qty}x {item.product.name}</Text>
-              <Text style={styles.summaryItemPrice}>${(item.product.price * item.qty).toFixed(2)}</Text>
-            </View>
-          ))}
-          <View style={styles.divider} />
-          <View style={styles.summaryRow}>
-            <Text style={styles.cartTotalGrand}>Total to Pay</Text>
-            <Text style={styles.cartTotalGrandValue}>${cartTotal.toFixed(2)}</Text>
-          </View>
-        </View>
+          </TouchableOpacity>
+        ))}
       </ScrollView>
 
-      <View style={styles.bottomBarCart}>
-        <TouchableOpacity style={styles.checkoutBtn} onPress={processPayment} disabled={isProcessing}>
-          {isProcessing ? (
-            <ActivityIndicator color="#FFF" size="small" />
-          ) : (
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-              <MaterialCommunityIcons name="shield-check" size={20} color="#FFF" style={{ marginRight: 8 }} />
-              <Text style={styles.checkoutBtnText}>Pay ${cartTotal.toFixed(2)}</Text>
+      {/* Product Spec Modal */}
+      <Modal visible={detailVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1, paddingRight: 10 }}>
+                <Text style={styles.modalBrand}>RENU-BIOME FORMULATION SPEC</Text>
+                <Text style={styles.modalTitle}>{selectedProduct?.name}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setDetailVisible(false)} style={styles.closeBtn}>
+                <Ionicons name="close" size={24} color="#64748B" />
+              </TouchableOpacity>
             </View>
-          )}
-        </TouchableOpacity>
-        <Text style={styles.secureBadgeText}>Encrypted and Secure Payment</Text>
-      </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
+              <View style={styles.specBox}>
+                <Text style={styles.specLabel}>Guaranteed Chemical Analysis</Text>
+                <Text style={styles.specAnalysis}>{selectedProduct?.analysis}</Text>
+                {selectedProduct?.densityLbGal && (
+                  <Text style={styles.specDensity}>Bulk Density: {selectedProduct.densityLbGal} lb/gal at 68°F</Text>
+                )}
+              </View>
+
+              <Text style={styles.modalSectionTitle}>Agronomic Description</Text>
+              <Text style={styles.modalDesc}>{selectedProduct?.description}</Text>
+
+              <Divider style={{ marginVertical: 14 }} />
+
+              <Text style={styles.modalSectionTitle}>Regulatory & Compliance</Text>
+              <View style={styles.complianceList}>
+                <View style={styles.complianceRow}>
+                  <MaterialCommunityIcons
+                    name={selectedProduct?.omriListed ? 'check-circle' : 'close-circle'}
+                    size={20}
+                    color={selectedProduct?.omriListed ? '#16A34A' : '#94A3B8'}
+                  />
+                  <Text style={styles.complianceRowText}>
+                    {selectedProduct?.omriListed ? 'OMRI Listed for Certified Organic Production' : 'Conventional Agricultural Use Only'}
+                  </Text>
+                </View>
+                <View style={styles.complianceRow}>
+                  <MaterialCommunityIcons
+                    name={selectedProduct?.countsTowardN ? 'check-circle' : 'minus-circle-outline'}
+                    size={20}
+                    color={selectedProduct?.countsTowardN ? '#0C6054' : '#94A3B8'}
+                  />
+                  <Text style={styles.complianceRowText}>
+                    {selectedProduct?.countsTowardN
+                      ? 'Reportable Nitrogen: Calculated under California Central Valley Regional Water Board guidelines'
+                      : 'Exempt from Regional Water Board nitrogen reporting thresholds'}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.pricingDisclaimerBox}>
+                <MaterialCommunityIcons name="receipt" size={18} color="#0C6054" />
+                <Text style={styles.pricingDisclaimerText}>
+                  In keeping with ReNu-Biome grower policy, no unit prices are shown. All shipments are invoiced through QuickBooks based on your seasonal contract.
+                </Text>
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalActions}>
+              <Button
+                mode="outlined"
+                onPress={() => setDetailVisible(false)}
+                textColor="#64748B"
+                style={{ flex: 1, marginRight: 8, minHeight: 48, justifyContent: 'center' }}
+              >
+                Close
+              </Button>
+              <Button
+                mode="contained"
+                onPress={() => {
+                  setDetailVisible(false);
+                  handleContactOffice();
+                }}
+                buttonColor="#0C6054"
+                icon="phone"
+                style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}
+              >
+                Order Inquiry
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
-
-  const renderSuccess = () => (
-    <View style={styles.successContainer}>
-      <View style={styles.successCircle}>
-        <MaterialCommunityIcons name="check" size={60} color="#FFF" />
-      </View>
-      <Text style={styles.successTitle}>Payment Successful!</Text>
-      <Text style={styles.successSub}>Order #ORD-{Math.floor(1000 + Math.random() * 9000)} has been placed.</Text>
-      
-      <View style={styles.successDetailsBox}>
-        <Text style={styles.successDetailText}>A confirmation email has been sent to {user?.email || 'your account'}.</Text>
-        <Text style={styles.successDetailText}>You can track the fulfillment status in the Orders tab.</Text>
-      </View>
-      
-      <TouchableOpacity style={styles.checkoutBtn} onPress={() => setViewMode('list')}>
-        <Text style={styles.checkoutBtnText}>Return to Shop</Text>
-      </TouchableOpacity>
-    </View>
-  );
-
-  return viewMode === 'list' ? renderList() : viewMode === 'detail' ? renderDetail() : viewMode === 'cart' ? renderCart() : viewMode === 'checkout' ? renderCheckout() : renderSuccess();
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FAF9F6' },
-  header: { paddingTop: 50, paddingBottom: 25, paddingHorizontal: 20, borderBottomLeftRadius: 30, borderBottomRightRadius: 30, shadowColor: '#166534', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 10, elevation: 5 },
-  headerTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-  backBtnSmall: { padding: 4, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20 },
-  headerTitle: { fontSize: 32, fontWeight: '900', color: '#ECFDF5', letterSpacing: 0.5 },
-  headerSubtitle: { fontSize: 16, color: '#A7F3D0', marginTop: 4, fontWeight: '500' },
-  
-  cartIconWrapper: { position: 'relative', backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 25, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
-  cartBadge: { position: 'absolute', top: -5, right: -5, backgroundColor: '#EF4444', width: 20, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFF' },
-  cartBadgeText: { color: '#FFF', fontSize: 10, fontWeight: 'bold' },
-  
-  listContent: { padding: 15, paddingBottom: 100, paddingTop: 25 },
-  rowWrapper: { justifyContent: 'space-between', marginBottom: 18 },
-  
-  productCard: { backgroundColor: '#FFF', borderRadius: 20, width: (SCREEN_WIDTH - 45) / 2, shadowColor: '#8C7C61', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 4, borderWidth: 1, borderColor: '#F0EBE1', overflow: 'hidden' },
-  productImage: { width: '100%', height: 160, backgroundColor: '#E7E5E4' },
-  productInfo: { padding: 15, paddingBottom: 18 },
-  productName: { fontSize: 17, fontWeight: '800', color: '#164E63', marginBottom: 6 },
-  productPrice: { fontSize: 16, fontWeight: '900', color: '#10B981' },
-  addBtnSmall: { position: 'absolute', bottom: 12, right: 12, backgroundColor: '#15803D', width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', shadowColor: '#15803D', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 5 },
-  
-  detailHeaderActions: { position: 'absolute', top: 50, left: 15, right: 15, zIndex: 10, flexDirection: 'row', justifyContent: 'space-between' },
-  actionCircle: { backgroundColor: '#FFF', width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 5 },
-  
-  detailImage: { width: SCREEN_WIDTH, height: 380, backgroundColor: '#E7E5E4' },
-  detailContent: { padding: 25, paddingBottom: 50, backgroundColor: '#FAF9F6', marginTop: -25, borderTopLeftRadius: 30, borderTopRightRadius: 30 },
-  detailName: { fontSize: 32, fontWeight: '900', color: '#164E63', letterSpacing: -0.5 },
-  detailPrice: { fontSize: 24, fontWeight: '900', color: '#10B981', marginTop: 10 },
-  divider: { height: 1.5, backgroundColor: '#E7E5E4', marginVertical: 25 },
-  sectionTitle: { fontSize: 19, fontWeight: '900', color: '#44403C', marginBottom: 12 },
-  detailDesc: { fontSize: 16, color: '#78716C', lineHeight: 24, fontWeight: '500' },
-  
-  qtyContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0FDF4', alignSelf: 'flex-start', borderRadius: 30, borderWidth: 1.5, borderColor: '#A7F3D0', padding: 6, shadowColor: '#16A34A', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4 },
-  qtyBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center', shadowColor: '#16A34A', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
-  qtyText: { fontSize: 20, fontWeight: '900', color: '#164E63', marginHorizontal: 25 },
-  
-  bottomBar: { backgroundColor: '#FFF', padding: 20, paddingBottom: 100, borderTopWidth: 1, borderTopColor: '#E7E5E4', shadowColor: '#000', shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.08, shadowRadius: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  priceSummaryRow: { flex: 1 },
-  summaryLabel: { fontSize: 13, color: '#78716C', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.5 },
-  summaryValue: { fontSize: 26, fontWeight: '900', color: '#10B981' },
-  checkoutBtn: { backgroundColor: '#15803D', paddingVertical: 18, paddingHorizontal: 30, borderRadius: 30, alignItems: 'center', shadowColor: '#16A34A', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
-  checkoutBtnText: { color: '#FFF', fontSize: 17, fontWeight: '900' },
-
-  emptyCart: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  emptyCartText: { fontSize: 20, fontWeight: 'bold', color: '#6B7280', marginVertical: 20 },
-  continueBtn: { backgroundColor: '#F0FDF4', borderWidth: 1.5, borderColor: '#10B981', paddingVertical: 14, paddingHorizontal: 30, borderRadius: 30 },
-  continueBtnText: { color: '#15803D', fontWeight: '900', fontSize: 16 },
-
-  cartItem: { flexDirection: 'row', backgroundColor: '#FFF', borderRadius: 20, padding: 15, marginBottom: 15, shadowColor: '#8C7C61', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3, borderWidth: 1, borderColor: '#F0EBE1' },
-  cartImg: { width: 80, height: 80, borderRadius: 12, backgroundColor: '#E7E5E4' },
-  cartItemInfo: { flex: 1, marginLeft: 15 },
-  cartItemName: { fontSize: 16, fontWeight: '800', color: '#164E63' },
-  cartItemPrice: { fontSize: 15, fontWeight: 'bold', color: '#10B981', marginTop: 4 },
-  cartQtyRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12, backgroundColor: '#F5F5F4', alignSelf: 'flex-start', borderRadius: 15, padding: 2 },
-  cartQtyBtn: { padding: 6 },
-  cartQtyText: { marginHorizontal: 12, fontWeight: 'bold', fontSize: 14, color: '#44403C' },
-  cartItemTotal: { alignItems: 'flex-end', justifyContent: 'space-between' },
-  cartItemTotalText: { fontSize: 17, fontWeight: '900', color: '#164E63' },
-
-  bottomBarCart: { backgroundColor: '#FFF', padding: 25, paddingBottom: 100, borderTopLeftRadius: 30, borderTopRightRadius: 30, shadowColor: '#000', shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 10, borderWidth: 1, borderColor: '#F0EBE1' },
-  cartTotalRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  cartTotalLabel: { fontSize: 15, color: '#78716C', fontWeight: '600' },
-  cartTotalGrand: { fontSize: 18, fontWeight: '900', color: '#164E63' },
-  cartTotalGrandValue: { fontSize: 24, fontWeight: '900', color: '#10B981' },
-
-  paymentCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 20, shadowColor: '#8C7C61', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3, borderWidth: 1, borderColor: '#F0EBE1', marginBottom: 20 },
-  inputLabel: { fontSize: 14, fontWeight: '700', color: '#44403C', marginBottom: 8, marginTop: 5 },
-  inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F5F4', borderRadius: 12, borderWidth: 1, borderColor: '#E7E5E4', marginBottom: 15 },
-  inputIcon: { paddingHorizontal: 12 },
-  inputField: { flex: 1, paddingVertical: 14, fontSize: 16, color: '#111827' },
-  
-  orderSummaryCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 20, shadowColor: '#8C7C61', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3, borderWidth: 1, borderColor: '#F0EBE1', marginBottom: 20 },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  summaryItemText: { fontSize: 15, color: '#44403C', fontWeight: '500' },
-  summaryItemPrice: { fontSize: 15, fontWeight: '700', color: '#164E63' },
-  secureBadgeText: { textAlign: 'center', fontSize: 12, color: '#A8A29E', marginTop: 15, fontWeight: '600' },
-  
-  successContainer: { flex: 1, backgroundColor: '#FAF9F6', justifyContent: 'center', alignItems: 'center', padding: 20, paddingBottom: 100 },
-  successCircle: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#10B981', justifyContent: 'center', alignItems: 'center', shadowColor: '#10B981', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 15, elevation: 8, marginBottom: 30 },
-  successTitle: { fontSize: 28, fontWeight: '900', color: '#164E63', marginBottom: 10 },
-  successSub: { fontSize: 16, color: '#44403C', fontWeight: '600', marginBottom: 30, textAlign: 'center' },
-  successDetailsBox: { backgroundColor: '#F0FDF4', padding: 20, borderRadius: 16, borderWidth: 1, borderColor: '#A7F3D0', marginBottom: 40, width: '100%' },
-  successDetailText: { fontSize: 14, color: '#064E3B', textAlign: 'center', lineHeight: 22, marginBottom: 8 }
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  header: {
+    paddingTop: 54,
+    paddingBottom: 22,
+    paddingHorizontal: 20,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+  headerContent: {},
+  brandTag: {
+    color: '#F07E42',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.5,
+  },
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    marginTop: 2,
+  },
+  headerSubtitle: {
+    fontSize: 13,
+    color: '#CCFBF1',
+    marginTop: 4,
+    lineHeight: 18,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 120,
+  },
+  orderingFlagBanner: {
+    flexDirection: 'row',
+    backgroundColor: '#F0FDFA',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    padding: 16,
+    marginBottom: 16,
+    gap: 12,
+  },
+  flagIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#CCFBF1',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  flagTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#083F38',
+  },
+  flagText: {
+    fontSize: 12,
+    color: '#115E59',
+    marginTop: 4,
+    lineHeight: 17,
+  },
+  contactSupportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 6,
+  },
+  contactSupportText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0C6054',
+  },
+  catalogMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  catalogCount: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  noPricingNotice: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  cardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  productName: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  analysisText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0C6054',
+    marginTop: 2,
+  },
+  omriBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    gap: 4,
+  },
+  omriBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#166534',
+  },
+  productDesc: {
+    fontSize: 13,
+    color: '#64748B',
+    lineHeight: 18,
+    marginTop: 8,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 12,
+  },
+  nutrientChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 4,
+  },
+  nAccountingChip: {
+    backgroundColor: '#F0FDFA',
+    borderColor: '#CCFBF1',
+  },
+  nutrientChipLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0C6054',
+  },
+  nutrientChipVal: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    marginTop: 14,
+    paddingTop: 10,
+  },
+  complianceTag: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#0C6054',
+  },
+  viewSpecText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0C6054',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 20,
+    maxHeight: '88%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  modalBrand: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#F07E42',
+    letterSpacing: 1.2,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#0F172A',
+    marginTop: 2,
+  },
+  closeBtn: {
+    padding: 4,
+  },
+  specBox: {
+    backgroundColor: '#F0FDFA',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    marginVertical: 10,
+  },
+  specLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#083F38',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  specAnalysis: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#0C6054',
+    marginTop: 4,
+  },
+  specDensity: {
+    fontSize: 12,
+    color: '#115E59',
+    marginTop: 4,
+    fontWeight: '600',
+  },
+  modalSectionTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 12,
+    marginBottom: 6,
+  },
+  modalDesc: {
+    fontSize: 13,
+    color: '#475569',
+    lineHeight: 20,
+  },
+  complianceList: {
+    gap: 8,
+  },
+  complianceRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  complianceRowText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#334155',
+    lineHeight: 18,
+  },
+  pricingDisclaimerBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginTop: 16,
+  },
+  pricingDisclaimerText: {
+    flex: 1,
+    fontSize: 11,
+    color: '#64748B',
+    lineHeight: 16,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    marginTop: 16,
+  },
 });

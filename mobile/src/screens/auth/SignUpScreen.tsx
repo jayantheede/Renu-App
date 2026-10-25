@@ -246,14 +246,14 @@ export const SignUpScreen = ({ navigation }: any) => {
             <Button 
               onPress={() => navigation.navigate('SignIn')}
               style={styles.textButton}
-              textColor="#2E5D36"
+              textColor="#0C6054"
             >
               Already have an account? Sign In
             </Button>
           </GlassCard>
 
           <Text style={styles.watermark} numberOfLines={1} adjustsFontSizeToFit>
-            A product By SRavanga AI Smart Solutions
+            ReNu-Biome — Farmer's Pride · Grower Portal
           </Text>
 
         </ScrollView>

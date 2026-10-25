@@ -20,8 +20,8 @@ const MESSAGE_TYPE_META: Record<string, { icon: string; color: string; bg: strin
   ALERT: { icon: 'alert-circle', color: '#DC2626', bg: '#FEE2E2', label: 'Alert' },
   REMINDER: { icon: 'calendar-clock', color: '#0891B2', bg: '#E0F2FE', label: 'Reminder' },
   INVOICE: { icon: 'file-document', color: '#059669', bg: '#D1FAE5', label: 'Invoice' },
-  REPORT: { icon: 'chart-bar', color: '#2E5D36', bg: '#DCFCE7', label: 'Report' },
-  USER: { icon: 'message-text', color: '#2E5D36', bg: '#DCFCE7', label: 'Message' },
+  REPORT: { icon: 'chart-bar', color: '#0C6054', bg: '#DCFCE7', label: 'Report' },
+  USER: { icon: 'message-text', color: '#0C6054', bg: '#DCFCE7', label: 'Message' },
 };
 
 export const MessagesScreen = () => {
@@ -149,7 +149,7 @@ export const MessagesScreen = () => {
 
       {loading ? (
         <View style={styles.loadingBox}>
-          <ActivityIndicator color="#2E5D36" size="large" />
+          <ActivityIndicator color="#0C6054" size="large" />
           <Text style={{ color: '#64748B', marginTop: 12 }}>Loading messages…</Text>
         </View>
       ) : messages.length === 0 ? (
@@ -159,7 +159,7 @@ export const MessagesScreen = () => {
           <Text style={styles.emptyText}>Tap the compose button to send your first message to the Renu team.</Text>
           <Button
             mode="contained"
-            buttonColor="#2E5D36"
+            buttonColor="#0C6054"
             onPress={() => setComposeVisible(true)}
             style={{ marginTop: 16, borderRadius: 10 }}
             icon="pencil-plus"
@@ -175,7 +175,7 @@ export const MessagesScreen = () => {
           contentContainerStyle={{ paddingBottom: 120, paddingHorizontal: 20 }}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={() => loadMessages(true)} colors={['#2E5D36']} tintColor="#2E5D36" />
+            <RefreshControl refreshing={refreshing} onRefresh={() => loadMessages(true)} colors={['#0C6054']} tintColor="#0C6054" />
           }
           ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
         />
@@ -210,7 +210,7 @@ export const MessagesScreen = () => {
                     </Button>
                     <Button
                       mode="contained"
-                      buttonColor="#2E5D36"
+                      buttonColor="#0C6054"
                       onPress={() => {
                         setSelectedMsg(null);
                         setMsgTitle(`Re: ${selectedMsg.title}`);
@@ -242,7 +242,7 @@ export const MessagesScreen = () => {
             </View>
 
             <View style={styles.toBox}>
-              <MaterialCommunityIcons name="account-tie" size={16} color="#2E5D36" style={{ marginRight: 6 }} />
+              <MaterialCommunityIcons name="account-tie" size={16} color="#0C6054" style={{ marginRight: 6 }} />
               <Text style={{ color: '#334155', fontSize: 14 }}>To: <Text style={{ fontWeight: 'bold' }}>Renu Biome Team (admin@renu.com)</Text></Text>
             </View>
 
@@ -253,7 +253,7 @@ export const MessagesScreen = () => {
               mode="outlined"
               style={styles.composeInput}
               outlineColor="#CBD5E1"
-              activeOutlineColor="#2E5D36"
+              activeOutlineColor="#0C6054"
               left={<TextInput.Icon icon="format-title" color="#64748B" />}
             />
             <TextInput
@@ -265,13 +265,13 @@ export const MessagesScreen = () => {
               numberOfLines={6}
               style={[styles.composeInput, { minHeight: 130 }]}
               outlineColor="#CBD5E1"
-              activeOutlineColor="#2E5D36"
+              activeOutlineColor="#0C6054"
               left={<TextInput.Icon icon="text" color="#64748B" />}
             />
 
             <Button
               mode="contained"
-              buttonColor="#2E5D36"
+              buttonColor="#0C6054"
               loading={sending}
               disabled={sending}
               onPress={handleSend}
@@ -303,13 +303,13 @@ const styles = StyleSheet.create({
   pageTitle: { fontSize: 26, fontWeight: 'bold', color: '#0F172A' },
   pageSubtitle: { fontSize: 13, color: '#64748B', marginTop: 2 },
   composeBtn: {
-    backgroundColor: '#2E5D36',
+    backgroundColor: '#0C6054',
     width: 44,
     height: 44,
     borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#2E5D36',
+    shadowColor: '#0C6054',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 3,
-    backgroundColor: '#2E5D36',
+    backgroundColor: '#0C6054',
     borderTopLeftRadius: 14,
     borderBottomLeftRadius: 14,
   },
@@ -386,7 +386,7 @@ const styles = StyleSheet.create({
   typeBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
   typeLabel: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
   fromText: { fontSize: 11, color: '#94A3B8' },
-  unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#2E5D36', alignSelf: 'center', flexShrink: 0 },
+  unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#0C6054', alignSelf: 'center', flexShrink: 0 },
   // Modal
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.5)', justifyContent: 'flex-end' },
   modalSheet: {

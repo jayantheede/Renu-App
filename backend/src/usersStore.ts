@@ -33,6 +33,8 @@ export function saveStore() {
     labResults: mockLabResults,
     notifications: mockNotifications,
     products: mockProducts,
+    programs: mockPrograms,
+    samples: mockSamples,
     featureFlags: mockFeatureFlags,
     platformSettings: mockPlatformSettings,
   };
@@ -108,6 +110,16 @@ export async function syncStoreFromDB(): Promise<void> {
         mockProducts.push(...data.products);
       }
 
+      if (Array.isArray(data.programs)) {
+        mockPrograms.length = 0;
+        mockPrograms.push(...data.programs);
+      }
+
+      if (Array.isArray(data.samples)) {
+        mockSamples.length = 0;
+        mockSamples.push(...data.samples);
+      }
+
       if (data.featureFlags) {
         Object.assign(mockFeatureFlags, data.featureFlags);
       }
@@ -168,6 +180,14 @@ export interface TankItem {
   pressure?: string;
   approvalStatus: string;
   ranch?: { name: string };
+  otodataDeviceId?: string;
+  levelPercent?: number;
+  levelGallons?: number;
+  weeklyUsageAvg?: number;
+  daysToEmpty?: number;
+  reorderThresholdPercent?: number;
+  lastReadingTime?: string;
+  status?: string;
 }
 
 export interface RanchItem {
@@ -190,23 +210,37 @@ export interface OrderItem {
   orderId: string; // e.g. "DEL-1041"
   customerId: string;
   customerEmail: string;
+  customerName?: string;
   product: string;
+  productName?: string;
   gallons: number;
   deliveredGallons?: number;
   deliveredDate?: string;
   ranchId: string;
+  ranchName?: string;
   tankId: string;
+  tankName?: string;
   blockIds: string[];
   deliveryWindow: string; // e.g. "2026-10-14 to 2026-10-15 (Morning)"
   gateCode?: string;
   contactOnArrival?: string;
+  whoToCall?: string;
   notes?: string;
   status: 'Scheduled' | 'Out for delivery' | 'Delivered' | 'Cancelled';
   cancelReason?: string;
   invoiceId?: string;
   optimoRouteOrderId?: string;
+  driverName?: string;
+  driverPhone?: string;
+  estimatedArrival?: string;
+  completedTime?: string;
+  programId?: string;
+  programName?: string;
+  lbN?: number;
+  lbK2O?: number;
   date: string;
   timeline: Array<{ stage: string; date: string; done: boolean }>;
+  historical?: boolean;
   // Compatibility fields
   qty?: string;
   amt?: number;
@@ -220,6 +254,7 @@ export interface InvoiceItem {
   invoiceNumber: string; // e.g. "INV-2026-001"
   customerId: string;
   customerEmail: string;
+  customerName?: string;
   deliveryId?: string;
   invoiceDate: string;
   dueDate: string;
@@ -238,15 +273,26 @@ export interface InvoiceItem {
 export interface ProductItem {
   id: string;
   name: string;
+  brandLabel?: string;
   description: string;
   analysis?: string;
+  lbPerGal?: number;
+  percentN?: number;
+  percentP2O5?: number;
+  percentK2O?: number;
+  percentCa?: number;
+  percentB?: number;
+  percentZn?: number;
+  countsTowardN?: boolean;
   omriCertified?: boolean;
+  omriListed?: boolean;
   imageUrl?: string;
   createdAt?: string;
   price?: number; // Kept as optional for compatibility with legacy tests
 }
 
 export interface FeatureFlagsMap {
+  ordering: boolean;
   payments: boolean;
   recommendations: boolean;
   labResults: boolean;
@@ -263,6 +309,74 @@ export interface FeatureFlagsMap {
 export interface FeatureFlagsConfig {
   global: FeatureFlagsMap;
   customerOverrides: Record<string, Partial<FeatureFlagsMap>>;
+}
+
+export interface ProgramLineItem {
+  id: string;
+  productId: string;
+  productName: string;
+  stageName: string;
+  ratePerAcre: number;
+  applicationsCount: number;
+  plannedGallons: number;
+  deliveredGallons: number;
+  timingNote?: string;
+  status?: 'Planned' | 'Active' | 'Completed';
+}
+
+export interface NutritionProgram {
+  id: string;
+  name: string;
+  crop: string;
+  seasonYear: number;
+  ranchId: string;
+  ranchName?: string;
+  blocksCovered: string[];
+  totalAcreage: number;
+  targetN: number;
+  targetK2O: number;
+  nLossFactor: number;
+  status: 'Planned' | 'Active' | 'Complete';
+  stageWindow: string;
+  notes?: string;
+  lines: ProgramLineItem[];
+  createdAt: string;
+}
+
+export interface LabSample {
+  id: string;
+  ranchId: string;
+  ranchName: string;
+  blockId: string;
+  customerId: string;
+  customerEmail: string;
+  sampleType: 'soil' | 'leaf tissue' | 'petiole' | 'irrigation water';
+  sampleDate: string;
+  labName: string;
+  status: 'Received' | 'Under review' | 'Recommended';
+  customerNotes?: string;
+  pdfData?: string;
+  pdfFileName?: string;
+  pdfUrl?: string;
+  values?: Record<string, number>;
+  recommendation?: {
+    id: string;
+    summary: string;
+    sentDate: string;
+    lines: Array<{
+      productName: string;
+      ratePerAcre: number;
+      timing: string;
+      blocks: string[];
+    }>;
+    savedAsProgram?: boolean;
+    customerReplies?: Array<{
+      question: string;
+      date: string;
+      reply?: string;
+    }>;
+  };
+  createdAt: string;
 }
 
 export interface EmployeeTask {
@@ -548,7 +662,7 @@ export const CANONICAL_ORDERS: OrderItem[] = [
     orderId: 'DEL-101',
     customerId: 'mock-cust-1',
     customerEmail: 'customer@renu.com',
-    product: 'Biome Care',
+    product: 'ReNu N-32% K-28% Blend',
     gallons: 500,
     ranchId: 'ranch-1',
     tankId: 'tank-1-1',
@@ -570,7 +684,7 @@ export const CANONICAL_ORDERS: OrderItem[] = [
     orderId: 'DEL-102',
     customerId: 'mock-cust-1',
     customerEmail: 'customer@renu.com',
-    product: 'N-CARE',
+    product: 'ReNu N-32% K-24% Blend',
     gallons: 750,
     ranchId: 'ranch-1',
     tankId: 'tank-1-1',
@@ -592,7 +706,7 @@ export const CANONICAL_ORDERS: OrderItem[] = [
     orderId: 'DEL-103',
     customerId: 'mock-cust-1',
     customerEmail: 'customer@renu.com',
-    product: 'Biome Care',
+    product: 'ReNu N-32% K-28% Blend',
     gallons: 600,
     deliveredGallons: 600,
     deliveredDate: '2026-03-15',
@@ -617,7 +731,7 @@ export const CANONICAL_ORDERS: OrderItem[] = [
     orderId: 'DEL-104',
     customerId: 'mock-cust-2',
     customerEmail: 'john@grower.com',
-    product: 'K-RUSH',
+    product: 'ReNu 0-0-29 Potassium Acetate',
     gallons: 800,
     deliveredGallons: 800,
     deliveredDate: '2026-03-20',
@@ -674,7 +788,7 @@ export const CANONICAL_INVOICES: InvoiceItem[] = [
     status: 'Paid',
     paidDate: '2026-03-28',
     quickbooksInvoiceId: 'QB-10842',
-    product: 'Biome Care',
+    product: 'ReNu N-32% K-28% Blend',
     gallons: 600,
     blockIds: ['blk-1-1', 'blk-1-2']
   },
@@ -690,7 +804,7 @@ export const CANONICAL_INVOICES: InvoiceItem[] = [
     status: 'Paid',
     paidDate: '2026-04-02',
     quickbooksInvoiceId: 'QB-10865',
-    product: 'K-RUSH',
+    product: 'ReNu 0-0-29 Potassium Acetate',
     gallons: 800,
     blockIds: ['blk-3-1', 'blk-3-2']
   },
@@ -705,7 +819,7 @@ export const CANONICAL_INVOICES: InvoiceItem[] = [
     amount: 5100.00,
     status: 'Open',
     quickbooksInvoiceId: 'QB-10902',
-    product: 'N-CARE',
+    product: 'ReNu N-32% K-24% Blend',
     gallons: 750,
     blockIds: ['blk-1-1']
   },
@@ -727,37 +841,134 @@ export const CANONICAL_INVOICES: InvoiceItem[] = [
 export const CANONICAL_PRODUCTS: ProductItem[] = [
   {
     id: 'prod-1',
-    name: 'Biome Care',
-    description: 'Advanced organic bio-stimulant promoting beneficial fungal and microbial root flora.',
-    analysis: '4-1-2 with 1.5% Fe',
+    name: 'ReNu N-32%, K-28% Blend',
+    brandLabel: 'Biome-Care Soil Blend (1st - 4th Application)',
+    description: 'Primary high-efficiency biological soil blend supplying active microbial nitrogen and potassium with calcium.',
+    analysis: '32-0-28 with 15% Ca (13.98 lb/gal)',
+    lbPerGal: 13.98,
+    percentN: 32.0,
+    percentP2O5: 0.0,
+    percentK2O: 28.0,
+    percentCa: 15.0,
+    percentB: 0.0,
+    percentZn: 0.0,
+    countsTowardN: true,
     omriCertified: true,
+    omriListed: true,
     imageUrl: '',
     createdAt: '2026-01-01T00:00:00.000Z'
   },
   {
     id: 'prod-2',
-    name: 'N-CARE',
-    description: 'Green nitrification inhibitor that extends nitrogen shelf life and reduces leaching.',
-    analysis: '1-2-6 with 2% Zn',
+    name: 'ReNu N-32%, K-24% Blend (K acetate)',
+    brandLabel: 'N-Care 3rd Application Blend',
+    description: 'Biological nitrogen blend buffered with fast-acting potassium acetate for maximum mid-season nutrient translocation.',
+    analysis: '32-0-24 with 10% Ca (13.98 lb/gal)',
+    lbPerGal: 13.98,
+    percentN: 32.0,
+    percentP2O5: 0.0,
+    percentK2O: 24.0,
+    percentCa: 10.0,
+    percentB: 0.0,
+    percentZn: 0.0,
+    countsTowardN: true,
     omriCertified: true,
+    omriListed: true,
     imageUrl: '',
     createdAt: '2026-01-01T00:00:00.000Z'
   },
   {
     id: 'prod-3',
-    name: 'K-RUSH',
-    description: 'Specialized formula for frost prevention and enhancing fruit quality and vigor.',
-    analysis: '0-0-1 with 3% Fe, 2% Mn, 1% Cu',
+    name: 'ReNu N-32%, K-28% Blend + B, Zn',
+    brandLabel: '4th Application Micronutrient Fortified',
+    description: 'Late spring biological soil blend with organic boron and zinc co-factors for nut fill, hull split, and embryo vigor.',
+    analysis: '32-0-28 + 0.2% B, 0.5% Zn, 20% Ca (14.12 lb/gal)',
+    lbPerGal: 14.12,
+    percentN: 32.0,
+    percentP2O5: 0.0,
+    percentK2O: 28.0,
+    percentCa: 20.0,
+    percentB: 0.2,
+    percentZn: 0.5,
+    countsTowardN: true,
     omriCertified: true,
+    omriListed: true,
     imageUrl: '',
     createdAt: '2026-01-01T00:00:00.000Z'
   },
   {
     id: 'prod-4',
-    name: 'Bee Bloom',
-    description: 'Pheromone and micronutrient blend to promote bee health and optimize pollination.',
-    analysis: 'Diverse beneficial microbial strains (>1x10^9 CFU/ml)',
+    name: 'ReNu Fruit Care',
+    brandLabel: 'Sea Biolife Fruit Care Shot',
+    description: 'Targeted biological biostimulant shot designed to sustain photosynthetic capacity and root vigor under intense heat.',
+    analysis: '32-0-28 with 12% Ca (13.97 lb/gal)',
+    lbPerGal: 13.97,
+    percentN: 32.0,
+    percentP2O5: 0.0,
+    percentK2O: 28.0,
+    percentCa: 12.0,
+    percentB: 0.0,
+    percentZn: 0.0,
+    countsTowardN: true,
     omriCertified: true,
+    omriListed: true,
+    imageUrl: '',
+    createdAt: '2026-01-01T00:00:00.000Z'
+  },
+  {
+    id: 'prod-5',
+    name: 'ReNu 0-0-29 Potassium Acetate',
+    brandLabel: 'K-Rush Soil / Foliar Acetate',
+    description: 'Zero-chloride ultra-pure potassium acetate providing instantaneous plant assimilation through drip or foliar spray.',
+    analysis: '0-0-29 (12.25 lb/gal)',
+    lbPerGal: 12.25,
+    percentN: 0.0,
+    percentP2O5: 0.0,
+    percentK2O: 29.0,
+    percentCa: 0.0,
+    percentB: 0.0,
+    percentZn: 0.0,
+    countsTowardN: false,
+    omriCertified: true,
+    omriListed: true,
+    imageUrl: '',
+    createdAt: '2026-01-01T00:00:00.000Z'
+  },
+  {
+    id: 'prod-6',
+    name: 'ReNu N-6%, K-16%, Ca-20% Blend',
+    brandLabel: 'Post-Harvest Restorative Program',
+    description: 'Post-harvest restorative blend designed to recharge tree carbohydrates, spur root flush, and set winter bud hardiness.',
+    analysis: '6-0-16 with 20% Ca (11.00 lb/gal)',
+    lbPerGal: 11.00,
+    percentN: 6.0,
+    percentP2O5: 0.0,
+    percentK2O: 16.0,
+    percentCa: 20.0,
+    percentB: 0.1,
+    percentZn: 0.2,
+    countsTowardN: true,
+    omriCertified: true,
+    omriListed: true,
+    imageUrl: '',
+    createdAt: '2026-01-01T00:00:00.000Z'
+  },
+  {
+    id: 'prod-7',
+    name: 'Bloom foliars + boron',
+    brandLabel: 'Bee Bloom & Pollination Foliar',
+    description: 'Bloom, dormant, and petal-fall natural foliar stimulant with organic boron for bee visitation and flower set.',
+    analysis: '0-0-0 with biological stimulants & B (9.80 lb/gal)',
+    lbPerGal: 9.80,
+    percentN: 0.0,
+    percentP2O5: 0.0,
+    percentK2O: 0.0,
+    percentCa: 0.0,
+    percentB: 0.5,
+    percentZn: 0.2,
+    countsTowardN: false,
+    omriCertified: true,
+    omriListed: true,
     imageUrl: '',
     createdAt: '2026-01-01T00:00:00.000Z'
   }
@@ -783,7 +994,7 @@ export const mockOrdersList: OrderItem[] = hasModernOrders
   ? _persistedStore.orders
   : JSON.parse(JSON.stringify(CANONICAL_ORDERS));
 
-const hasModernInvoices = Array.isArray(_persistedStore.invoices) && _persistedStore.invoices.some((i: any) => i.invoiceNumber === 'INV-2026-004');
+const hasModernInvoices = Array.isArray(_persistedStore.invoices) && _persistedStore.invoices.some((i: any) => i.invoiceNumber === 'INV-2026-001' || i.invoiceNumber === 'INV-2026-004');
 export const mockInvoices: InvoiceItem[] = hasModernInvoices
   ? _persistedStore.invoices
   : JSON.parse(JSON.stringify(CANONICAL_INVOICES));
@@ -792,17 +1003,21 @@ export const mockProducts: ProductItem[] = (_persistedStore.products && _persist
   ? _persistedStore.products
   : JSON.parse(JSON.stringify(CANONICAL_PRODUCTS));
 
+export const mockPrograms: NutritionProgram[] = _persistedStore.programs || [];
+export const mockSamples: LabSample[] = _persistedStore.samples || [];
+
 export const mockFeatureFlags: FeatureFlagsConfig = _persistedStore.featureFlags || {
   global: {
+    ordering: false,
     payments: false,
-    recommendations: false,
-    labResults: false,
+    recommendations: true,
+    labResults: true,
     documents: false,
-    compliance: false,
+    compliance: true,
     messaging: false,
     staffTasks: false,
-    optimoroute: false,
-    telemetry: false,
+    optimoroute: true,
+    telemetry: true,
     quickbooks: false,
     map: false
   },
@@ -1539,4 +1754,387 @@ export function assignGrowerToEmployee(customerId: string, employeeEmail: string
   const customer = mockUsers.find(u => u.id === customerId);
   if (customer) { customer.assignedEmpEmail = employeeEmail; saveStore(); return customer; }
   return null;
+}
+
+// -----------------------------------------------------------------------
+// Delivery Enrichment (Resolves Finding 1: customer, ranch, and tank names)
+// -----------------------------------------------------------------------
+export function enrichDelivery(d: OrderItem): OrderItem {
+  const customer = mockUsers.find(
+    u => u.id.toLowerCase() === (d.customerId || '').toLowerCase() ||
+         u.email.toLowerCase() === (d.customerEmail || '').toLowerCase()
+  );
+  const ranch = mockRanches.find(r => r.id === d.ranchId);
+  const tank = ranch ? (ranch.tanks || []).find(t => t.id === d.tankId) : null;
+  const productObj = mockProducts.find(p => p.name.toLowerCase() === (d.product || '').toLowerCase());
+
+  // Compute lbN and lbK2O if not already explicitly stored
+  let lbN = d.lbN;
+  let lbK2O = d.lbK2O;
+  const gallons = d.deliveredGallons || d.gallons || 0;
+  if ((lbN === undefined || lbK2O === undefined) && productObj && gallons > 0) {
+    const lbPerGal = productObj.lbPerGal || 13.98;
+    const totalPounds = gallons * lbPerGal;
+    lbN = Math.round(totalPounds * ((productObj.percentN || 0) / 100));
+    lbK2O = Math.round(totalPounds * ((productObj.percentK2O || 0) / 100));
+  }
+
+  return {
+    ...d,
+    customerName: customer?.name || d.customerName || d.customerEmail || 'Customer',
+    ranchName: ranch?.name || d.ranchName || 'Ranch',
+    tankName: tank?.name || d.tankName || 'Tank',
+    lbN,
+    lbK2O,
+  };
+}
+
+// -----------------------------------------------------------------------
+// Nutrition Programs Helpers (Phase 2 - Section 4 & 9.2)
+// -----------------------------------------------------------------------
+export function getProgramsForRanch(ranchId?: string): NutritionProgram[] {
+  if (!ranchId) return mockPrograms;
+  return mockPrograms.filter(p => p.ranchId === ranchId);
+}
+
+export function createProgram(data: any): NutritionProgram {
+  const ranch = mockRanches.find(r => r.id === data.ranchId);
+  const totalAcreage = data.totalAcreage || (ranch ? computeRanchAcreage(ranch) : 650);
+
+  const newProgram: NutritionProgram = {
+    id: `prog-${Date.now()}`,
+    name: data.name || 'Almond Nutrition Program',
+    crop: data.crop || 'Almond',
+    seasonYear: Number(data.seasonYear) || new Date().getFullYear(),
+    ranchId: data.ranchId,
+    ranchName: ranch?.name || data.ranchName || 'Ranch',
+    blocksCovered: Array.isArray(data.blocksCovered) ? data.blocksCovered : (ranch?.blocks || []).map(b => b.blockId),
+    totalAcreage,
+    targetN: Number(data.targetN) || 165,
+    targetK2O: Number(data.targetK2O) || 135,
+    nLossFactor: 0.06,
+    status: data.status || 'Active',
+    stageWindow: data.stageWindow || 'Full Season',
+    notes: data.notes || '',
+    lines: Array.isArray(data.lines) ? data.lines : [],
+    createdAt: new Date().toISOString()
+  };
+
+  mockPrograms.unshift(newProgram);
+  saveStore();
+  return newProgram;
+}
+
+export function updateProgram(id: string, updates: any): NutritionProgram | null {
+  const idx = mockPrograms.findIndex(p => p.id === id);
+  if (idx < 0) return null;
+  mockPrograms[idx] = { ...mockPrograms[idx], ...updates };
+  saveStore();
+  return mockPrograms[idx];
+}
+
+export function deleteProgram(id: string): boolean {
+  const idx = mockPrograms.findIndex(p => p.id === id);
+  if (idx >= 0) {
+    mockPrograms.splice(idx, 1);
+    saveStore();
+    return true;
+  }
+  return false;
+}
+
+// -----------------------------------------------------------------------
+// Soil & Tissue Samples Helpers (Phase 2 - Section 5)
+// -----------------------------------------------------------------------
+export function getSamplesList(ranchId?: string, blockId?: string): LabSample[] {
+  return mockSamples.filter(s => {
+    if (ranchId && s.ranchId !== ranchId) return false;
+    if (blockId && s.blockId !== blockId) return false;
+    return true;
+  });
+}
+
+export function createSample(data: any): LabSample {
+  const ranch = mockRanches.find(r => r.id === data.ranchId);
+  const newSample: LabSample = {
+    id: `SMP-${new Date().getFullYear()}-${String(Math.floor(100 + Math.random() * 900))}`,
+    ranchId: data.ranchId || 'ranch-1',
+    ranchName: ranch?.name || data.ranchName || 'Sierra Foothills Ranch',
+    blockId: data.blockId || 'N-4',
+    customerId: data.customerId || 'mock-cust-1',
+    customerEmail: data.customerEmail || 'customer@renu.com',
+    sampleType: data.sampleType || 'leaf tissue',
+    sampleDate: data.sampleDate || new Date().toISOString().split('T')[0],
+    labName: data.labName || 'Deng Agronomics Lab',
+    status: 'Received',
+    customerNotes: data.customerNotes || data.notes || '',
+    pdfData: data.pdfData || 'JVBERi0xLjQKJeLjz9MKMSAwIG9iajw8L1R5cGUvQ2F0YWxvZy9QYWdlcyAyIDAgUj4+ZW5kb2JqCg==',
+    pdfFileName: data.pdfFileName || 'Lab_Assay_Report.pdf',
+    createdAt: new Date().toISOString()
+  };
+
+  mockSamples.unshift(newSample);
+  saveStore();
+  return newSample;
+}
+
+export function updateSampleValues(id: string, values: Record<string, number>): LabSample | null {
+  const sample = mockSamples.find(s => s.id === id);
+  if (!sample) return null;
+  sample.values = { ...(sample.values || {}), ...values };
+  sample.status = 'Under review';
+  saveStore();
+  return sample;
+}
+
+export function createRecommendation(sampleId: string, recData: any): LabSample | null {
+  const sample = mockSamples.find(s => s.id === sampleId);
+  if (!sample) return null;
+
+  sample.status = 'Recommended';
+  sample.recommendation = {
+    id: `REC-${Date.now()}`,
+    summary: recData.summary || 'Custom agronomic recommendation based on lab findings.',
+    sentDate: new Date().toISOString().split('T')[0],
+    lines: Array.isArray(recData.lines) ? recData.lines : [],
+    savedAsProgram: Boolean(recData.savedAsProgram),
+    customerReplies: []
+  };
+
+  // If savedAsProgram is true, also create or append to ranch program
+  if (recData.savedAsProgram && sample.ranchId) {
+    const existingProg = mockPrograms.find(p => p.ranchId === sample.ranchId && p.status === 'Active');
+    if (existingProg) {
+      recData.lines.forEach((l: any) => {
+        existingProg.lines.push({
+          id: `line-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          productId: 'prod-5',
+          productName: l.productName || 'ReNu 0-0-29 Potassium Acetate',
+          stageName: 'Custom Lab Recommendation',
+          ratePerAcre: Number(l.ratePerAcre) || 3.5,
+          applicationsCount: 1,
+          plannedGallons: Math.round((Number(l.ratePerAcre) || 3.5) * (existingProg.totalAcreage || 650)),
+          deliveredGallons: 0,
+          timingNote: l.timing || 'Immediate application per lab recommendation',
+          status: 'Planned'
+        });
+      });
+    }
+  }
+
+  saveStore();
+  return sample;
+}
+
+export function replyToRecommendation(sampleId: string, question: string): LabSample | null {
+  const sample = mockSamples.find(s => s.id === sampleId);
+  if (!sample || !sample.recommendation) return null;
+
+  if (!Array.isArray(sample.recommendation.customerReplies)) {
+    sample.recommendation.customerReplies = [];
+  }
+
+  sample.recommendation.customerReplies.push({
+    question,
+    date: new Date().toISOString()
+  });
+
+  saveStore();
+  return sample;
+}
+
+// -----------------------------------------------------------------------
+// Otodata Telemetry Helpers (Phase 2 - Section 3)
+// -----------------------------------------------------------------------
+export function updateTankTelemetry(tankId: string, data: any) {
+  for (const ranch of mockRanches) {
+    const tank = (ranch.tanks || []).find(t => t.id === tankId);
+    if (tank) {
+      if (data.otodataDeviceId !== undefined) tank.otodataDeviceId = data.otodataDeviceId;
+      if (data.levelPercent !== undefined) tank.levelPercent = Number(data.levelPercent);
+      if (data.levelGallons !== undefined) tank.levelGallons = Number(data.levelGallons);
+      if (data.weeklyUsageAvg !== undefined) tank.weeklyUsageAvg = Number(data.weeklyUsageAvg);
+      if (data.daysToEmpty !== undefined) tank.daysToEmpty = Number(data.daysToEmpty);
+      if (data.reorderThresholdPercent !== undefined) tank.reorderThresholdPercent = Number(data.reorderThresholdPercent);
+      if (data.status !== undefined) tank.status = data.status;
+      tank.lastReadingTime = new Date().toISOString();
+      saveStore();
+      return tank;
+    }
+  }
+  return null;
+}
+
+// -----------------------------------------------------------------------
+// Monthly Reports Helper (Section A6.7)
+// -----------------------------------------------------------------------
+export function getMonthlyReports(period?: string) {
+  const filterYear = period ? period.split('-')[0] : '2026';
+
+  // 1. Sales by Customer (invoice totals)
+  const salesByCustomerMap: Record<string, { customerName: string; totalInvoiced: number; totalPaid: number; openBalance: number; invoiceCount: number }> = {};
+  mockInvoices.forEach(inv => {
+    if (inv.status === 'Void') return;
+    const name = inv.customerName || inv.customerEmail || 'Customer';
+    if (!salesByCustomerMap[name]) {
+      salesByCustomerMap[name] = { customerName: name, totalInvoiced: 0, totalPaid: 0, openBalance: 0, invoiceCount: 0 };
+    }
+    const amt = Number(inv.amount) || 0;
+    salesByCustomerMap[name].totalInvoiced += amt;
+    salesByCustomerMap[name].invoiceCount += 1;
+    if (inv.status === 'Paid') {
+      salesByCustomerMap[name].totalPaid += amt;
+    } else {
+      salesByCustomerMap[name].openBalance += amt;
+    }
+  });
+
+  // 2. Sales by Product (gallons & invoice totals)
+  const salesByProductMap: Record<string, { productName: string; totalGallons: number; estimatedRevenue: number; deliveryCount: number }> = {};
+  mockOrdersList.forEach(del => {
+    if (del.status === 'Cancelled') return;
+    const prod = del.productName || del.product || 'Standard Blend';
+    if (!salesByProductMap[prod]) {
+      salesByProductMap[prod] = { productName: prod, totalGallons: 0, estimatedRevenue: 0, deliveryCount: 0 };
+    }
+    const gal = Number(del.deliveredGallons || del.gallons) || 0;
+    salesByProductMap[prod].totalGallons += gal;
+    salesByProductMap[prod].deliveryCount += 1;
+  });
+
+  // 3. Receivables Aging (Current, 30, 60, 90+ days)
+  const now = Date.now();
+  const aging = {
+    current: 0,
+    days30: 0,
+    days60: 0,
+    days90Plus: 0,
+    totalOverdue: 0
+  };
+  mockInvoices.forEach(inv => {
+    if (inv.status === 'Open' || inv.status === 'Overdue') {
+      const amt = Number(inv.amount) || 0;
+      const dueTime = new Date(inv.dueDate).getTime();
+      const diffDays = Math.floor((now - dueTime) / (86400000));
+      if (diffDays <= 0) {
+        aging.current += amt;
+      } else if (diffDays <= 30) {
+        aging.days30 += amt;
+        aging.totalOverdue += amt;
+      } else if (diffDays <= 60) {
+        aging.days60 += amt;
+        aging.totalOverdue += amt;
+      } else {
+        aging.days90Plus += amt;
+        aging.totalOverdue += amt;
+      }
+    }
+  });
+
+  // 4. Gallons by Month (by product and crop)
+  const gallonsByMonth: Record<string, { month: string; gallons: number; products: Record<string, number> }> = {};
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  monthNames.forEach(m => {
+    gallonsByMonth[m] = { month: m, gallons: 0, products: {} };
+  });
+
+  mockOrdersList.forEach(del => {
+    if (del.status === 'Cancelled') return;
+    const dStr = del.deliveredDate || del.date;
+    if (dStr && dStr.includes('-')) {
+      const parts = dStr.split('-');
+      const monthIdx = parseInt(parts[1], 10) - 1;
+      if (monthIdx >= 0 && monthIdx < 12) {
+        const mName = monthNames[monthIdx];
+        const gal = Number(del.deliveredGallons || del.gallons) || 0;
+        gallonsByMonth[mName].gallons += gal;
+        const pName = del.productName || del.product;
+        gallonsByMonth[mName].products[pName] = (gallonsByMonth[mName].products[pName] || 0) + gal;
+      }
+    }
+  });
+
+  return {
+    period: filterYear,
+    salesByCustomer: Object.values(salesByCustomerMap),
+    salesByProduct: Object.values(salesByProductMap),
+    receivablesAging: aging,
+    gallonsByMonth: Object.values(gallonsByMonth)
+  };
+}
+
+// -----------------------------------------------------------------------
+// Spreadsheet Import & Export of Blocks (Section A11)
+// -----------------------------------------------------------------------
+export function importBlocksToRanch(ranchId: string, blocksRaw: any[]) {
+  const ranch = mockRanches.find(r => r.id === ranchId);
+  if (!ranch) throw new Error('Ranch not found');
+
+  const imported: BlockItem[] = [];
+  const errors: Array<{ row: number; reason: string }> = [];
+
+  blocksRaw.forEach((row: any, idx: number) => {
+    const rowNum = idx + 1;
+    const blockId = String(row.blockId || row['Block ID'] || row.id || '').trim();
+    const acreage = Number(row.acreage || row['Acreage'] || row.acres || 0);
+
+    if (!blockId) {
+      errors.push({ row: rowNum, reason: 'Missing Block ID' });
+      return;
+    }
+    if (isNaN(acreage) || acreage <= 0) {
+      errors.push({ row: rowNum, reason: `Invalid acreage "${row.acreage || row['Acreage']}"` });
+      return;
+    }
+
+    const apnsRaw = row.apns || row['APNs'] || row.apn || '';
+    const apns = Array.isArray(apnsRaw)
+      ? apnsRaw
+      : String(apnsRaw).split(/[,;]/).map(a => a.trim()).filter(Boolean);
+
+    const newBlock: BlockItem = {
+      id: `blk-${Date.now()}-${idx}`,
+      blockId,
+      ranchId,
+      crop: String(row.crop || row['Crop'] || 'Almond').trim(),
+      variety: String(row.variety || row['Variety'] || 'Nonpareil').trim(),
+      rootstock: String(row.rootstock || row['Rootstock'] || 'Nemaguard').trim(),
+      acreage,
+      plantingYear: parseInt(String(row.plantingYear || row['Planting Year'] || 2020), 10) || 2020,
+      irrigationType: String(row.irrigationType || row['Irrigation Type'] || 'Drip').trim(),
+      fertigationSet: String(row.fertigationSet || row['Fertigation Set'] || 'Set 1').trim(),
+      county: String(row.county || row['County'] || ranch.county || 'Fresno County').trim(),
+      apns: apns.length > 0 ? apns : ['045-120-001'],
+      createdAt: new Date().toISOString()
+    };
+
+    ranch.blocks.push(newBlock);
+    imported.push(newBlock);
+  });
+
+  // Recompute ranch acreage
+  ranch.ac = computeRanchAcreage(ranch);
+  saveStore();
+
+  return {
+    success: true,
+    importedCount: imported.length,
+    errorCount: errors.length,
+    errors,
+    ranchAcreage: ranch.ac
+  };
+}
+
+export function exportBlocksFromRanches(ranchId?: string): string {
+  const targetRanches = ranchId ? mockRanches.filter(r => r.id === ranchId) : mockRanches;
+  let csv = 'Ranch Name,Block ID,Crop,Variety,Rootstock,Acreage,Planting Year,Irrigation Type,Fertigation Set,County,APNs\n';
+
+  targetRanches.forEach(r => {
+    (r.blocks || []).forEach(b => {
+      const apnsStr = (b.apns || []).join('; ');
+      csv += `"${r.name}","${b.blockId}","${b.crop}","${b.variety}","${b.rootstock}",${b.acreage},${b.plantingYear},"${b.irrigationType}","${b.fertigationSet}","${b.county}","${apnsStr}"\n`;
+    });
+  });
+
+  return csv;
 }

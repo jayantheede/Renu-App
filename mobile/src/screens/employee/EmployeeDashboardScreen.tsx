@@ -34,7 +34,7 @@ export const EmployeeDashboardScreen = ({ navigation }: any) => {
   // Application Log Modal State
   const [appModalVisible, setAppModalVisible] = useState(false);
   const [appFieldSite, setAppFieldSite] = useState('Central Valley Almonds - Field 3');
-  const [appProduct, setAppProduct] = useState('Biome Care');
+  const [appProduct, setAppProduct] = useState('ReNu N-32% K-28% Blend');
   const [appQuantity, setAppQuantity] = useState('15 Gal');
   const [appAcreage, setAppAcreage] = useState('40');
   const [appSubmitting, setAppSubmitting] = useState(false);
@@ -219,7 +219,7 @@ export const EmployeeDashboardScreen = ({ navigation }: any) => {
           activeOpacity={0.7}
           onPress={() => setAppModalVisible(true)}
         >
-          <LinearGradient colors={['#2E5D36', '#1F4E34']} style={styles.actionGradient}>
+          <LinearGradient colors={['#083F38', '#0C6054']} style={styles.actionGradient}>
             <MaterialCommunityIcons name="flask-outline" size={24} color="#FFF" />
             <Text style={styles.actionText}>Log Application</Text>
           </LinearGradient>
@@ -248,7 +248,7 @@ export const EmployeeDashboardScreen = ({ navigation }: any) => {
         {RECENT_ACTIVITIES.map((item, index) => (
           <View key={item.id} style={[styles.activityRow, index === RECENT_ACTIVITIES.length - 1 && { borderBottomWidth: 0 }]}>
             <View style={[styles.activityIconBox, { backgroundColor: '#F3F4F6' }]}>
-              <MaterialCommunityIcons name={item.icon as any} size={20} color="#2E5D36" />
+              <MaterialCommunityIcons name={item.icon as any} size={20} color="#0C6054" />
             </View>
             <View style={styles.activityInfo}>
               <Text style={styles.activityTitle}>{item.title}</Text>
@@ -281,7 +281,7 @@ export const EmployeeDashboardScreen = ({ navigation }: any) => {
                 placeholder="e.g. Central Valley Almonds - Block 2"
                 style={styles.modalInput}
                 outlineColor="#E2E8F0"
-                activeOutlineColor="#2E5D36"
+                activeOutlineColor="#0C6054"
               />
 
               <Text style={styles.inputLabel}>Product Applied</Text>
@@ -289,10 +289,10 @@ export const EmployeeDashboardScreen = ({ navigation }: any) => {
                 mode="outlined"
                 value={appProduct}
                 onChangeText={setAppProduct}
-                placeholder="Biome Care, N-CARE, etc."
+                placeholder="ReNu N-32% K-28% Blend, ReNu Fruit Care, etc."
                 style={styles.modalInput}
                 outlineColor="#E2E8F0"
-                activeOutlineColor="#2E5D36"
+                activeOutlineColor="#0C6054"
               />
 
               <View style={{ flexDirection: 'row', gap: 12 }}>
@@ -305,7 +305,7 @@ export const EmployeeDashboardScreen = ({ navigation }: any) => {
                     placeholder="15 Gal"
                     style={styles.modalInput}
                     outlineColor="#E2E8F0"
-                    activeOutlineColor="#2E5D36"
+                    activeOutlineColor="#0C6054"
                   />
                 </View>
                 <View style={{ flex: 1 }}>
@@ -318,7 +318,7 @@ export const EmployeeDashboardScreen = ({ navigation }: any) => {
                     placeholder="40"
                     style={styles.modalInput}
                     outlineColor="#E2E8F0"
-                    activeOutlineColor="#2E5D36"
+                    activeOutlineColor="#0C6054"
                   />
                 </View>
               </View>
@@ -338,7 +338,7 @@ export const EmployeeDashboardScreen = ({ navigation }: any) => {
                 loading={appSubmitting}
                 disabled={appSubmitting}
                 onPress={handleLogApplication}
-                style={{ flex: 1, backgroundColor: '#2E5D36' }}
+                style={{ flex: 1, backgroundColor: '#0C6054' }}
                 textColor="#FFFFFF"
               >
                 Submit Log
@@ -590,7 +590,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
     elevation: 4,
-    shadowColor: '#2E5D36',
+    shadowColor: '#0C6054',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -612,7 +612,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   seeAllText: {
-    color: '#2E5D36',
+    color: '#0C6054',
     fontWeight: '600',
     fontSize: 14,
   },

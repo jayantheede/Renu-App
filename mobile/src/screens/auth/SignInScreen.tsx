@@ -1,12 +1,21 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Alert, ScrollView, ImageBackground, TouchableOpacity } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
-import { Text, TextInput, Button, useTheme, Divider } from 'react-native-paper';
-// Supabase removed
-import { GlassCard } from '../../components/GlassCard';
-import { useAuthStore } from '../../store/useAuthStore';
-import { login, verifyMfa, resendMfa } from '../../api/client';
+import {
+  View,
+  StyleSheet,
+  Alert,
+  ScrollView,
+  ImageBackground,
+  Image,
+  TouchableOpacity,
+  Modal,
+  Platform,
+} from 'react-native';
+import { Text, TextInput, Button, Divider } from 'react-native-paper';
+import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useAuthStore } from '../../store/useAuthStore';
+import { login, verifyMfa, resendMfa, requestPasswordReset } from '../../api/client';
+import { BRAND_COLORS } from '../../theme/theme';
 
 export const SignInScreen = ({ navigation }: any) => {
   const [email, setEmail] = useState('');
@@ -14,22 +23,46 @@ export const SignInScreen = ({ navigation }: any) => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
-  
+  const [errorMessage, setErrorMessage] = useState('');
+
   // MFA / 2FA Verification State
   const [mfaStep, setMfaStep] = useState(false);
   const [mfaCode, setMfaCode] = useState('');
   const [mfaEmail, setMfaEmail] = useState('');
   const [mfaDemoCode, setMfaDemoCode] = useState('');
 
-  const theme = useTheme();
+  // Forgot Password Modal State
+  const [forgotModalVisible, setForgotModalVisible] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotSuccess, setForgotSuccess] = useState(false);
+
   const setSession = useAuthStore((state) => state.setSession);
 
+  // Staging vs Production detection
+  const isProduction =
+    typeof window !== 'undefined' &&
+    Boolean(
+      window?.location?.hostname === 'app.renu-biome.com' ||
+      window?.location?.hostname === 'renu-biome.com' ||
+      window?.location?.hostname === 'app.renubiome.com' ||
+      window?.location?.hostname === 'renubiome.com'
+    );
+
   const handleSignIn = async (directEmail?: string, directPassword?: string) => {
+    setErrorMessage('');
     setLoading(true);
 
     const loginEmail = typeof directEmail === 'string' ? directEmail : email;
     const loginPassword = typeof directPassword === 'string' ? directPassword : password;
 
+    if (!loginEmail || !loginPassword) {
+      setErrorMessage('Please enter both your email address and password.');
+      setLoading(false);
+      return;
+    }
+
+    // Quick offline demo fallback
     if (loginEmail === 'Admin' && loginPassword === 'Admin') {
       setSession({ id: 'admin', email: 'admin@renu.com', name: 'Administrator', role: 'admin' }, 'mock_token');
       setLoading(false);
@@ -53,18 +86,27 @@ export const SignInScreen = ({ navigation }: any) => {
       }
       setSession(data.user, data.token);
     } catch (error: any) {
-      const errorMessage = error.message === 'Failed to fetch' 
-        ? 'Could not connect to the server. Please check your network or ensure the backend is running.' 
-        : error.message;
-      Alert.alert('SIGN IN FAILED', errorMessage);
+      const raw = error.message || '';
+      let friendly = 'Could not sign in. Please verify your email and password.';
+      if (raw.toLowerCase().includes('password')) {
+        friendly = "That password doesn't match our records.";
+      } else if (raw.toLowerCase().includes('user') || raw.toLowerCase().includes('not found') || raw.toLowerCase().includes('account')) {
+        friendly = 'No account found with that email address.';
+      } else if (raw.toLowerCase().includes('failed to fetch') || raw.toLowerCase().includes('network')) {
+        friendly = 'Network connection issue. Please check your internet connection.';
+      } else if (raw) {
+        friendly = raw;
+      }
+      setErrorMessage(friendly);
     } finally {
       setLoading(false);
     }
   };
 
   const handleVerifyMfa = async () => {
+    setErrorMessage('');
     if (!mfaCode || mfaCode.trim().length === 0) {
-      Alert.alert('Verification Required', 'Please enter the 6-digit security code.');
+      setErrorMessage('Please enter the 6-digit verification code.');
       return;
     }
 
@@ -73,7 +115,7 @@ export const SignInScreen = ({ navigation }: any) => {
       const data = await verifyMfa(mfaEmail, mfaCode.trim());
       setSession(data.user, data.token);
     } catch (error: any) {
-      Alert.alert('VERIFICATION FAILED', error.message || 'Invalid or expired verification code.');
+      setErrorMessage(error.message || 'Invalid or expired verification code.');
     } finally {
       setLoading(false);
     }
@@ -87,7 +129,7 @@ export const SignInScreen = ({ navigation }: any) => {
         setMfaDemoCode(data.demoCode);
         setMfaCode(data.demoCode);
       }
-      Alert.alert('Code Sent', 'A fresh 6-digit verification code has been dispatched.');
+      Alert.alert('Code Dispatched', 'A fresh 6-digit verification code has been dispatched.');
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to resend verification code.');
     } finally {
@@ -95,38 +137,80 @@ export const SignInScreen = ({ navigation }: any) => {
     }
   };
 
-  // Demo logins only on non-production / staging
-  const isProduction = typeof window !== 'undefined' && Boolean(
-    window?.location?.hostname === 'app.renubiome.com' || 
-    window?.location?.hostname === 'renubiome.com'
-  );
+  const handleForgotPasswordSubmit = async () => {
+    const target = forgotEmail.trim() || email.trim();
+    if (!target) {
+      Alert.alert('Email Required', 'Please enter your email address to receive reset instructions.');
+      return;
+    }
+    setForgotLoading(true);
+    try {
+      await requestPasswordReset(target);
+      setForgotSuccess(true);
+    } catch (e: any) {
+      setForgotSuccess(true);
+    } finally {
+      setForgotLoading(false);
+    }
+  };
 
   return (
-    <View style={styles.background}>
-      <View style={styles.overlay}>
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          <GlassCard style={styles.card}>
-            <View style={styles.headerContainer}>
-              <Text variant="displaySmall" style={styles.title}>
-                <Text style={{ color: '#F47F46' }}>Renu</Text>
-                <Text style={{ color: '#2E5D36' }}> Biome</Text>
-              </Text>
-              <Text variant="titleMedium" style={styles.subtitle}>
-                {mfaStep ? 'Two-Factor Authentication (MFA)' : 'Sign in to your account'}
-              </Text>
+    <ImageBackground
+      source={require('../../../assets/brand/bloom-photo-STOCK-NOT-LICENSED-replace-before-launch.jpg')}
+      style={styles.backgroundImage}
+      resizeMode="cover"
+    >
+      <LinearGradient
+        colors={['rgba(8, 63, 56, 0.92)', 'rgba(12, 96, 84, 0.86)']}
+        style={styles.gradientOverlay}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Header Branding */}
+          <View style={styles.headerSection}>
+            <Image
+              source={require('../../../assets/brand/renu-biome-logo-white-orange-for-dark-backgrounds.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+            <Text style={styles.taglineItalic}>Farmer's Pride</Text>
+            <View style={styles.portalBadge}>
+              <Text style={styles.portalBadgeText}>GROWER PORTAL</Text>
             </View>
+          </View>
+
+          {/* White Card */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>
+              {mfaStep ? 'Two-Factor Authentication' : 'Sign In'}
+            </Text>
+
+            {/* Error Banner */}
+            {Boolean(errorMessage) && (
+              <View style={styles.errorBanner}>
+                <MaterialCommunityIcons name="alert-circle" size={18} color="#B91C1C" style={{ marginRight: 6 }} />
+                <Text style={styles.errorBannerText}>{errorMessage}</Text>
+              </View>
+            )}
 
             {mfaStep ? (
-              /* ================= MFA / 2FA VERIFICATION STEP ================= */
+              /* ================= MFA STEP ================= */
               <View style={{ width: '100%' }}>
                 <View style={styles.mfaBanner}>
-                  <MaterialCommunityIcons name="shield-check" size={36} color="#2E5D36" style={{ alignSelf: 'center', marginBottom: 6 }} />
+                  <MaterialCommunityIcons
+                    name="shield-check"
+                    size={36}
+                    color={BRAND_COLORS.primaryTeal}
+                    style={{ alignSelf: 'center', marginBottom: 6 }}
+                  />
                   <Text style={styles.mfaInstruction}>
-                    A 6-digit verification code was sent to:
+                    A 6-digit security verification code was sent to:
                   </Text>
                   <Text style={styles.mfaTargetEmail}>{mfaEmail}</Text>
                   {mfaDemoCode ? (
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       onPress={() => setMfaCode(mfaDemoCode)}
                       style={styles.demoCodeBadge}
                     >
@@ -138,41 +222,48 @@ export const SignInScreen = ({ navigation }: any) => {
                 <TextInput
                   label="6-Digit Verification Code"
                   value={mfaCode}
-                  onChangeText={setMfaCode}
+                  onChangeText={(val) => {
+                    setMfaCode(val);
+                    if (errorMessage) setErrorMessage('');
+                  }}
                   keyboardType="number-pad"
                   maxLength={6}
                   style={[styles.input, { letterSpacing: 4, textAlign: 'center', fontSize: 20 }]}
                   mode="outlined"
-                  outlineColor="#2E5D36"
-                  activeOutlineColor="#2E5D36"
-                  textColor="#1E293B"
-                  theme={{ colors: { background: '#FFFFFF', onSurfaceVariant: '#2E5D36' } }}
+                  outlineColor={BRAND_COLORS.primaryTeal}
+                  activeOutlineColor={BRAND_COLORS.primaryTeal}
+                  textColor="#0F172A"
+                  theme={{ colors: { background: '#FFFFFF' } }}
                 />
 
-                <Button 
-                  mode="contained" 
-                  onPress={handleVerifyMfa} 
+                <Button
+                  mode="contained"
+                  onPress={handleVerifyMfa}
                   loading={loading}
-                  style={styles.button}
+                  style={styles.primaryButton}
                   contentStyle={styles.buttonContent}
-                  buttonColor="#2E5D36"
+                  buttonColor={BRAND_COLORS.primaryTeal}
                   textColor="#FFFFFF"
                 >
                   Verify & Sign In
                 </Button>
 
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 }}>
-                  <Button 
-                    mode="text" 
+                  <Button
+                    mode="text"
                     onPress={handleResendCode}
                     loading={resending}
-                    textColor="#2E5D36"
+                    textColor={BRAND_COLORS.primaryTeal}
                   >
                     Resend Code
                   </Button>
-                  <Button 
-                    mode="text" 
-                    onPress={() => { setMfaStep(false); setMfaCode(''); }}
+                  <Button
+                    mode="text"
+                    onPress={() => {
+                      setMfaStep(false);
+                      setMfaCode('');
+                      setErrorMessage('');
+                    }}
                     textColor="#64748B"
                   >
                     Back to Sign In
@@ -180,213 +271,357 @@ export const SignInScreen = ({ navigation }: any) => {
                 </View>
               </View>
             ) : (
-              /* ================= NORMAL SIGN IN STEP ================= */
+              /* ================= NORMAL SIGN IN ================= */
               <View style={{ width: '100%' }}>
                 <TextInput
                   label="Email"
                   value={email}
-                  onChangeText={setEmail}
+                  onChangeText={(val) => {
+                    setEmail(val);
+                    if (errorMessage) setErrorMessage('');
+                  }}
                   autoCapitalize="none"
                   keyboardType="email-address"
                   style={styles.input}
                   mode="outlined"
-                  outlineColor="#2E5D36"
-                  activeOutlineColor="#2E5D36"
-                  textColor="#1E293B"
-                  theme={{ colors: { background: '#FFFFFF', onSurfaceVariant: '#2E5D36' } }}
+                  outlineColor="#CBD5E1"
+                  activeOutlineColor={BRAND_COLORS.primaryTeal}
+                  textColor="#0F172A"
+                  theme={{ colors: { background: '#FFFFFF' } }}
                 />
+
                 <TextInput
                   label="Password"
                   value={password}
-                  onChangeText={setPassword}
+                  onChangeText={(val) => {
+                    setPassword(val);
+                    if (errorMessage) setErrorMessage('');
+                  }}
                   secureTextEntry={!showPassword}
                   style={styles.input}
                   mode="outlined"
-                  outlineColor="#2E5D36"
-                  activeOutlineColor="#2E5D36"
-                  textColor="#1E293B"
-                  theme={{ colors: { background: '#FFFFFF', onSurfaceVariant: '#2E5D36' } }}
+                  outlineColor="#CBD5E1"
+                  activeOutlineColor={BRAND_COLORS.primaryTeal}
+                  textColor="#0F172A"
+                  theme={{ colors: { background: '#FFFFFF' } }}
                   right={
-                    <TextInput.Icon 
-                      icon={showPassword ? "eye-off" : "eye"} 
+                    <TextInput.Icon
+                      icon={showPassword ? 'eye-off' : 'eye'}
                       onPress={() => setShowPassword(!showPassword)}
-                      color="#2E5D36"
+                      color={BRAND_COLORS.primaryTeal}
                     />
                   }
                 />
-                
-                <Button 
-                  mode="contained" 
-                  onPress={() => handleSignIn()} 
+
+                <View style={styles.forgotRow}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setForgotEmail(email);
+                      setForgotSuccess(false);
+                      setForgotModalVisible(true);
+                    }}
+                  >
+                    <Text style={styles.forgotText}>Forgot password?</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <Button
+                  mode="contained"
+                  onPress={() => handleSignIn()}
                   loading={loading}
-                  style={styles.button}
+                  style={styles.primaryButton}
                   contentStyle={styles.buttonContent}
-                  buttonColor="#2E5D36"
+                  buttonColor={BRAND_COLORS.primaryTeal}
                   textColor="#FFFFFF"
                 >
                   Sign In
                 </Button>
 
+                {/* Account Assistance */}
+                <View style={styles.supportHelpBox}>
+                  <Text style={styles.supportHelpText}>
+                    Need an account? Email{' '}
+                    <Text style={{ fontWeight: '600', color: BRAND_COLORS.primaryTeal }}>
+                      support@renu-biome.com
+                    </Text>
+                  </Text>
+                </View>
+
+                {/* Demo Logins (Staging Only) */}
                 {!isProduction && (
                   <View style={styles.demoSection}>
                     <View style={styles.dividerContainer}>
                       <Divider style={styles.dividerLine} />
-                      <Text style={styles.dividerText}>DEMO LOGINS (STAGING ONLY)</Text>
+                      <Text style={styles.dividerText}>DEMO LOGINS (STAGING)</Text>
                       <Divider style={styles.dividerLine} />
                     </View>
 
-                    <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 10, marginBottom: 8 }}>
-                      <Button 
-                        mode="outlined" 
+                    <View style={styles.demoButtonsRow}>
+                      <Button
+                        mode="outlined"
                         onPress={() => handleSignIn('admin@renu.com', 'admin')}
-                        buttonColor="rgba(255,255,255,0.7)"
-                        textColor="#2E5D36"
-                        style={{ borderColor: '#2E5D36', minHeight: 48, justifyContent: 'center' }}
+                        textColor={BRAND_COLORS.primaryTeal}
+                        style={styles.demoButton}
                       >
-                        Admin
+                        Admin Demo
                       </Button>
-                      <Button 
-                        mode="outlined" 
+                      <Button
+                        mode="outlined"
                         onPress={() => handleSignIn('customer@renu.com', 'customer')}
-                        buttonColor="rgba(255,255,255,0.7)"
-                        textColor="#2E5D36"
-                        style={{ borderColor: '#2E5D36', minHeight: 48, justifyContent: 'center' }}
+                        textColor={BRAND_COLORS.primaryTeal}
+                        style={styles.demoButton}
                       >
-                        Customer
+                        Customer Demo
                       </Button>
                     </View>
                   </View>
                 )}
               </View>
             )}
+          </View>
 
-          </GlassCard>
-
-          <Text style={styles.watermark} numberOfLines={1} adjustsFontSizeToFit>
-            A product By SRavanga AI Smart Solutions
+          {/* Footer App Attribution */}
+          <Text style={styles.footerNote}>
+            ReNu-Biome Grower Portal · Version 2.0
           </Text>
         </ScrollView>
-      </View>
-    </View>
+      </LinearGradient>
+
+      {/* Forgot Password Modal */}
+      <Modal
+        visible={forgotModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setForgotModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <MaterialCommunityIcons name="lock-reset" size={28} color={BRAND_COLORS.primaryTeal} />
+              <Text style={styles.modalTitle}>Reset Password</Text>
+            </View>
+
+            {forgotSuccess ? (
+              <View style={{ alignItems: 'center', paddingVertical: 12 }}>
+                <MaterialCommunityIcons name="check-circle" size={48} color="#16A34A" />
+                <Text style={styles.modalSuccessText}>
+                  If an account exists for this email, password reset instructions have been dispatched.
+                </Text>
+                <Button
+                  mode="contained"
+                  buttonColor={BRAND_COLORS.primaryTeal}
+                  onPress={() => setForgotModalVisible(false)}
+                  style={{ marginTop: 16, width: '100%', borderRadius: 8 }}
+                >
+                  Return to Sign In
+                </Button>
+              </View>
+            ) : (
+              <View>
+                <Text style={styles.modalSubtitle}>
+                  Enter your email address and we'll dispatch password reset instructions.
+                </Text>
+                <TextInput
+                  label="Account Email"
+                  value={forgotEmail}
+                  onChangeText={setForgotEmail}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  style={[styles.input, { marginBottom: 16 }]}
+                  mode="outlined"
+                  outlineColor="#CBD5E1"
+                  activeOutlineColor={BRAND_COLORS.primaryTeal}
+                  theme={{ colors: { background: '#FFFFFF' } }}
+                />
+                <Button
+                  mode="contained"
+                  onPress={handleForgotPasswordSubmit}
+                  loading={forgotLoading}
+                  buttonColor={BRAND_COLORS.primaryTeal}
+                  style={{ borderRadius: 8, marginBottom: 8 }}
+                  contentStyle={styles.buttonContent}
+                >
+                  Send Reset Link
+                </Button>
+                <Button
+                  mode="text"
+                  onPress={() => setForgotModalVisible(false)}
+                  textColor="#64748B"
+                >
+                  Cancel
+                </Button>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
+    </ImageBackground>
   );
 };
 
 const styles = StyleSheet.create({
-  background: {
+  backgroundImage: {
     flex: 1,
-    backgroundColor: '#1E3D2F',
+    width: '100%',
+    height: '100%',
   },
-  overlay: {
+  gradientOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 35, 25, 0.45)',
   },
   scrollContent: {
     flexGrow: 1,
-    padding: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 36,
     justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerSection: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  logoImage: {
+    width: 240,
+    height: 70,
+    marginBottom: 6,
+  },
+  taglineItalic: {
+    fontSize: 16,
+    fontStyle: 'italic',
+    color: '#E0EDE9',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  portalBadge: {
+    backgroundColor: BRAND_COLORS.accentOrange,
+    paddingHorizontal: 12,
+    paddingVertical: 3,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  portalBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.5,
   },
   card: {
-    backgroundColor: 'rgba(245, 248, 245, 0.92)',
-    padding: 12,
-    borderRadius: 16,
-    borderWidth: 0,
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22,
+    shadowRadius: 16,
+    elevation: 8,
   },
-  headerContainer: {
-    alignItems: 'center',
+  cardTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#0F172A',
     marginBottom: 16,
-  },
-  title: {
-    fontWeight: 'bold',
-    marginBottom: 8,
     textAlign: 'center',
   },
-  subtitle: {
-    color: '#555555',
-    textAlign: 'center',
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 14,
+  },
+  errorBannerText: {
+    color: '#B91C1C',
+    fontSize: 13,
+    fontWeight: '500',
+    flex: 1,
   },
   input: {
-    marginBottom: 8,
+    marginBottom: 12,
     backgroundColor: '#FFFFFF',
-    height: 40,
   },
-  button: {
-    borderRadius: 30,
+  forgotRow: {
+    alignItems: 'flex-end',
+    marginBottom: 16,
+    marginTop: -4,
+  },
+  forgotText: {
+    color: BRAND_COLORS.primaryTeal,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  primaryButton: {
+    borderRadius: 10,
     marginTop: 4,
   },
   buttonContent: {
-    paddingVertical: 2,
+    paddingVertical: 6,
   },
-  socialButton: {
-    borderColor: '#CCCCCC',
-    backgroundColor: 'transparent',
-    marginBottom: 8,
+  supportHelpBox: {
+    marginTop: 20,
+    alignItems: 'center',
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  supportHelpText: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
   },
   demoSection: {
-    marginTop: 4,
+    marginTop: 14,
   },
   dividerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 16,
+    marginVertical: 12,
   },
   dividerLine: {
     flex: 1,
-    backgroundColor: '#CCCCCC',
+    backgroundColor: '#E2E8F0',
   },
   dividerText: {
-    marginHorizontal: 16,
-    color: '#888888',
+    marginHorizontal: 10,
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
-  textButton: {
-    marginTop: 8,
-  },
-  watermark: {
-    paddingVertical: 10,
-    textAlign: 'center',
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: 'bold',
-    letterSpacing: 1,
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
-  devBox: {
-    marginTop: 20,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#EEEEEE',
-    alignItems: 'center',
-  },
-  devTitle: {
-    fontSize: 10,
-    color: '#888',
-    marginBottom: 4,
-    textTransform: 'uppercase',
-  },
-  devRow: {
+  demoButtonsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    width: '100%',
+    gap: 12,
+  },
+  demoButton: {
+    borderColor: BRAND_COLORS.primaryTeal,
+    borderRadius: 8,
+    flex: 1,
   },
   mfaBanner: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#F0FDFA',
     borderRadius: 12,
-    padding: 12,
+    padding: 14,
     marginBottom: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#86EFAC',
+    borderColor: '#99F6E4',
   },
   mfaInstruction: {
     fontSize: 13,
-    color: '#166534',
+    color: '#0F766E',
     textAlign: 'center',
   },
   mfaTargetEmail: {
     fontSize: 14,
-    fontWeight: 'bold',
-    color: '#14532D',
+    fontWeight: '700',
+    color: '#115E59',
     marginTop: 2,
     marginBottom: 6,
     textAlign: 'center',
@@ -404,5 +639,53 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#92400E',
+  },
+  footerNote: {
+    marginTop: 24,
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.7)',
+    textAlign: 'center',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    marginBottom: 16,
+    lineHeight: 18,
+  },
+  modalSuccessText: {
+    fontSize: 14,
+    color: '#15803D',
+    textAlign: 'center',
+    marginVertical: 12,
+    lineHeight: 20,
   },
 });

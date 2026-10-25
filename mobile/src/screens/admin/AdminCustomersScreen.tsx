@@ -358,7 +358,7 @@ export const AdminCustomersScreen = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor="#2E5D36" />
+          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor="#0C6054" />
         }
       >
         {/* Header */}
@@ -435,7 +435,7 @@ export const AdminCustomersScreen = () => {
               <Button 
                 mode="contained" 
                 onPress={() => openDrilldown(c)}
-                buttonColor="#2E5D36"
+                buttonColor="#0C6054"
                 icon="tree-outline"
                 style={{ borderRadius: 10, flex: 1, minWidth: 150 }}
                 contentStyle={{ minHeight: 48 }}
@@ -446,8 +446,8 @@ export const AdminCustomersScreen = () => {
               <Button 
                 mode="outlined" 
                 onPress={() => openCreateOrderModal(c)}
-                textColor="#2E5D36"
-                style={{ borderColor: '#2E5D36', borderRadius: 10, flex: 1, minWidth: 130 }}
+                textColor="#0C6054"
+                style={{ borderColor: '#0C6054', borderRadius: 10, flex: 1, minWidth: 130 }}
                 contentStyle={{ minHeight: 48 }}
               >
                 Create Order
@@ -532,7 +532,7 @@ export const AdminCustomersScreen = () => {
                 mode="contained" 
                 onPress={handleCreateCustomer}
                 loading={creating}
-                buttonColor="#2E5D36"
+                buttonColor="#0C6054"
                 style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}
               >
                 Save Login
@@ -580,7 +580,7 @@ export const AdminCustomersScreen = () => {
                 mode="contained" 
                 onPress={handleResetPassword}
                 loading={resettingPassword}
-                buttonColor="#2E5D36"
+                buttonColor="#0C6054"
                 style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}
               >
                 Update Password
@@ -612,7 +612,7 @@ export const AdminCustomersScreen = () => {
                 <Button 
                   mode="contained" 
                   onPress={() => setAddRanchModalVisible(true)}
-                  buttonColor="#2E5D36"
+                  buttonColor="#0C6054"
                   compact
                   icon="plus"
                 >
@@ -655,7 +655,7 @@ export const AdminCustomersScreen = () => {
                               setTargetRanchForBlock(r);
                               setAddBlockModalVisible(true);
                             }}
-                            textColor="#2E5D36"
+                            textColor="#0C6054"
                           >
                             + Add Block
                           </Button>
@@ -686,7 +686,7 @@ export const AdminCustomersScreen = () => {
                               setTargetRanchForTank(r);
                               setAddTankModalVisible(true);
                             }}
-                            textColor="#2E5D36"
+                            textColor="#0C6054"
                           >
                             + Add Tank
                           </Button>
@@ -709,7 +709,7 @@ export const AdminCustomersScreen = () => {
             <Button 
               mode="contained" 
               onPress={() => setDrilldownModalVisible(false)}
-              buttonColor="#2E5D36"
+              buttonColor="#0C6054"
               style={{ marginTop: 14, minHeight: 48, justifyContent: 'center' }}
             >
               Close
@@ -743,10 +743,10 @@ export const AdminCustomersScreen = () => {
                           paddingHorizontal: 12,
                           paddingVertical: 6,
                           borderRadius: 20,
-                          backgroundColor: isSelected ? '#2E5D36' : '#F1F5F9',
+                          backgroundColor: isSelected ? '#0C6054' : '#F1F5F9',
                           marginRight: 8,
                           borderWidth: 1,
-                          borderColor: isSelected ? '#2E5D36' : '#CBD5E1'
+                          borderColor: isSelected ? '#0C6054' : '#CBD5E1'
                         }}
                       >
                         <Text style={{ color: isSelected ? '#FFFFFF' : '#334155', fontSize: 12, fontWeight: isSelected ? '700' : '500' }}>
@@ -777,7 +777,7 @@ export const AdminCustomersScreen = () => {
             />
             <View style={styles.modalActions}>
               <Button mode="outlined" onPress={() => setAddRanchModalVisible(false)} textColor="#64748B" style={{ flex: 1, marginRight: 8, minHeight: 48, justifyContent: 'center' }}>Cancel</Button>
-              <Button mode="contained" onPress={handleAddRanch} loading={savingRanch} buttonColor="#2E5D36" style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}>Save Ranch</Button>
+              <Button mode="contained" onPress={handleAddRanch} loading={savingRanch} buttonColor="#0C6054" style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}>Save Ranch</Button>
             </View>
           </View>
         </View>
@@ -802,7 +802,7 @@ export const AdminCustomersScreen = () => {
             </ScrollView>
             <View style={styles.modalActions}>
               <Button mode="outlined" onPress={() => setAddBlockModalVisible(false)} textColor="#64748B" style={{ flex: 1, marginRight: 8, minHeight: 48, justifyContent: 'center' }}>Cancel</Button>
-              <Button mode="contained" onPress={handleAddBlock} loading={savingBlock} buttonColor="#2E5D36" style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}>Save Block</Button>
+              <Button mode="contained" onPress={handleAddBlock} loading={savingBlock} buttonColor="#0C6054" style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}>Save Block</Button>
             </View>
           </View>
         </View>
@@ -818,7 +818,7 @@ export const AdminCustomersScreen = () => {
             <TextInput label="Location / Description" value={tankLocationInput} onChangeText={setTankLocationInput} mode="outlined" placeholder="e.g. Well #3 Pad" style={styles.modalInput} />
             <View style={styles.modalActions}>
               <Button mode="outlined" onPress={() => setAddTankModalVisible(false)} textColor="#64748B" style={{ flex: 1, marginRight: 8, minHeight: 48, justifyContent: 'center' }}>Cancel</Button>
-              <Button mode="contained" onPress={handleAddTank} loading={savingTank} buttonColor="#2E5D36" style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}>Save Tank</Button>
+              <Button mode="contained" onPress={handleAddTank} loading={savingTank} buttonColor="#0C6054" style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}>Save Tank</Button>
             </View>
           </View>
         </View>
@@ -922,7 +922,7 @@ export const AdminCustomersScreen = () => {
 
             <View style={styles.modalActions}>
               <Button mode="outlined" onPress={() => setCreateOrderModalVisible(false)} textColor="#64748B" style={{ flex: 1, marginRight: 8, minHeight: 48, justifyContent: 'center' }}>Cancel</Button>
-              <Button mode="contained" onPress={handleSaveOrder} loading={savingOrder} buttonColor="#2E5D36" style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}>Schedule Order</Button>
+              <Button mode="contained" onPress={handleSaveOrder} loading={savingOrder} buttonColor="#0C6054" style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}>Schedule Order</Button>
             </View>
           </View>
         </View>
@@ -947,7 +947,7 @@ const styles = StyleSheet.create({
   addBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2E5D36',
+    backgroundColor: '#0C6054',
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 24,
@@ -1021,6 +1021,6 @@ const styles = StyleSheet.create({
   },
   radioItemSelected: {
     backgroundColor: '#F0FDF4',
-    borderColor: '#2E5D36',
+    borderColor: '#0C6054',
   },
 });

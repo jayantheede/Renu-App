@@ -134,6 +134,11 @@ export const toggleMfa = (email: string, enabled: boolean) => apiClient('/auth/t
   body: JSON.stringify({ email, enabled }),
 });
 
+export const requestPasswordReset = (email: string) => apiClient('/auth/forgot-password', {
+  method: 'POST',
+  body: JSON.stringify({ email }),
+});
+
 export const updateProfile = (data: any) => apiClient('/app/profile', { method: 'PUT', body: JSON.stringify(data) });
 
 // -----------------------------------------------------------------------
@@ -313,7 +318,7 @@ export const saveFeatureFlags = async (data: { global?: any; customerId?: string
 // Admin Customer Management
 // -----------------------------------------------------------------------
 export const fetchAdminCustomers = async () => {
-  return apiClient('/admin/customers');
+  return apiClient('/app/admin/customers');
 };
 
 export const createAdminCustomer = async (data: {
@@ -323,18 +328,18 @@ export const createAdminCustomer = async (data: {
   phone?: string;
   role?: string;
 }) => {
-  return apiClient('/admin/customers', { method: 'POST', body: JSON.stringify(data) });
+  return apiClient('/app/admin/customers', { method: 'POST', body: JSON.stringify(data) });
 };
 
 export const resetCustomerPassword = async (id: string, password: string) => {
-  return apiClient(`/admin/customers/${id}/reset-password`, {
+  return apiClient(`/app/admin/customers/${id}/reset-password`, {
     method: 'PUT',
     body: JSON.stringify({ password })
   });
 };
 
 export const updateCustomer = async (id: string, data: any) => {
-  return apiClient(`/admin/customers/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  return apiClient(`/app/admin/customers/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 };
 
 // -----------------------------------------------------------------------
@@ -348,6 +353,15 @@ export const submitProduct = async (data: {
   name: string;
   description: string;
   analysis?: string;
+  brandLabel?: string;
+  lbPerGal?: number;
+  percentN?: number;
+  percentP2O5?: number;
+  percentK2O?: number;
+  percentCa?: number;
+  percentB?: number;
+  percentZn?: number;
+  countsTowardN?: boolean;
   omriCertified?: boolean;
   omriListed?: boolean;
   imageUrl?: string;
@@ -364,13 +378,101 @@ export const deleteProduct = async (id: string) => {
 };
 
 // -----------------------------------------------------------------------
+// Nutrition Programs (Phase 2 - Section 4)
+// -----------------------------------------------------------------------
+export const fetchPrograms = async (ranchId?: string) => {
+  const q = ranchId ? `?ranchId=${encodeURIComponent(ranchId)}` : '';
+  return getCachedOrFetch(`@cache_programs_${ranchId || 'all'}`, () =>
+    apiClient(`/app/programs${q}`)
+  );
+};
+
+export const submitProgram = async (data: any) => {
+  const res = await apiClient('/app/programs', { method: 'POST', body: JSON.stringify(data) });
+  fetchPrograms().catch(() => {});
+  return res;
+};
+
+export const updateProgram = async (id: string, data: any) => {
+  const res = await apiClient(`/app/programs/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  fetchPrograms().catch(() => {});
+  return res;
+};
+
+export const deleteProgram = async (id: string) => {
+  const res = await apiClient(`/app/programs/${id}`, { method: 'DELETE' });
+  fetchPrograms().catch(() => {});
+  return res;
+};
+
+// -----------------------------------------------------------------------
+// Soil & Tissue Samples and Custom Recommendations (Phase 2 - Section 5)
+// -----------------------------------------------------------------------
+export const fetchSamples = async (ranchId?: string, blockId?: string) => {
+  const params = new URLSearchParams();
+  if (ranchId) params.append('ranchId', ranchId);
+  if (blockId) params.append('blockId', blockId);
+  const q = params.toString() ? `?${params.toString()}` : '';
+  return apiClient(`/app/samples${q}`);
+};
+
+export const submitSample = async (data: any) => {
+  return apiClient('/app/samples', { method: 'POST', body: JSON.stringify(data) });
+};
+
+export const updateSampleValues = async (id: string, values: any) => {
+  return apiClient(`/app/samples/${id}/values`, { method: 'PUT', body: JSON.stringify(values) });
+};
+
+export const submitRecommendation = async (sampleId: string, data: any) => {
+  return apiClient(`/app/samples/${sampleId}/recommendation`, { method: 'POST', body: JSON.stringify(data) });
+};
+
+export const replyToRecommendation = async (sampleId: string, question: string) => {
+  return apiClient(`/app/samples/${sampleId}/reply`, { method: 'POST', body: JSON.stringify({ question }) });
+};
+
+// -----------------------------------------------------------------------
+// Otodata Tank Telemetry (Phase 2 - Section 3)
+// -----------------------------------------------------------------------
+export const fetchTankTelemetry = async (tankId: string) => {
+  return apiClient(`/app/tanks/${tankId}/telemetry`);
+};
+
+export const updateTankTelemetry = async (tankId: string, data: any) => {
+  return apiClient(`/app/tanks/${tankId}/telemetry`, { method: 'PUT', body: JSON.stringify(data) });
+};
+
+// -----------------------------------------------------------------------
+// Monthly Reports (Section A6.7)
+// -----------------------------------------------------------------------
+export const fetchMonthlyReports = async (monthOrYear: string) => {
+  return apiClient(`/app/reports/monthly?period=${encodeURIComponent(monthOrYear)}`);
+};
+
+// -----------------------------------------------------------------------
+// Block Import / Export (Section A11)
+// -----------------------------------------------------------------------
+export const importBlocks = async (ranchId: string, blocks: any[]) => {
+  return apiClient(`/app/ranches/${ranchId}/blocks/import`, {
+    method: 'POST',
+    body: JSON.stringify({ blocks })
+  });
+};
+
+export const exportBlocks = async (ranchId?: string) => {
+  const q = ranchId ? `?ranchId=${encodeURIComponent(ranchId)}` : '';
+  return apiClient(`/app/blocks/export${q}`);
+};
+
+// -----------------------------------------------------------------------
 // Admin Approvals, Notifications & Misc
 // -----------------------------------------------------------------------
 export const fetchCustomers = fetchAdminCustomers;
-export const fetchAdminApprovals = () => apiClient('/admin/approvals');
-export const approveCustomer = (id: string, status: string) => apiClient(`/admin/approvals/customer/${id}`, { method: 'POST', body: JSON.stringify({ status }) });
-export const approveRanch = (id: string, status: string) => apiClient(`/admin/approvals/ranch/${id}`, { method: 'POST', body: JSON.stringify({ status }) });
-export const approveTank = (id: string, status: string) => apiClient(`/admin/approvals/tank/${id}`, { method: 'POST', body: JSON.stringify({ status }) });
+export const fetchAdminApprovals = () => apiClient('/app/admin/approvals');
+export const approveCustomer = (id: string, status: string) => apiClient(`/app/admin/approvals/customer/${id}`, { method: 'POST', body: JSON.stringify({ status }) });
+export const approveRanch = (id: string, status: string) => apiClient(`/app/admin/approvals/ranch/${id}`, { method: 'POST', body: JSON.stringify({ status }) });
+export const approveTank = (id: string, status: string) => apiClient(`/app/admin/approvals/tank/${id}`, { method: 'POST', body: JSON.stringify({ status }) });
 export const fetchAdminNotifications = () => apiClient('/app/admin/notifications');
 export const markNotificationsRead = () => apiClient('/app/admin/notifications/mark-read', { method: 'POST' });
 export const exportData = (entity: string) => apiClient(`/app/export/${entity}`);

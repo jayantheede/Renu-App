@@ -6,6 +6,20 @@ import { MainTabNavigator } from './MainTabNavigator';
 import { AdminTabNavigator } from './AdminTabNavigator';
 import { EmployeeTabNavigator } from './EmployeeTabNavigator';
 
+const linking = {
+  prefixes: ['https://app.renu-biome.com', 'http://localhost:8081', 'http://localhost:3000', 'renubiome://'],
+  config: {
+    screens: {
+      Install: 'install',
+      SignIn: '',
+      Home: 'home',
+      Ranches: 'ranches',
+      Deliveries: 'deliveries',
+      Invoices: 'invoices',
+    },
+  },
+};
+
 export const RootNavigator = () => {
   const { isLoggedIn, role } = useAuthStore();
 
@@ -13,16 +27,20 @@ export const RootNavigator = () => {
     ...DefaultTheme,
     colors: {
       ...DefaultTheme.colors,
-      primary: '#1F4E34',
+      primary: '#0C6054',
       background: '#F8FAFC',
       card: '#FFFFFF',
       border: '#E2E8F0',
-      text: '#111827',
+      text: '#0F172A',
     },
   };
 
   return (
-    <NavigationContainer key={isLoggedIn ? `auth-${role}` : 'guest'} theme={appTheme}>
+    <NavigationContainer
+      key={isLoggedIn ? `auth-${role}` : 'guest'}
+      theme={appTheme}
+      linking={linking}
+    >
       {!isLoggedIn ? (
         <AuthNavigator />
       ) : role?.toLowerCase() === 'admin' ? (

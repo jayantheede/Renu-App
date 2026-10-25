@@ -110,7 +110,7 @@ export const OrdersScreen = () => {
       const newOrder = {
         id: `ord-${Date.now()}`,
         orderId: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
-        product: orderToDuplicate.product || 'Biome Care',
+        product: orderToDuplicate.product || 'ReNu N-32% K-28% Blend',
         qty: orderToDuplicate.qty || '10 Gal',
         amt: orderToDuplicate.amt || orderToDuplicate.totalAmount || 1200,
         status: 'PENDING',
@@ -198,7 +198,7 @@ export const OrdersScreen = () => {
         <Card.Content>
           <View style={styles.row}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <MaterialCommunityIcons name="cube-outline" size={22} color="#2E5D36" style={{ marginRight: 6 }} />
+              <MaterialCommunityIcons name="cube-outline" size={22} color="#0C6054" style={{ marginRight: 6 }} />
               <Text variant="titleMedium" style={{ fontWeight: 'bold', color: '#0F172A' }}>
                 Order #{orderNum}
               </Text>
@@ -219,7 +219,7 @@ export const OrdersScreen = () => {
             <Text variant="bodySmall" style={{ color: '#64748B' }}>
               Date: {item.date || (item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'Today')}
             </Text>
-            <Text variant="titleMedium" style={{ color: '#2E5D36', fontWeight: 'bold' }}>
+            <Text variant="titleMedium" style={{ color: '#0C6054', fontWeight: 'bold' }}>
               ${amount.toLocaleString()}
             </Text>
           </View>
@@ -267,7 +267,7 @@ export const OrdersScreen = () => {
               mode="outlined"
               icon="map-marker-path"
               onPress={() => openTrackingModal(item)}
-              textColor="#2E5D36"
+              textColor="#0C6054"
               style={styles.trackingBtn}
             >
               Live Tracking
@@ -312,7 +312,7 @@ export const OrdersScreen = () => {
             icon="download"
             onPress={handleExportOrders}
             style={styles.actionBtn}
-            textColor="#2E5D36"
+            textColor="#0C6054"
           >
             Export
           </Button>
@@ -323,7 +323,7 @@ export const OrdersScreen = () => {
               setImportJsonText(JSON.stringify([{
                 id: `ord-${Date.now()}`,
                 orderId: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
-                product: 'N-CARE',
+                product: 'ReNu N-32% K-24% Blend',
                 qty: '20 Gal',
                 amt: 5000,
                 status: 'PENDING',
@@ -331,7 +331,7 @@ export const OrdersScreen = () => {
               }], null, 2));
               setImportModalVisible(true);
             }}
-            style={[styles.actionBtn, { backgroundColor: '#2E5D36' }]}
+            style={[styles.actionBtn, { backgroundColor: '#0C6054' }]}
             textColor="#FFFFFF"
           >
             Import
@@ -340,7 +340,7 @@ export const OrdersScreen = () => {
       </View>
 
       {loading ? (
-        <ActivityIndicator style={{ marginTop: 40 }} color="#2E5D36" size="large" />
+        <ActivityIndicator style={{ marginTop: 40 }} color="#0C6054" size="large" />
       ) : orders.length === 0 ? (
         <View style={styles.emptyContainer}>
           <MaterialCommunityIcons name="cube-scan" size={56} color="#94A3B8" />
@@ -418,7 +418,7 @@ export const OrdersScreen = () => {
 
             <Button
               mode="contained"
-              buttonColor="#2E5D36"
+              buttonColor="#0C6054"
               onPress={() => setTrackingModalVisible(false)}
               style={{ marginTop: 12, borderRadius: 10 }}
             >
@@ -441,23 +441,23 @@ export const OrdersScreen = () => {
 
             <View style={styles.paymentDetails}>
               <Text style={styles.detailLabel}>Product:</Text>
-              <Text style={styles.detailValue}>{orderToDuplicate?.product || 'Biome Care'} ({orderToDuplicate?.qty || '10 Gal'})</Text>
+              <Text style={styles.detailValue}>{orderToDuplicate?.product || 'ReNu N-32% K-28% Blend'} ({orderToDuplicate?.qty || '10 Gal'})</Text>
               <View style={styles.divider} />
               <Text style={styles.detailLabel}>Total Amount:</Text>
               <Text style={styles.amountValue}>${(orderToDuplicate?.amt || orderToDuplicate?.totalAmount || 0)?.toLocaleString()}</Text>
             </View>
 
             <Text style={styles.inputLabel}>Card Number</Text>
-            <TextInput mode="outlined" placeholder="**** **** **** 4242" style={styles.input} disabled={isProcessingPayment} outlineColor="#E2E8F0" activeOutlineColor="#2E5D36" />
+            <TextInput mode="outlined" placeholder="**** **** **** 4242" style={styles.input} disabled={isProcessingPayment} outlineColor="#E2E8F0" activeOutlineColor="#0C6054" />
 
             <View style={styles.row}>
               <View style={{ flex: 1, marginRight: 10 }}>
                 <Text style={styles.inputLabel}>Expiry</Text>
-                <TextInput mode="outlined" placeholder="MM/YY" style={styles.input} disabled={isProcessingPayment} outlineColor="#E2E8F0" activeOutlineColor="#2E5D36" />
+                <TextInput mode="outlined" placeholder="MM/YY" style={styles.input} disabled={isProcessingPayment} outlineColor="#E2E8F0" activeOutlineColor="#0C6054" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.inputLabel}>CVC</Text>
-                <TextInput mode="outlined" placeholder="123" style={styles.input} disabled={isProcessingPayment} outlineColor="#E2E8F0" activeOutlineColor="#2E5D36" />
+                <TextInput mode="outlined" placeholder="123" style={styles.input} disabled={isProcessingPayment} outlineColor="#E2E8F0" activeOutlineColor="#0C6054" />
               </View>
             </View>
 
@@ -467,7 +467,7 @@ export const OrdersScreen = () => {
               loading={isProcessingPayment}
               disabled={isProcessingPayment}
               style={styles.payButton}
-              buttonColor="#2E5D36"
+              buttonColor="#0C6054"
             >
               {isProcessingPayment ? 'Processing...' : `Confirm & Place Order`}
             </Button>
@@ -493,13 +493,13 @@ export const OrdersScreen = () => {
               onChangeText={setImportJsonText}
               style={{ backgroundColor: '#F8FAFC', fontSize: 12, marginBottom: 16 }}
               outlineColor="#CBD5E1"
-              activeOutlineColor="#2E5D36"
+              activeOutlineColor="#0C6054"
             />
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <Button mode="outlined" onPress={() => setImportModalVisible(false)} style={{ flex: 1 }} textColor="#64748B">
                 Cancel
               </Button>
-              <Button mode="contained" onPress={handleImportOrders} style={{ flex: 1, backgroundColor: '#2E5D36' }}>
+              <Button mode="contained" onPress={handleImportOrders} style={{ flex: 1, backgroundColor: '#0C6054' }}>
                 Import
               </Button>
             </View>
@@ -619,7 +619,7 @@ const styles = StyleSheet.create({
   },
   actionBtn: {
     borderRadius: 8,
-    borderColor: '#2E5D36',
+    borderColor: '#0C6054',
   },
   card: {
     marginBottom: 16,
@@ -665,7 +665,7 @@ const styles = StyleSheet.create({
   trackingBtn: {
     flex: 1.2,
     borderRadius: 8,
-    borderColor: '#2E5D36',
+    borderColor: '#0C6054',
   },
   dupBtn: {
     flex: 0.8,
@@ -726,7 +726,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   dotCompleted: {
-    backgroundColor: '#2E5D36',
+    backgroundColor: '#0C6054',
   },
   dotPending: {
     backgroundColor: '#E2E8F0',
@@ -740,7 +740,7 @@ const styles = StyleSheet.create({
     height: 38,
   },
   lineCompleted: {
-    backgroundColor: '#2E5D36',
+    backgroundColor: '#0C6054',
   },
   linePending: {
     backgroundColor: '#E2E8F0',
@@ -807,7 +807,7 @@ const styles = StyleSheet.create({
   amountValue: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#2E5D36',
+    color: '#0C6054',
   },
   inputLabel: {
     fontSize: 13,

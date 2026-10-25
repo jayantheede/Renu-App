@@ -225,7 +225,7 @@ export const AdminProfileScreen = () => {
           <List.Item
             title="My Tasks & Schedules"
             description="Daily application logs, soil reports & work orders"
-            left={props => <List.Icon {...props} icon="clipboard-check-outline" color="#2E5D36" />}
+            left={props => <List.Icon {...props} icon="clipboard-check-outline" color="#0C6054" />}
             right={props => <List.Icon {...props} icon="chevron-right" color="#94A3B8" />}
             onPress={() => navigation?.navigate('Tasks')}
             style={styles.clickableItem}
@@ -271,7 +271,7 @@ export const AdminProfileScreen = () => {
           <List.Item
             title="Platform Settings"
             description="Configure global app behavior, notifications & rules"
-            left={props => <List.Icon {...props} icon="cog-outline" color="#2E5D36" />}
+            left={props => <List.Icon {...props} icon="cog-outline" color="#0C6054" />}
             right={props => <List.Icon {...props} icon="chevron-right" color="#94A3B8" />}
             onPress={openPlatformSettings}
             style={styles.clickableItem}
@@ -311,7 +311,7 @@ export const AdminProfileScreen = () => {
           />
           
           <Text style={styles.footerBranding}>
-            A product By SRavanga AI Smart Solutions
+            ReNu-Biome — Operations & Admin Portal
           </Text>
         </View>
       )}
@@ -333,8 +333,8 @@ export const AdminProfileScreen = () => {
             <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 500 }}>
               {loadingSettings && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, gap: 8 }}>
-                  <ActivityIndicator size="small" color="#2E5D36" />
-                  <Text style={{ fontSize: 12, color: '#2E5D36', fontWeight: '500' }}>Syncing platform configurations...</Text>
+                  <ActivityIndicator size="small" color="#0C6054" />
+                  <Text style={{ fontSize: 12, color: '#0C6054', fontWeight: '500' }}>Syncing platform configurations...</Text>
                 </View>
               )}
 
@@ -378,7 +378,7 @@ export const AdminProfileScreen = () => {
                     <Switch
                       value={settings.emailNotifications}
                       onValueChange={val => setSettings(s => ({ ...s, emailNotifications: val }))}
-                      trackColor={{ false: '#E2E8F0', true: '#2E5D36' }}
+                      trackColor={{ false: '#E2E8F0', true: '#0C6054' }}
                       thumbColor="#FFFFFF"
                     />
                   </View>
@@ -393,7 +393,7 @@ export const AdminProfileScreen = () => {
                     <Switch
                       value={settings.orderAutoApprove}
                       onValueChange={val => setSettings(s => ({ ...s, orderAutoApprove: val }))}
-                      trackColor={{ false: '#E2E8F0', true: '#2E5D36' }}
+                      trackColor={{ false: '#E2E8F0', true: '#0C6054' }}
                       thumbColor="#FFFFFF"
                     />
                   </View>
@@ -408,7 +408,7 @@ export const AdminProfileScreen = () => {
                     <Switch
                       value={settings.require2FAForAdmin}
                       onValueChange={val => setSettings(s => ({ ...s, require2FAForAdmin: val }))}
-                      trackColor={{ false: '#E2E8F0', true: '#2E5D36' }}
+                      trackColor={{ false: '#E2E8F0', true: '#0C6054' }}
                       thumbColor="#FFFFFF"
                     />
                   </View>
@@ -422,7 +422,7 @@ export const AdminProfileScreen = () => {
                 mode="contained" 
                 onPress={handleSaveSettings} 
                 loading={savingSettings} 
-                buttonColor="#2E5D36" 
+                buttonColor="#0C6054" 
                 style={{ flex: 1, marginLeft: 8 }}
               >
                 Save Settings
@@ -465,8 +465,8 @@ export const AdminProfileScreen = () => {
             <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
               {loadingAudits && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, gap: 8 }}>
-                  <ActivityIndicator size="small" color="#2E5D36" />
-                  <Text style={{ fontSize: 12, color: '#2E5D36', fontWeight: '500' }}>Syncing audit trail...</Text>
+                  <ActivityIndicator size="small" color="#0C6054" />
+                  <Text style={{ fontSize: 12, color: '#0C6054', fontWeight: '500' }}>Syncing audit trail...</Text>
                 </View>
               )}
               {filteredLogs.length === 0 && !loadingAudits ? (
@@ -658,7 +658,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   filterChipActive: {
-    backgroundColor: '#2E5D36',
+    backgroundColor: '#0C6054',
   },
   filterChipText: {
     fontSize: 12,

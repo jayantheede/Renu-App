@@ -17,7 +17,7 @@ const TabBarIcon = ({ name, isFocused, label }: { name: string; isFocused: boole
       <MaterialCommunityIcons 
         name={name as any} 
         size={22} 
-        color={isFocused ? '#1F4E34' : '#64748B'} 
+        color={isFocused ? '#0C6054' : '#64748B'} 
       />
       <Text style={[styles.iconLabel, isFocused && styles.activeIconLabel]}>
         {label}
@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   activeIconWrapper: {
-    backgroundColor: '#E8F5E9',
+    backgroundColor: '#E6F3F1',
   },
   iconLabel: {
     color: '#64748B',
@@ -136,7 +136,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   activeIconLabel: {
-    color: '#1F4E34',
+    color: '#0C6054',
     fontWeight: '700',
   }
 });

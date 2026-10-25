@@ -7,6 +7,8 @@ import {
   mockOrdersList,
   mockInvoices,
   mockProducts,
+  mockPrograms,
+  mockSamples,
   mockFeatureFlags,
   mockAuditLogs,
   addAuditLog,
@@ -35,6 +37,21 @@ import {
   updateCustomerFeatureFlagOverride,
   getAllCustomersList,
   updateCustomerDetails,
+  createNewUser,
+  enrichDelivery,
+  getProgramsForRanch,
+  createProgram,
+  updateProgram,
+  deleteProgram,
+  getSamplesList,
+  createSample,
+  updateSampleValues,
+  createRecommendation,
+  replyToRecommendation,
+  getMonthlyReports,
+  importBlocksToRanch,
+  exportBlocksFromRanches,
+  updateTankTelemetry,
   ProductItem
 } from './usersStore';
 import { mockAvatars, transporter } from './index';
@@ -146,6 +163,9 @@ router.get('/admin/dashboard', async (req: AuthenticatedRequest, res) => {
     deliveriesDueSoon = mockOrdersList.filter(d => d.status === 'Scheduled' || d.status === 'Out for delivery').slice(0, 4);
   }
 
+  // Enrich delivery cards so customer, ranch, and tank names are populated
+  const enrichedDueSoon = deliveriesDueSoon.map(d => enrichDelivery(d));
+
   const deliveriesThisWeek = mockOrdersList.filter(d => d.status === 'Scheduled' || d.status === 'Out for delivery');
 
   const invoices = getInvoicesList(undefined, 'admin');
@@ -158,18 +178,50 @@ router.get('/admin/dashboard', async (req: AuthenticatedRequest, res) => {
   const openInvoices = invoices.filter(i => i.status === 'Open');
   const openTotal = openInvoices.reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
 
+  // Otodata Low-tank alerts (Section 3)
+  const lowTanksAlerts: any[] = [];
+  mockRanches.forEach(r => {
+    (r.tanks || []).forEach(t => {
+      const threshold = t.reorderThresholdPercent || 25;
+      const level = t.levelPercent !== undefined ? t.levelPercent : parseInt(t.level || '100', 10);
+      if (level <= threshold) {
+        lowTanksAlerts.push({
+          tankId: t.id,
+          tankName: t.name,
+          ranchId: r.id,
+          ranchName: r.name,
+          customerId: r.customerId,
+          customerEmail: r.customerEmail,
+          levelPercent: level,
+          levelGallons: t.levelGallons || Math.round(t.capacity * (level / 100)),
+          capacity: t.capacity,
+          thresholdPercent: threshold,
+          daysToEmpty: t.daysToEmpty || 4,
+          deviceSerial: t.otodataDeviceId
+        });
+      }
+    });
+  });
+
+  // Pending lab samples waiting for recommendation (Section 5.5)
+  const pendingSamplesAlerts = mockSamples.filter(s => s.status === 'Received' || s.status === 'Under review');
+
   res.json({
-    deliveriesDueSoon,
+    deliveriesDueSoon: enrichedDueSoon,
     deliveriesThisWeekCount: deliveriesThisWeek.length,
     overdueInvoices,
     overdueTotal,
     totalPaidRevenue,
     openTotal,
+    lowTanksAlerts,
+    pendingSamplesAlerts,
     metrics: {
       totalRevenue: totalPaidRevenue,
       openInvoicesTotal: openTotal,
       overdueTotal,
-      activeDeliveries: deliveriesThisWeek.length
+      activeDeliveries: deliveriesThisWeek.length,
+      lowTanksCount: lowTanksAlerts.length,
+      pendingSamplesCount: pendingSamplesAlerts.length
     }
   });
 });
@@ -299,14 +351,14 @@ router.get(['/deliveries', '/orders'], async (req: AuthenticatedRequest, res) =>
   await syncStoreFromDB();
   const user = req.user!;
   if (user.role === 'admin') {
-    return res.json(mockOrdersList);
+    return res.json(mockOrdersList.map(d => enrichDelivery(d)));
   }
   const norm = user.email.toLowerCase().trim();
   const userDeliveries = mockOrdersList.filter(
     d => (d.customerId && d.customerId.toLowerCase() === norm) ||
          (d.customerEmail && d.customerEmail.toLowerCase() === norm)
   );
-  res.json(userDeliveries);
+  res.json(userDeliveries.map(d => enrichDelivery(d)));
 });
 
 router.post(['/deliveries', '/orders'], async (req: AuthenticatedRequest, res) => {
@@ -331,7 +383,7 @@ router.post(['/deliveries', '/orders'], async (req: AuthenticatedRequest, res) =
     const delivery = createDeliveryOrder({
       customerId: targetCustId,
       customerEmail: targetEmail,
-      product: product || 'Biome Care',
+      product: product || 'ReNu N-32% K-28% Blend',
       gallons: Number(gallons) || 500,
       ranchId: ranchId || 'ranch-1',
       tankId: tankId || 'tank-1-1',
@@ -704,6 +756,284 @@ router.delete('/admin/products/:id', async (req: AuthenticatedRequest, res) => {
     return res.json({ success: true, message: 'Product deleted' });
   }
   res.status(404).json({ error: 'Product not found' });
+});
+
+// ---------------------------------
+// Nutrition Programs Routes (Phase 2 - Section 4)
+// ---------------------------------
+router.get('/programs', async (req: AuthenticatedRequest, res) => {
+  await syncStoreFromDB();
+  const ranchId = req.query.ranchId as string | undefined;
+  const programs = getProgramsForRanch(ranchId);
+  res.json(programs);
+});
+
+router.post('/programs', async (req: AuthenticatedRequest, res) => {
+  try {
+    const program = createProgram(req.body);
+    addAuditLog({
+      action: 'PROGRAM_CREATED',
+      details: `Program "${program.name}" created for ranch ${program.ranchName}`,
+      actor: req.user?.email || 'admin@renu.com',
+      category: 'RANCHES'
+    });
+    res.json(program);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to create nutrition program' });
+  }
+});
+
+router.put('/programs/:id', async (req: AuthenticatedRequest, res) => {
+  const updated = updateProgram(req.params.id, req.body);
+  if (!updated) return res.status(404).json({ error: 'Program not found' });
+  res.json(updated);
+});
+
+router.delete('/programs/:id', async (req: AuthenticatedRequest, res) => {
+  const ok = deleteProgram(req.params.id);
+  if (!ok) return res.status(404).json({ error: 'Program not found' });
+  res.json({ success: true });
+});
+
+// ---------------------------------
+// Soil & Tissue Samples Routes (Phase 2 - Section 5)
+// ---------------------------------
+router.get('/samples', async (req: AuthenticatedRequest, res) => {
+  await syncStoreFromDB();
+  const ranchId = req.query.ranchId as string | undefined;
+  const blockId = req.query.blockId as string | undefined;
+  const samples = getSamplesList(ranchId, blockId);
+  res.json(samples);
+});
+
+router.post('/samples', async (req: AuthenticatedRequest, res) => {
+  try {
+    const sample = createSample({
+      ...req.body,
+      customerId: req.user?.id,
+      customerEmail: req.user?.email
+    });
+
+    addAuditLog({
+      action: 'SAMPLE_SUBMITTED',
+      details: `New ${sample.sampleType} sample submitted for Block ${sample.blockId}`,
+      actor: req.user?.email || 'customer@renu.com',
+      category: 'RANCHES'
+    });
+
+    addAdminNotification({
+      title: 'New Lab Sample Received',
+      message: `${sample.sampleType.toUpperCase()} assay submitted for Block ${sample.blockId} (${sample.ranchName})`,
+      type: 'LAB'
+    });
+
+    res.json(sample);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to submit lab sample' });
+  }
+});
+
+router.put('/samples/:id/values', async (req: AuthenticatedRequest, res) => {
+  try {
+    const updated = updateSampleValues(req.params.id, req.body);
+    if (!updated) return res.status(404).json({ error: 'Sample not found' });
+    res.json(updated);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to update sample values' });
+  }
+});
+
+router.post('/samples/:id/recommendation', async (req: AuthenticatedRequest, res) => {
+  try {
+    const updated = createRecommendation(req.params.id, req.body);
+    if (!updated) return res.status(404).json({ error: 'Sample not found' });
+
+    addAuditLog({
+      action: 'RECOMMENDATION_SENT',
+      details: `Custom nutrition recommendation sent for Sample ${updated.id}`,
+      actor: req.user?.email || 'admin@renu.com',
+      category: 'RANCHES'
+    });
+
+    // Notify customer
+    if (transporter && updated.customerEmail) {
+      try {
+        await transporter.sendMail({
+          from: `"ReNu-Biome Agronomy" <${process.env.SMTP_USER || 'support@renu-biome.com'}>`,
+          to: updated.customerEmail,
+          subject: `ReNu-Biome: Agronomic Recommendation for Block ${updated.blockId}`,
+          text: `Your lab results for Block ${updated.blockId} have been reviewed. A custom recommendation has been posted in your grower portal.`
+        });
+      } catch (err) {}
+    }
+
+    res.json(updated);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to post recommendation' });
+  }
+});
+
+router.post('/samples/:id/reply', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { question } = req.body;
+    const updated = replyToRecommendation(req.params.id, question);
+    if (!updated) return res.status(404).json({ error: 'Sample not found' });
+
+    addAdminNotification({
+      title: 'Customer Question on Recommendation',
+      message: `Question regarding ${updated.blockId} recommendation: "${question}"`,
+      type: 'LAB'
+    });
+
+    res.json(updated);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to submit reply' });
+  }
+});
+
+// ---------------------------------
+// Otodata Tank Telemetry Routes (Phase 2 - Section 3)
+// ---------------------------------
+router.get('/tanks/:id/telemetry', async (req: AuthenticatedRequest, res) => {
+  for (const ranch of mockRanches) {
+    const tank = (ranch.tanks || []).find(t => t.id === req.params.id);
+    if (tank) {
+      return res.json({
+        tankId: tank.id,
+        tankName: tank.name,
+        ranchName: ranch.name,
+        capacity: tank.capacity,
+        otodataDeviceId: tank.otodataDeviceId || 'OTO-99214',
+        levelPercent: tank.levelPercent !== undefined ? tank.levelPercent : parseInt(tank.level || '75', 10),
+        levelGallons: tank.levelGallons || Math.round(tank.capacity * 0.75),
+        pressurePSI: parseInt(tank.pressure || '32', 10),
+        lastReadingTime: tank.lastReadingTime || new Date().toISOString(),
+        weeklyUsageAvg: tank.weeklyUsageAvg || 210,
+        daysToEmpty: tank.daysToEmpty || 35,
+        reorderThresholdPercent: tank.reorderThresholdPercent || 25,
+        status: tank.status || 'Normal'
+      });
+    }
+  }
+  res.status(404).json({ error: 'Tank not found' });
+});
+
+router.put('/tanks/:id/telemetry', async (req: AuthenticatedRequest, res) => {
+  const updated = updateTankTelemetry(req.params.id, req.body);
+  if (!updated) return res.status(404).json({ error: 'Tank not found' });
+  res.json(updated);
+});
+
+// ---------------------------------
+// Monthly Reports Routes (Section A6.7)
+// ---------------------------------
+router.get('/reports/monthly', async (req: AuthenticatedRequest, res) => {
+  const period = req.query.period as string | undefined;
+  const reports = getMonthlyReports(period);
+  res.json(reports);
+});
+
+// ---------------------------------
+// Block Import / Export Routes (Section A11)
+// ---------------------------------
+router.post('/ranches/:ranchId/blocks/import', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { blocks } = req.body;
+    if (!Array.isArray(blocks) || blocks.length === 0) {
+      return res.status(400).json({ error: 'Blocks array is required' });
+    }
+    const result = importBlocksToRanch(req.params.ranchId, blocks);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Import failed' });
+  }
+});
+
+router.get('/blocks/export', async (req: AuthenticatedRequest, res) => {
+  try {
+    const ranchId = req.query.ranchId as string | undefined;
+    const csvData = exportBlocksFromRanches(ranchId);
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="ReNu-Biome-Blocks.csv"');
+    res.send(csvData);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Export failed' });
+  }
+});
+
+// ---------------------------------
+// Admin Customer Management Routes (inside router)
+// ---------------------------------
+router.get('/admin/customers', async (req: AuthenticatedRequest, res) => {
+  const customers = await getAllCustomersList();
+  res.json(customers);
+});
+
+router.post('/admin/customers', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { name, email, password, phone, role } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+
+    const newCust = await createNewUser({
+      name: name || 'New Customer',
+      email,
+      password: password || 'Customer123!',
+      phone,
+      role: role || 'Grower',
+      approvalStatus: 'APPROVED'
+    });
+
+    res.json({ success: true, customer: newCust });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to create customer' });
+  }
+});
+
+router.put('/admin/customers/:id', async (req: AuthenticatedRequest, res) => {
+  try {
+    const updated = await updateCustomerDetails(req.params.id, req.body);
+    res.json({ success: true, customer: updated });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to update customer' });
+  }
+});
+
+router.put('/admin/customers/:id/reset-password', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { password } = req.body;
+    if (!password) return res.status(400).json({ error: 'Password is required' });
+    const updated = await updateCustomerDetails(req.params.id, { password });
+    res.json({ success: true, message: 'Password reset successfully', customer: updated });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to reset password' });
+  }
+});
+
+// ---------------------------------
+// OptimoRoute Integration Routes (Phase 2 - Section 2)
+// ---------------------------------
+router.post('/optimoroute/webhook', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { orderId, status, driverName, eta, completionTime } = req.body;
+    const order = mockOrdersList.find(o => o.orderId === orderId || o.optimoRouteOrderId === orderId);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+
+    if (status === 'Out for delivery' || status === 'en_route') {
+      updateDeliveryStatus(order.id, 'Out for delivery');
+      if (driverName) order.driverName = driverName;
+      if (eta) order.estimatedArrival = eta;
+    } else if (status === 'Delivered' || status === 'completed') {
+      updateDeliveryStatus(order.id, 'Delivered', {
+        deliveredDate: completionTime || new Date().toISOString().split('T')[0]
+      });
+      if (completionTime) order.completedTime = completionTime;
+    }
+
+    saveStore();
+    res.json({ success: true, order: enrichDelivery(order) });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Webhook failed' });
+  }
 });
 
 export default router;

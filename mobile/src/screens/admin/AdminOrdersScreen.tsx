@@ -12,7 +12,7 @@ import {
   fetchRanches
 } from '../../api/client';
 
-export const AdminOrdersScreen = () => {
+export const AdminOrdersScreen = ({ route }: any) => {
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -28,7 +28,7 @@ export const AdminOrdersScreen = () => {
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [newCustomerName, setNewCustomerName] = useState('Sierra Agri Group');
   const [newCustomerEmail, setNewCustomerEmail] = useState('customer@renu.com');
-  const [newProduct, setNewProduct] = useState('Biome Care');
+  const [newProduct, setNewProduct] = useState('ReNu N-32% K-28% Blend');
   const [newGallons, setNewGallons] = useState('');
   const [newRanchId, setNewRanchId] = useState('');
   const [newTankId, setNewTankId] = useState('');
@@ -90,6 +90,16 @@ export const AdminOrdersScreen = () => {
     loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    if (route?.params?.prefillRanchId) {
+      setNewRanchId(route.params.prefillRanchId);
+      if (route.params.prefillTankId) setNewTankId(route.params.prefillTankId);
+      if (route.params.prefillCustomerName) setNewCustomerName(route.params.prefillCustomerName);
+      if (route.params.prefillCustomerEmail) setNewCustomerEmail(route.params.prefillCustomerEmail);
+      setCreateModalVisible(true);
+    }
+  }, [route?.params]);
+
   // Handle Create Order
   const handleCreateOrder = async () => {
     const gal = parseFloat(newGallons);
@@ -135,8 +145,16 @@ export const AdminOrdersScreen = () => {
   // Handle Mark Out For Delivery
   const handleMarkOutForDelivery = async (del: any) => {
     try {
-      await updateDeliveryStatus(del.id || del.orderId, 'Out for delivery');
-      Alert.alert('Dispatched', `Delivery ${del.orderId || del.id} is now Out for Delivery. Customer received email notification.`);
+      await updateDeliveryStatus(del.id || del.orderId, 'Out for delivery', {
+        optimoroute: {
+          orderId: `OPT-${del.orderId || Math.floor(1000 + Math.random() * 9000)}`,
+          driverName: 'Dave Miller',
+          driverPhone: '(559) 555-0144',
+          eta: '2:15 PM',
+          status: 'in_transit'
+        }
+      });
+      Alert.alert('Dispatched', `Delivery ${del.orderId || del.id} dispatched via OptimoRoute. Driver: Dave Miller · Live ETA: 2:15 PM. Customer notified.`);
       loadData();
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to update status');

@@ -24,15 +24,35 @@ const customFonts = {
   bodySmall: { ...fontConfig, fontWeight: '400', fontSize: 12, lineHeight: 16 },
 };
 
-// Base colors mapped to the AI Agriculture spec
+// Official ReNu-Biome Brand Colors
+export const BRAND_COLORS = {
+  primary: '#0C6054', // Teal (primary)
+  accent: '#F07E42', // Orange (accent)
+  secondary: '#F07E42',
+  darkTeal: '#083F38', // Dark teal (headers & gradients)
+  lightTeal: '#16837A', // Lighter teal (gradients)
+  tealSoft: '#E6F3F1', // Soft tinted background
+  orangeSoft: '#FEF0E8', // Soft orange tint
+  gradient: ['#083F38', '#0C6054', '#16837A'] as const,
+  cardBackground: '#FFFFFF',
+  neutralBackground: '#F8FAFC',
+  border: '#E2E8F0',
+  textPrimary: '#0F172A',
+  textSecondary: '#64748B',
+  success: '#15803D',
+  error: '#DC2626',
+  warning: '#D97706',
+};
+
+// Base colors mapped to the ReNu-Biome brand spec
 const baseColors = {
-  primary: '#2D6640',       // Deep forest green brand color
-  primaryContainer: '#98D6A4',
-  secondary: '#FF8F00',     // Warm amber for offers/promotions
-  secondaryContainer: '#FFF2C2',
-  tertiary: '#5D9C68',      // Muted green for alerts/reminders
-  error: '#FF5252',         // Red for errors
-  success: '#3F784C',       // Green for success
+  primary: BRAND_COLORS.primary,
+  primaryContainer: '#99D5CE',
+  secondary: BRAND_COLORS.accent,
+  secondaryContainer: '#FCE0D2',
+  tertiary: BRAND_COLORS.lightTeal,
+  error: '#DC2626',
+  success: '#15803D',
 };
 
 export const lightTheme = {
@@ -42,10 +62,10 @@ export const lightTheme = {
   colors: {
     ...MD3LightTheme.colors,
     ...baseColors,
-    background: '#F0F4F1',  // Very light green/gray neutral
-    surface: '#FFFFFF',     // Clean white cards
-    surfaceVariant: 'rgba(255, 255, 255, 0.7)', // Translucent surface for glassmorphism
-    onSurfaceVariant: '#4E6B56', // Neutral green-gray for secondary text
+    background: '#F8FAFC', // Clean neutral background
+    surface: '#FFFFFF', // Clean white cards
+    surfaceVariant: 'rgba(255, 255, 255, 0.95)',
+    onSurfaceVariant: '#0C6054',
   },
 };
 
@@ -56,10 +76,10 @@ export const darkTheme = {
   colors: {
     ...MD3DarkTheme.colors,
     ...baseColors,
-    primary: '#4CAF50',       // Lighter green for dark mode contrast
-    background: '#121C14',    // True dark with slight green tint
-    surface: '#1A2E20',       // Elevated dark surface
-    surfaceVariant: 'rgba(26, 46, 32, 0.7)', // Translucent surface for glassmorphism
-    onSurfaceVariant: '#9DBBA4', // Lighter green-gray for secondary text
+    primary: '#16837A',
+    background: '#081D1A',
+    surface: '#0F2E2A',
+    surfaceVariant: 'rgba(15, 46, 42, 0.85)',
+    onSurfaceVariant: '#99D5CE',
   },
 };

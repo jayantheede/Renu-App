@@ -31,7 +31,7 @@ export const AdminInvoicesScreen = () => {
   const [newAmount, setNewAmount] = useState('');
   const [newInvoiceDate, setNewInvoiceDate] = useState(new Date().toISOString().split('T')[0]);
   const [newDueDate, setNewDueDate] = useState(new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]);
-  const [newProduct, setNewProduct] = useState('Biome Care');
+  const [newProduct, setNewProduct] = useState('ReNu N-32% K-28% Blend');
   const [newGallons, setNewGallons] = useState('');
   const [newQuickbooksId, setNewQuickbooksId] = useState('');
   const [savingInvoice, setSavingInvoice] = useState(false);
@@ -222,7 +222,7 @@ export const AdminInvoicesScreen = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor="#2E5D36" />
+          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor="#0C6054" />
         }
       >
         {/* Header */}
@@ -344,8 +344,8 @@ export const AdminInvoicesScreen = () => {
                       setPdfModalVisible(true);
                     }}
                     icon="file-pdf-box"
-                    textColor="#2E5D36"
-                    style={{ borderColor: '#2E5D36', minHeight: 44, justifyContent: 'center' }}
+                    textColor="#0C6054"
+                    style={{ borderColor: '#0C6054', minHeight: 44, justifyContent: 'center' }}
                   >
                     View / Print PDF
                   </Button>
@@ -426,7 +426,7 @@ export const AdminInvoicesScreen = () => {
 
             <View style={styles.modalActions}>
               <Button mode="outlined" onPress={() => setAddModalVisible(false)} textColor="#64748B" style={{ flex: 1, marginRight: 8, minHeight: 48, justifyContent: 'center' }}>Cancel</Button>
-              <Button mode="contained" onPress={handleSaveNewInvoice} loading={savingInvoice} buttonColor="#2E5D36" style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}>Save Invoice</Button>
+              <Button mode="contained" onPress={handleSaveNewInvoice} loading={savingInvoice} buttonColor="#0C6054" style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}>Save Invoice</Button>
             </View>
           </View>
         </View>
@@ -470,9 +470,9 @@ export const AdminInvoicesScreen = () => {
 
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={styles.statementBox}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 2, borderBottomColor: '#2E5D36', paddingBottom: 10 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 2, borderBottomColor: '#0C6054', paddingBottom: 10 }}>
                   <View>
-                    <Text style={{ fontSize: 20, fontWeight: '900', color: '#2E5D36' }}>ReNu-Biome Inc.</Text>
+                    <Text style={{ fontSize: 20, fontWeight: '900', color: '#0C6054' }}>ReNu-Biome Inc.</Text>
                     <Text style={{ fontSize: 11, color: '#64748B' }}>Agricultural Biologicals & Nutrients</Text>
                   </View>
                   <View style={{ alignItems: 'flex-end' }}>
@@ -515,7 +515,7 @@ export const AdminInvoicesScreen = () => {
 
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 }}>
                   <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>Total Amount Due</Text>
-                  <Text style={{ fontSize: 18, fontWeight: '900', color: '#2E5D36' }}>
+                  <Text style={{ fontSize: 18, fontWeight: '900', color: '#0C6054' }}>
                     ${Number(selectedInvoiceForPdf?.amount || 0).toLocaleString()}
                   </Text>
                 </View>
@@ -524,7 +524,7 @@ export const AdminInvoicesScreen = () => {
 
             <View style={styles.modalActions}>
               <Button mode="outlined" onPress={() => setPdfModalVisible(false)} textColor="#64748B" style={{ flex: 1, marginRight: 8, minHeight: 48, justifyContent: 'center' }}>Close</Button>
-              <Button mode="contained" onPress={handlePrintPdf} icon="printer" buttonColor="#2E5D36" style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}>Print / Export</Button>
+              <Button mode="contained" onPress={handlePrintPdf} icon="printer" buttonColor="#0C6054" style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}>Print / Export</Button>
             </View>
           </View>
         </View>
@@ -544,7 +544,7 @@ export const AdminInvoicesScreen = () => {
             <TextInput label="QuickBooks ID" value={editQbId} onChangeText={setEditQbId} mode="outlined" style={styles.modalInput} />
             <View style={styles.modalActions}>
               <Button mode="outlined" onPress={() => setEditModalVisible(false)} textColor="#64748B" style={{ flex: 1, marginRight: 8, minHeight: 48, justifyContent: 'center' }}>Cancel</Button>
-              <Button mode="contained" onPress={handleSaveEdit} loading={updatingInvoice} buttonColor="#2E5D36" style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}>Save</Button>
+              <Button mode="contained" onPress={handleSaveEdit} loading={updatingInvoice} buttonColor="#0C6054" style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}>Save</Button>
             </View>
           </View>
         </View>
@@ -569,7 +569,7 @@ const styles = StyleSheet.create({
   addBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2E5D36',
+    backgroundColor: '#0C6054',
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 24,
@@ -588,7 +588,7 @@ const styles = StyleSheet.create({
     minHeight: 40,
     justifyContent: 'center',
   },
-  filterChipActive: { backgroundColor: '#2E5D36', borderColor: '#2E5D36' },
+  filterChipActive: { backgroundColor: '#0C6054', borderColor: '#0C6054' },
   filterChipText: { fontSize: 13, fontWeight: '600', color: '#475569' },
   filterChipTextActive: { color: '#FFFFFF' },
   searchInput: { marginBottom: 8, backgroundColor: '#FFFFFF' },
