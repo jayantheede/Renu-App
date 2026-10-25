@@ -27,7 +27,9 @@ const customFonts = {
 // Official ReNu-Biome Brand Colors
 export const BRAND_COLORS = {
   primary: '#0C6054', // Teal (primary)
+  primaryTeal: '#0C6054', // Explicit Teal alias
   accent: '#F07E42', // Orange (accent)
+  accentOrange: '#F07E42', // Explicit Orange alias
   secondary: '#F07E42',
   darkTeal: '#083F38', // Dark teal (headers & gradients)
   lightTeal: '#16837A', // Lighter teal (gradients)

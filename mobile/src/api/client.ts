@@ -230,7 +230,7 @@ export const submitOrder = submitDelivery; // Backward compatibility alias
 export const updateDeliveryStatus = async (
   id: string,
   status: 'Scheduled' | 'Out for delivery' | 'Delivered' | 'Cancelled',
-  extra?: { deliveredGallons?: number; deliveredDate?: string; cancelReason?: string }
+  extra?: { deliveredGallons?: number; deliveredDate?: string; cancelReason?: string; optimoroute?: any }
 ) => {
   const res = await apiClient(`/app/deliveries/${id}/status`, {
     method: 'PUT',
@@ -498,3 +498,34 @@ export const fetchAuditLogs = () => apiClient('/app/admin/audit-logs');
 export const resetSystemCache = () => apiClient('/app/admin/reset-cache', { method: 'POST' });
 export const fetchMessages = () => apiClient('/app/messages');
 export const sendMessage = (data: any) => apiClient('/app/messages', { method: 'POST', body: JSON.stringify(data) });
+export const markMessageRead = (id: string) => apiClient(`/app/messages/${id}/read`, { method: 'PUT' });
+
+// -----------------------------------------------------------------------
+// Deferred Launch Capabilities API Methods
+// -----------------------------------------------------------------------
+export const fetchDocuments = () => apiClient('/app/documents');
+export const uploadDocument = (data: any) => apiClient('/app/documents/upload', { method: 'POST', body: JSON.stringify(data) });
+export const signContract = (documentId: string, signatureName: string) => apiClient('/app/documents/sign', { method: 'POST', body: JSON.stringify({ documentId, signatureName }) });
+export const fetchAuditPack = () => apiClient('/app/documents/audit-pack');
+
+export const fetchComplianceReport = (season?: number) => apiClient(`/app/compliance/nitrogen-report?season=${season || 2026}`);
+export const updateBlockYield = (blockId: string, yieldPerAcre: number) => apiClient('/app/compliance/yield', { method: 'PUT', body: JSON.stringify({ blockId, yieldPerAcre }) });
+
+export const fetchQuickBooksStatus = () => apiClient('/app/quickbooks/status');
+export const syncQuickBooks = () => apiClient('/app/quickbooks/sync', { method: 'POST' });
+
+export const payInvoiceOnline = (invoiceId: string, paymentData: { paymentMethod: string; paymentDetails?: any; paymentDate?: string }) =>
+  apiClient(`/app/invoices/${invoiceId}/pay`, { method: 'PUT', body: JSON.stringify(paymentData) });
+
+export const submitOrderRequest = (data: {
+  productId: string;
+  product: string;
+  gallons: number;
+  ranchId: string;
+  ranchName: string;
+  tankId?: string;
+  tankName?: string;
+  deliveryWindow?: string;
+  notes?: string;
+}) => apiClient('/app/orders', { method: 'POST', body: JSON.stringify(data) });
+

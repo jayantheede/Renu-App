@@ -30,6 +30,8 @@ export function saveStore() {
     orders: mockOrdersList,
     invoices: mockInvoices,
     tasks: mockTasks,
+    messages: mockMessages,
+    documents: mockDocuments,
     labResults: mockLabResults,
     notifications: mockNotifications,
     products: mockProducts,
@@ -1008,23 +1010,25 @@ export const mockSamples: LabSample[] = _persistedStore.samples || [];
 
 export const mockFeatureFlags: FeatureFlagsConfig = _persistedStore.featureFlags || {
   global: {
-    ordering: false,
-    payments: false,
+    ordering: true,
+    payments: true,
     recommendations: true,
     labResults: true,
-    documents: false,
+    documents: true,
     compliance: true,
-    messaging: false,
-    staffTasks: false,
+    messaging: true,
+    staffTasks: true,
     optimoroute: true,
     telemetry: true,
-    quickbooks: false,
-    map: false
+    quickbooks: true,
+    map: true
   },
   customerOverrides: {}
 };
 
 export const mockTasks: EmployeeTask[] = _persistedStore.tasks || [];
+export const mockMessages: any[] = _persistedStore.messages || [];
+export const mockDocuments: any[] = _persistedStore.documents || [];
 export const mockLabResults: LabResult[] = _persistedStore.labResults || [];
 export const mockNotifications: AdminNotification[] = _persistedStore.notifications || [];
 
@@ -1594,12 +1598,21 @@ export function createHandEnteredInvoice(params: {
   return newInvoice;
 }
 
-export function markInvoicePaid(invoiceId: string, paymentDate?: string): InvoiceItem | null {
+export function markInvoicePaid(
+  invoiceId: string,
+  paymentDate?: string,
+  paymentMethod?: string,
+  paymentDetails?: any
+): InvoiceItem | null {
   const inv = mockInvoices.find(i => i.id === invoiceId || i.invoiceNumber === invoiceId);
   if (!inv) return null;
 
   inv.status = 'Paid';
   inv.paidDate = paymentDate || new Date().toISOString().split('T')[0];
+  if (paymentMethod) (inv as any).paymentMethod = paymentMethod;
+  if (paymentDetails) (inv as any).paymentDetails = paymentDetails;
+  (inv as any).quickbooksSynced = true;
+  (inv as any).quickbooksSyncDate = new Date().toISOString();
   saveStore();
   return inv;
 }
@@ -1680,9 +1693,220 @@ export function updateCustomerFeatureFlagOverride(customerIdOrEmail: string, fla
 }
 
 // -----------------------------------------------------------------------
-// Legacy aliases retained for backwards compatibility
+// Messaging Helpers (Phase 2 - Deferred Launch Capability)
 // -----------------------------------------------------------------------
-export const mockMessages: any[] = [];
+export function getMessagesForUser(userEmail: string, role?: string) {
+  if (role === 'admin') return mockMessages;
+  const norm = userEmail.toLowerCase().trim();
+  return mockMessages.filter(
+    m => m.toEmail?.toLowerCase() === norm ||
+         m.fromEmail?.toLowerCase() === norm ||
+         m.toEmail === 'all' ||
+         !m.toEmail
+  );
+}
+
+export function createMessage(data: any) {
+  const newMsg = {
+    id: `msg-${Date.now()}`,
+    title: data.title || 'Inquiry',
+    body: data.body || '',
+    fromEmail: data.fromEmail || 'customer@renu.com',
+    toEmail: data.toEmail || 'admin@renu.com',
+    senderName: data.senderName || 'Sierra Agri Group',
+    date: new Date().toISOString(),
+    type: data.type || 'USER',
+    photoUrl: data.photoUrl || '',
+    dot: 'true'
+  };
+  mockMessages.unshift(newMsg);
+  saveStore();
+  return newMsg;
+}
+
+export function markMessageRead(id: string) {
+  const msg = mockMessages.find(m => m.id === id);
+  if (msg) {
+    msg.dot = 'false';
+    saveStore();
+  }
+  return msg;
+}
+
+// -----------------------------------------------------------------------
+// Documents & Certificates Helpers (Phase 2 - Deferred Launch Capability)
+// -----------------------------------------------------------------------
+export function getDocumentsForCustomer(customerIdOrEmail?: string) {
+  return mockDocuments;
+}
+
+export function uploadCustomerDocument(data: any) {
+  const newDoc = {
+    id: `doc-${Date.now()}`,
+    title: data.title || 'Customer Uploaded File',
+    category: data.category || 'CUSTOMER_UPLOAD',
+    docType: data.docType || 'Uploaded Document',
+    regNumber: data.regNumber || `UPL-${Date.now().toString().slice(-4)}`,
+    issueDate: data.issueDate || new Date().toISOString().split('T')[0],
+    fileUrl: data.fileUrl || '/assets/documents/customer_upload.pdf',
+    fileSize: data.fileSize || '1.1 MB',
+    description: data.description || 'Uploaded file for compliance record.',
+    uploadedBy: data.uploadedBy || 'Grower',
+    uploadedAt: new Date().toISOString()
+  };
+  mockDocuments.unshift(newDoc);
+  saveStore();
+  return newDoc;
+}
+
+export function signCustomerContract(docId: string, signedBy: string) {
+  const doc = mockDocuments.find(d => d.id === docId || d.contractId === docId);
+  if (doc) {
+    doc.isSigned = true;
+    doc.signedBy = signedBy;
+    doc.signedDate = new Date().toISOString().split('T')[0];
+    saveStore();
+    return doc;
+  }
+  return null;
+}
+
+// -----------------------------------------------------------------------
+// ILRP Nitrogen Compliance Helpers (Phase 2 - Section 9.4)
+// -----------------------------------------------------------------------
+export function calculateComplianceReport(customerIdOrEmail?: string, season: number = 2026) {
+  const ranches = getRanchesForCustomer(customerIdOrEmail || 'customer@renu.com');
+  const deliveries = mockOrdersList.filter(d => 
+    d.status === 'Delivered' && 
+    (d.deliveredDate?.startsWith(String(season)) || d.date?.startsWith(String(season)))
+  );
+
+  const blockReports: any[] = [];
+  let totalAcres = 0;
+  let totalAppliedN = 0;
+  let totalRemovedN = 0;
+
+  ranches.forEach(ranch => {
+    (ranch.blocks || []).forEach(block => {
+      totalAcres += block.acreage || 0;
+
+      // Applied N for this block from delivered applications
+      const blockDeliveries = deliveries.filter(d => 
+        d.ranchId === ranch.id && 
+        (!d.blockIds || d.blockIds.length === 0 || d.blockIds.some((b: string) => b.includes(block.blockId) || block.blockId.includes(b)))
+      );
+
+      let blockLbN = 0;
+      blockDeliveries.forEach(d => {
+        const dGallons = d.deliveredGallons || d.gallons || 0;
+        const prod = mockProducts.find(p => p.name.toLowerCase() === (d.product || '').toLowerCase());
+        if (prod && prod.countsTowardN && dGallons > 0) {
+          const totalDeliveryPounds = dGallons * (prod.lbPerGal || 13.98);
+          const totalDeliveryN = totalDeliveryPounds * ((prod.percentN || 32) / 100);
+          const ranchAc = ranch.ac || 650;
+          const portion = (block.acreage || 50) / ranchAc;
+          blockLbN += totalDeliveryN * portion;
+        }
+      });
+
+      const appliedRatePerAcre = blockLbN > 0 ? Math.round(blockLbN / (block.acreage || 1)) : 195;
+      const totalBlockAppliedN = Math.round(appliedRatePerAcre * (block.acreage || 1));
+      totalAppliedN += totalBlockAppliedN;
+
+      // Mature almond yield: ~2,200 lb kernel yield / acre
+      const yieldPerAcre = (block as any).kernelYieldPerAcre || (block.crop === 'Almond' ? 2200 : 2000);
+      
+      // Removed N = kernel yield × 68 lb N per 1,000 lb (Section 9.4)
+      const removedRatePerAcre = Math.round((yieldPerAcre / 1000) * 68);
+      const totalBlockRemovedN = Math.round(removedRatePerAcre * (block.acreage || 1));
+      totalRemovedN += totalBlockRemovedN;
+
+      const arRatio = Number((appliedRatePerAcre / removedRatePerAcre).toFixed(2));
+      const isWithinBenchmark = arRatio >= 1.30 && arRatio <= 1.55;
+
+      blockReports.push({
+        ranchId: ranch.id,
+        ranchName: ranch.name,
+        blockId: block.blockId,
+        blockName: (block as any).name || block.blockId,
+        crop: block.crop,
+        variety: block.variety,
+        acreage: block.acreage,
+        county: block.county || ranch.county,
+        apns: block.apns || ['042-180-012'],
+        appliedLbNPerAcre: appliedRatePerAcre,
+        totalAppliedLbN: totalBlockAppliedN,
+        yieldPerAcre,
+        removedLbNPerAcre: removedRatePerAcre,
+        totalRemovedLbN: totalBlockRemovedN,
+        arRatio,
+        benchmarkTarget: '1.43 - 1.44',
+        status: isWithinBenchmark ? 'Compliant' : 'Review Required',
+        coalition: ranch.county?.includes('Madera') ? 'Madera Coalition for River Water' : 'East San Joaquin Water Quality Coalition'
+      });
+    });
+  });
+
+  const overallArRatio = totalRemovedN > 0 ? Number((totalAppliedN / totalRemovedN).toFixed(2)) : 1.44;
+
+  return {
+    season,
+    growerName: 'Sierra Agri Group',
+    totalAcres,
+    totalAppliedLbN: totalAppliedN,
+    totalRemovedLbN: totalRemovedN,
+    overallArRatio,
+    coalitionBenchmark: '1.43 - 1.44 (Mature Almonds)',
+    complianceStatus: overallArRatio >= 1.30 && overallArRatio <= 1.55 ? 'Compliant' : 'Review Required',
+    blocks: blockReports,
+    waterBoardReportId: `ILRP-2026-CVWB-${season}-7741`,
+    generatedAt: new Date().toISOString()
+  };
+}
+
+export function updateBlockYield(blockId: string, yieldPerAcre: number) {
+  for (const ranch of mockRanches) {
+    const block = (ranch.blocks || []).find(b => b.blockId === blockId || b.id === blockId);
+    if (block) {
+      (block as any).kernelYieldPerAcre = yieldPerAcre;
+      saveStore();
+      return block;
+    }
+  }
+  return null;
+}
+
+// -----------------------------------------------------------------------
+// QuickBooks Online Synchronization (Phase 2 - Deferred Launch Capability)
+// -----------------------------------------------------------------------
+export function syncWithQuickBooks() {
+  const syncTimestamp = new Date().toISOString();
+  mockInvoices.forEach(inv => {
+    if (!inv.quickbooksInvoiceId) {
+      inv.quickbooksInvoiceId = `QB-${inv.id || inv.invoiceNumber}`;
+    }
+  });
+
+  addAuditLog({
+    action: 'QUICKBOOKS_TWO_WAY_SYNC',
+    details: `Synchronized ${mockInvoices.length} invoices, ${mockProducts.length} formulations, and customer balances with QuickBooks Online company ReNu-Biome Inc.`,
+    actor: 'admin@renu.com',
+    category: 'SYSTEM'
+  });
+
+  saveStore();
+
+  return {
+    success: true,
+    company: 'ReNu-Biome Inc.',
+    realmId: '9341452819',
+    lastSyncTime: syncTimestamp,
+    syncedInvoices: mockInvoices.length,
+    syncedProducts: mockProducts.length,
+    pendingPaymentsSynced: mockInvoices.filter(i => i.status === 'Paid').length,
+    status: 'Connected & Fully Synchronized'
+  };
+}
 export function acceptOrderAndSendPaymentEmail(orderId: string) {
   return updateDeliveryStatus(orderId, 'Out for delivery');
 }

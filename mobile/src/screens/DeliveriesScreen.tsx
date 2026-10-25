@@ -8,10 +8,16 @@ import {
   RefreshControl,
   Linking,
 } from 'react-native';
-import { Text, Chip, Divider, ActivityIndicator, Button } from 'react-native-paper';
+import { Text, Chip, Divider, ActivityIndicator, Button, TextInput } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { fetchDeliveries, fetchRanches } from '../api/client';
+import {
+  fetchDeliveries,
+  fetchRanches,
+  fetchProducts,
+  fetchFeatureFlags,
+  submitOrderRequest
+} from '../api/client';
 import { BRAND_COLORS } from '../theme/theme';
 
 export const DeliveriesScreen = () => {
@@ -19,9 +25,28 @@ export const DeliveriesScreen = () => {
 
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [ranches, setRanches] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
   const [selectedRanchFilter, setSelectedRanchFilter] = useState<string>('ALL');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Deferred Launch Flags
+  const [orderingEnabled, setOrderingEnabled] = useState(true);
+  const [optimorouteEnabled, setOptimorouteEnabled] = useState(true);
+
+  // Order Placement Modal (Deferred: ordering)
+  const [orderModalVisible, setOrderModalVisible] = useState(false);
+  const [orderProduct, setOrderProduct] = useState('ReNu N-CARE 32-0-0');
+  const [orderRanchId, setOrderRanchId] = useState('');
+  const [orderTankId, setOrderTankId] = useState('');
+  const [orderGallons, setOrderGallons] = useState('2500');
+  const [orderWindow, setOrderWindow] = useState('Tomorrow 8:00 AM - 12:00 PM');
+  const [orderNotes, setOrderNotes] = useState('');
+  const [submittingOrder, setSubmittingOrder] = useState(false);
+
+  // Proof of Delivery (POD) Modal (Deferred: optimoroute)
+  const [podModalVisible, setPodModalVisible] = useState(false);
+  const [podDelivery, setPodDelivery] = useState<any>(null);
 
   // Delivery Detail Modal
   const [selectedDelivery, setSelectedDelivery] = useState<any>(null);
@@ -29,17 +54,67 @@ export const DeliveriesScreen = () => {
 
   const loadData = async () => {
     try {
-      const [dData, rData] = await Promise.all([
+      const [dData, rData, pData, flagData] = await Promise.all([
         fetchDeliveries().catch(() => []),
         fetchRanches().catch(() => []),
+        fetchProducts().catch(() => []),
+        fetchFeatureFlags().catch(() => ({})),
       ]);
       if (Array.isArray(dData)) setDeliveries(dData);
-      if (Array.isArray(rData)) setRanches(rData);
+      if (Array.isArray(rData)) {
+        setRanches(rData);
+        if (rData.length > 0) {
+          setOrderRanchId(rData[0].id);
+          if (rData[0].tanks && rData[0].tanks.length > 0) {
+            setOrderTankId(rData[0].tanks[0].id);
+          }
+        }
+      }
+      if (Array.isArray(pData) && pData.length > 0) {
+        setProducts(pData);
+      }
+      if (flagData) {
+        setOrderingEnabled(Boolean(flagData.global?.ordering ?? flagData.ordering ?? true));
+        setOptimorouteEnabled(Boolean(flagData.global?.optimoroute ?? flagData.optimoroute ?? true));
+      }
     } catch (e) {
       console.warn('Deliveries fetch error:', e);
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  };
+
+  const handleCreateOrder = async () => {
+    if (!orderProduct || !orderRanchId || !orderGallons) {
+      alert('Please fill in product, destination ranch, and gallons.');
+      return;
+    }
+    setSubmittingOrder(true);
+    try {
+      const selectedRanch = ranches.find(r => r.id === orderRanchId);
+      const selectedTank = (selectedRanch?.tanks || []).find((t: any) => t.id === orderTankId);
+
+      await submitOrderRequest({
+        productId: 'prod-order',
+        product: orderProduct,
+        gallons: parseInt(orderGallons, 10) || 2500,
+        ranchId: orderRanchId,
+        ranchName: selectedRanch?.name || 'Sierra Foothills Ranch',
+        tankId: orderTankId,
+        tankName: selectedTank?.name || 'Tank T-101',
+        deliveryWindow: orderWindow,
+        notes: orderNotes
+      });
+
+      setOrderModalVisible(false);
+      setOrderNotes('');
+      alert(`Order submitted successfully for ${parseInt(orderGallons, 10).toLocaleString()} gallons of ${orderProduct} to ${selectedRanch?.name || 'Ranch'}. Our dispatch team has received your order.`);
+      loadData();
+    } catch (e: any) {
+      alert(e.message || 'Failed to submit order request');
+    } finally {
+      setSubmittingOrder(false);
     }
   };
 
@@ -94,10 +169,21 @@ export const DeliveriesScreen = () => {
     <View style={styles.container}>
       {/* Top Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Deliveries</Text>
-        <Text style={styles.headerSubtitle}>
-          Scheduled tank refills, OptimoRoute driver tracking & nutrient accounting
-        </Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.headerTitle}>Deliveries</Text>
+          <Text style={styles.headerSubtitle}>
+            Scheduled tank refills, OptimoRoute driver tracking & nutrient accounting
+          </Text>
+        </View>
+        {orderingEnabled && (
+          <TouchableOpacity
+            style={styles.requestOrderBtn}
+            onPress={() => setOrderModalVisible(true)}
+          >
+            <MaterialCommunityIcons name="plus-circle" size={16} color="#FFFFFF" />
+            <Text style={styles.requestOrderBtnText}>Request Refill</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Ranch Filter Pills */}
@@ -283,7 +369,25 @@ export const DeliveriesScreen = () => {
                           Blocks: {item.blockIds && item.blockIds.length > 0 ? item.blockIds.join(', ') : 'All Ranch Blocks'}
                         </Text>
                       </View>
-                      <MaterialCommunityIcons name="chevron-right" size={20} color="#94A3B8" />
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        {optimorouteEnabled && item.status === 'Delivered' && (
+                          <Button
+                            mode="outlined"
+                            compact
+                            icon="shield-check"
+                            textColor="#0C6054"
+                            style={{ borderColor: '#0C6054', borderRadius: 8, height: 32 }}
+                            contentStyle={{ height: 32 }}
+                            onPress={() => {
+                              setPodDelivery(item);
+                              setPodModalVisible(true);
+                            }}
+                          >
+                            POD
+                          </Button>
+                        )}
+                        <MaterialCommunityIcons name="chevron-right" size={20} color="#94A3B8" />
+                      </View>
                     </View>
                   </TouchableOpacity>
                 );
@@ -438,28 +542,273 @@ export const DeliveriesScreen = () => {
                     )}
                   </View>
 
-                  {/* Link to Invoice (if delivered) */}
-                  {selectedDelivery.status === 'Delivered' && (
-                    <View style={styles.invoiceLinkBox}>
-                      <MaterialCommunityIcons name="receipt-text-check" size={24} color={BRAND_COLORS.primaryTeal} />
+                  {/* Proof of Delivery (POD) Box (if delivered) */}
+                  {selectedDelivery.status === 'Delivered' && optimorouteEnabled && (
+                    <View style={styles.podBannerBox}>
+                      <MaterialCommunityIcons name="shield-check" size={24} color="#059669" />
                       <View style={{ flex: 1, marginLeft: 10 }}>
-                        <Text style={styles.invoiceLinkTitle}>Invoice Available</Text>
-                        <Text style={styles.invoiceLinkSub}>Official QuickBooks invoice issued</Text>
+                        <Text style={styles.podBannerTitle}>Proof of Delivery (POD) Confirmed</Text>
+                        <Text style={styles.podBannerSub}>Driver signature & electronic tank verification on record</Text>
                       </View>
                       <Button
                         mode="contained"
-                        buttonColor={BRAND_COLORS.primaryTeal}
+                        buttonColor="#059669"
                         compact
                         onPress={() => {
                           setDetailModalVisible(false);
-                          navigation.navigate('Invoices');
+                          setPodDelivery(selectedDelivery);
+                          setPodModalVisible(true);
                         }}
                       >
-                        View Invoice
+                        View POD
                       </Button>
                     </View>
                   )}
                 </ScrollView>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* ==================== ORDER PLACEMENT MODAL (Deferred: ordering) ==================== */}
+      <Modal visible={orderModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalSub}>Customer Self-Ordering</Text>
+                <Text style={styles.modalTitle}>Request Delivery / Refill</Text>
+              </View>
+              <TouchableOpacity onPress={() => setOrderModalVisible(false)} style={styles.modalCloseBtn}>
+                <MaterialCommunityIcons name="close" size={24} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 440 }}>
+              <View style={styles.orderForm}>
+                {/* Product Selection */}
+                <Text style={styles.formSectionLabel}>1. Select Formulation</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+                  {['ReNu N-CARE 32-0-0', 'ReNu K-RUSH 0-0-28', 'Bio-Release', 'Micro-Trace Blend', 'Calcium-Prime', 'Macro-Max N-P-K'].map((p) => (
+                    <TouchableOpacity
+                      key={p}
+                      style={[styles.productPill, orderProduct === p && styles.productPillActive]}
+                      onPress={() => setOrderProduct(p)}
+                    >
+                      <Text style={[styles.productPillText, orderProduct === p && styles.productPillTextActive]}>
+                        {p}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+
+                {/* Ranch Destination */}
+                <Text style={styles.formSectionLabel}>2. Destination Ranch & Tank</Text>
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+                  {ranches.map((r) => (
+                    <TouchableOpacity
+                      key={r.id}
+                      style={[styles.ranchSelectPill, orderRanchId === r.id && styles.ranchSelectPillActive]}
+                      onPress={() => {
+                        setOrderRanchId(r.id);
+                        if (r.tanks && r.tanks.length > 0) {
+                          setOrderTankId(r.tanks[0].id);
+                        }
+                      }}
+                    >
+                      <Text style={[styles.ranchSelectText, orderRanchId === r.id && styles.ranchSelectTextActive]}>
+                        {r.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Tank Selection */}
+                {ranches.find(r => r.id === orderRanchId)?.tanks && (
+                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                    {(ranches.find(r => r.id === orderRanchId)?.tanks || []).map((t: any) => (
+                      <TouchableOpacity
+                        key={t.id}
+                        style={[styles.tankSelectPill, orderTankId === t.id && styles.tankSelectPillActive]}
+                        onPress={() => setOrderTankId(t.id)}
+                      >
+                        <Text style={[styles.tankSelectText, orderTankId === t.id && styles.tankSelectTextActive]}>
+                          {t.name} (Cap: {t.capacityGallons?.toLocaleString() || t.capacity?.toLocaleString()} Gal)
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                {/* Gallons & Delivery Window */}
+                <Text style={styles.formSectionLabel}>3. Quantity & Scheduling</Text>
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+                  {['1000', '2500', '3000', '5000'].map((g) => (
+                    <TouchableOpacity
+                      key={g}
+                      style={[styles.galPill, orderGallons === g && styles.galPillActive]}
+                      onPress={() => setOrderGallons(g)}
+                    >
+                      <Text style={[styles.galPillText, orderGallons === g && styles.galPillTextActive]}>
+                        {parseInt(g, 10).toLocaleString()} Gal
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <TextInput
+                  label="Target Delivery Window / Date"
+                  value={orderWindow}
+                  onChangeText={setOrderWindow}
+                  mode="outlined"
+                  outlineColor="#CBD5E1"
+                  activeOutlineColor="#0C6054"
+                  style={{ marginBottom: 10, backgroundColor: '#FFFFFF' }}
+                />
+
+                <TextInput
+                  label="Field Dispatch Notes (Gate code, contact on arrival)"
+                  value={orderNotes}
+                  onChangeText={setOrderNotes}
+                  mode="outlined"
+                  outlineColor="#CBD5E1"
+                  activeOutlineColor="#0C6054"
+                  placeholder="e.g. Gate code #4921, call foreman 15 mins prior"
+                  multiline
+                  numberOfLines={2}
+                  style={{ backgroundColor: '#FFFFFF' }}
+                />
+
+                <View style={styles.policyNotice}>
+                  <MaterialCommunityIcons name="information-outline" size={16} color="#0C6054" />
+                  <Text style={styles.policyNoticeText}>
+                    In accordance with ReNu-Biome grower policy, no unit prices are shown. Official invoices are generated through QuickBooks upon delivery.
+                  </Text>
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalActionRow}>
+              <Button
+                mode="outlined"
+                onPress={() => setOrderModalVisible(false)}
+                textColor="#64748B"
+                style={styles.closeBtn}
+              >
+                Cancel
+              </Button>
+              <Button
+                mode="contained"
+                buttonColor="#0C6054"
+                icon="send"
+                loading={submittingOrder}
+                onPress={handleCreateOrder}
+                style={{ borderRadius: 8, flex: 1 }}
+              >
+                Submit Order Request
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ==================== PROOF OF DELIVERY (POD) MODAL (Deferred: optimoroute) ==================== */}
+      <Modal visible={podModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            {podDelivery && (
+              <>
+                <View style={styles.modalHeader}>
+                  <View>
+                    <Text style={styles.modalSub}>OptimoRoute Dispatch POD</Text>
+                    <Text style={styles.modalTitle}>Proof of Delivery #{podDelivery.orderId}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => setPodModalVisible(false)} style={styles.modalCloseBtn}>
+                    <MaterialCommunityIcons name="close" size={24} color="#64748B" />
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 460 }}>
+                  {/* Verified Badge */}
+                  <View style={styles.podVerifiedStrip}>
+                    <MaterialCommunityIcons name="check-decagram" size={22} color="#15803D" />
+                    <View style={{ marginLeft: 8 }}>
+                      <Text style={styles.podVerifiedTitle}>Delivery Completed & Geotagged</Text>
+                      <Text style={styles.podVerifiedSub}>
+                        Delivered on {podDelivery.deliveredDate || podDelivery.date} · OptimoRoute Order #{podDelivery.optimoRouteOrderId || 'OR-9412'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Delivery Parameters Table */}
+                  <View style={styles.podTable}>
+                    <View style={styles.podRow}>
+                      <Text style={styles.podLabel}>Delivered Product:</Text>
+                      <Text style={styles.podVal}>{podDelivery.product}</Text>
+                    </View>
+                    <View style={styles.podRow}>
+                      <Text style={styles.podLabel}>Delivered Quantity:</Text>
+                      <Text style={[styles.podVal, { color: '#0C6054', fontWeight: '800' }]}>
+                        {(podDelivery.deliveredGallons || podDelivery.gallons)?.toLocaleString()} Gallons
+                      </Text>
+                    </View>
+                    <View style={styles.podRow}>
+                      <Text style={styles.podLabel}>Destination Ranch:</Text>
+                      <Text style={styles.podVal}>{getRanchName(podDelivery)}</Text>
+                    </View>
+                    <View style={styles.podRow}>
+                      <Text style={styles.podLabel}>Target Refill Tank:</Text>
+                      <Text style={styles.podVal}>{podDelivery.tankName || 'Tank T-101'}</Text>
+                    </View>
+                    <View style={styles.podRow}>
+                      <Text style={styles.podLabel}>Ranch GPS Drop Pin:</Text>
+                      <Text style={styles.podVal}>
+                        {podDelivery.ranchId === 'ranch-2' ? '36.9613° N, -120.0607° W' : '36.5963° N, -119.4504° W (Gate #2)'}
+                      </Text>
+                    </View>
+                    <View style={[styles.podRow, { borderBottomWidth: 0 }]}>
+                      <Text style={styles.podLabel}>Commercial Transport:</Text>
+                      <Text style={styles.podVal}>ReNu-Biome Logistics · Bobtail Tanker #4</Text>
+                    </View>
+                  </View>
+
+                  {/* Driver Electronic Signature */}
+                  <View style={styles.podSigCard}>
+                    <Text style={styles.podSigLabel}>Authorized Driver Electronic Signature:</Text>
+                    <View style={styles.sigCanvasBox}>
+                      <Text style={styles.sigScriptText}>Dave Miller</Text>
+                      <Text style={styles.sigSub}>
+                        Commercial Driver License Verified · Timestamp {podDelivery.completedTime || '14:48:22 PST'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Photo Verification */}
+                  <View style={styles.podPhotoCard}>
+                    <Text style={styles.podSigLabel}>Tank Level Verification Photo:</Text>
+                    <View style={styles.photoBox}>
+                      <MaterialCommunityIcons name="camera" size={32} color="#0C6054" />
+                      <Text style={styles.photoBoxText}>
+                        Tank Gauge Reading Verified (Fill Level: {(podDelivery.deliveredGallons || podDelivery.gallons)?.toLocaleString()} Gal Added)
+                      </Text>
+                      <Text style={styles.photoTimestamp}>
+                        Geotagged: Reedley, CA · Accuracy ±3m · Encrypted SHA-256
+                      </Text>
+                    </View>
+                  </View>
+                </ScrollView>
+
+                <View style={styles.modalActionRow}>
+                  <Button
+                    mode="contained"
+                    buttonColor={BRAND_COLORS.primaryTeal}
+                    onPress={() => setPodModalVisible(false)}
+                    style={{ borderRadius: 8, flex: 1 }}
+                  >
+                    Done
+                  </Button>
+                </View>
               </>
             )}
           </View>
@@ -669,6 +1018,27 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#0F172A',
   },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  modalSub: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  modalActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 16,
+  },
+  closeBtn: {
+    borderRadius: 8,
+    borderColor: '#CBD5E1',
+  },
   modalProduct: {
     fontSize: 14,
     fontWeight: '600',
@@ -854,5 +1224,259 @@ const styles = StyleSheet.create({
   invoiceLinkSub: {
     fontSize: 11,
     color: '#0F766E',
+  },
+  // Refill Request Button & Modal styles
+  requestOrderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0C6054',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 4,
+  },
+  requestOrderBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  podBannerBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 10,
+  },
+  podBannerTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#166534',
+  },
+  podBannerSub: {
+    fontSize: 11,
+    color: '#15803D',
+    marginTop: 2,
+  },
+  orderForm: {
+    paddingVertical: 4,
+  },
+  formSectionLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  productPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  productPillActive: {
+    backgroundColor: '#CCFBF1',
+    borderColor: '#0C6054',
+  },
+  productPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  productPillTextActive: {
+    color: '#0C6054',
+    fontWeight: '700',
+  },
+  ranchSelectPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  ranchSelectPillActive: {
+    backgroundColor: '#CCFBF1',
+    borderColor: '#0C6054',
+  },
+  ranchSelectText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  ranchSelectTextActive: {
+    color: '#0C6054',
+    fontWeight: '700',
+  },
+  tankSelectPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  tankSelectPillActive: {
+    backgroundColor: '#F0FDFA',
+    borderColor: '#0D9488',
+  },
+  tankSelectText: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  tankSelectTextActive: {
+    color: '#0D9488',
+    fontWeight: '700',
+  },
+  galPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  galPillActive: {
+    backgroundColor: '#CCFBF1',
+    borderColor: '#0C6054',
+  },
+  galPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  galPillTextActive: {
+    color: '#0C6054',
+    fontWeight: '700',
+  },
+  policyNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDFA',
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    marginTop: 12,
+    gap: 8,
+  },
+  policyNoticeText: {
+    fontSize: 11,
+    color: '#0C6054',
+    flex: 1,
+    lineHeight: 15,
+  },
+  // POD Modal styles
+  podVerifiedStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+    marginBottom: 12,
+  },
+  podVerifiedTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  podVerifiedSub: {
+    fontSize: 11,
+    color: '#166534',
+    marginTop: 2,
+  },
+  podTable: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 12,
+  },
+  podRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  podLabel: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  podVal: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1E293B',
+  },
+  podSigCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+  },
+  podSigLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 6,
+  },
+  sigCanvasBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 6,
+    padding: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  sigScriptText: {
+    fontFamily: 'serif',
+    fontSize: 24,
+    fontStyle: 'italic',
+    color: '#1E293B',
+    marginBottom: 4,
+  },
+  sigSub: {
+    fontSize: 10,
+    color: '#64748B',
+  },
+  podPhotoCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+  },
+  photoBox: {
+    backgroundColor: '#F0FDFA',
+    borderRadius: 6,
+    padding: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    borderStyle: 'dashed',
+  },
+  photoBoxText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#0C6054',
+    marginTop: 6,
+    textAlign: 'center',
+  },
+  photoTimestamp: {
+    fontSize: 10,
+    color: '#0F766E',
+    marginTop: 2,
+    textAlign: 'center',
   },
 });

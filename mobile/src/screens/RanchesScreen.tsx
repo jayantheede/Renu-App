@@ -32,11 +32,14 @@ import {
   replyToRecommendation,
   importBlocks,
   exportBlocks,
+  fetchFeatureFlags,
 } from '../api/client';
+import { useNavigation } from '@react-navigation/native';
 import { useAuthStore } from '../store/useAuthStore';
 import { BRAND_COLORS } from '../theme/theme';
 
 export const RanchesScreen = ({ route }: any) => {
+  const navigation = useNavigation<any>();
   const user = useAuthStore((state) => state.user);
   const isAdmin = user?.role === 'admin';
 
@@ -46,6 +49,19 @@ export const RanchesScreen = ({ route }: any) => {
   const [samples, setSamples] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Deferred Launch Flags
+  const [flags, setFlags] = useState<any>({
+    map: true,
+    telemetry: true,
+    recommendations: true,
+    labResults: true,
+  });
+  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+  const [activeMapRanchId, setActiveMapRanchId] = useState<string>('');
+  const [telemetryModalVisible, setTelemetryModalVisible] = useState(false);
+  const [selectedTelemetryTank, setSelectedTelemetryTank] = useState<any>(null);
+  const [selectedTelemetryRanch, setSelectedTelemetryRanch] = useState<any>(null);
 
   // Selected Block Detail Modal
   const [selectedBlock, setSelectedBlock] = useState<any>(null);
@@ -106,16 +122,30 @@ export const RanchesScreen = ({ route }: any) => {
 
   const loadAll = async () => {
     try {
-      const [rData, dData, pData, sData] = await Promise.all([
+      const [rData, dData, pData, sData, fData] = await Promise.all([
         fetchRanches().catch(() => []),
         fetchDeliveries().catch(() => []),
         fetchPrograms().catch(() => []),
         fetchSamples().catch(() => []),
+        fetchFeatureFlags().catch(() => ({})),
       ]);
-      if (Array.isArray(rData)) setRanches(rData);
+      if (Array.isArray(rData)) {
+        setRanches(rData);
+        if (rData.length > 0) {
+          setActiveMapRanchId((prev) => prev || rData[0].id);
+        }
+      }
       if (Array.isArray(dData)) setDeliveries(dData);
       if (Array.isArray(pData)) setPrograms(pData);
       if (Array.isArray(sData)) setSamples(sData);
+      if (fData) {
+        setFlags({
+          map: Boolean(fData.global?.map ?? fData.map ?? true),
+          telemetry: Boolean(fData.global?.telemetry ?? fData.telemetry ?? true),
+          recommendations: Boolean(fData.global?.recommendations ?? fData.recommendations ?? true),
+          labResults: Boolean(fData.global?.labResults ?? fData.labResults ?? true),
+        });
+      }
 
       if (rData.length > 0 && !sampleRanchId) {
         setSampleRanchId(rData[0].id);
@@ -419,7 +449,166 @@ export const RanchesScreen = ({ route }: any) => {
           </View>
         </View>
 
-        {loading && !refreshing ? (
+        {/* Map / List View Switcher (Deferred: map) */}
+        {flags.map && (
+          <View style={styles.viewModeToggleRow}>
+            <TouchableOpacity
+              style={[styles.viewModeBtn, viewMode === 'list' && styles.viewModeBtnActive]}
+              onPress={() => setViewMode('list')}
+            >
+              <MaterialCommunityIcons
+                name="format-list-bulleted"
+                size={16}
+                color={viewMode === 'list' ? '#FFFFFF' : '#64748B'}
+              />
+              <Text style={[styles.viewModeText, viewMode === 'list' && styles.viewModeTextActive]}>
+                List View
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.viewModeBtn, viewMode === 'map' && styles.viewModeBtnActive]}
+              onPress={() => setViewMode('map')}
+            >
+              <MaterialCommunityIcons
+                name="map"
+                size={16}
+                color={viewMode === 'map' ? '#FFFFFF' : '#64748B'}
+              />
+              <Text style={[styles.viewModeText, viewMode === 'map' && styles.viewModeTextActive]}>
+                Satellite Farm Map
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {viewMode === 'map' ? (
+          <View style={styles.mapContainer}>
+            {/* Ranch Switcher Tabs */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.mapRanchStrip}>
+              {ranches.map((r) => {
+                const isSel = (activeMapRanchId || ranches[0]?.id) === r.id;
+                return (
+                  <TouchableOpacity
+                    key={r.id}
+                    style={[styles.mapRanchPill, isSel && styles.mapRanchPillActive]}
+                    onPress={() => setActiveMapRanchId(r.id)}
+                  >
+                    <MaterialCommunityIcons
+                      name="sprout"
+                      size={14}
+                      color={isSel ? '#FFFFFF' : '#0C6054'}
+                    />
+                    <Text style={[styles.mapRanchPillText, isSel && styles.mapRanchPillTextActive]}>
+                      {r.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            {/* GPS & Weather Telemetry HUD */}
+            {(() => {
+              const currentRanch = ranches.find((r) => r.id === (activeMapRanchId || ranches[0]?.id)) || ranches[0];
+              if (!currentRanch) return null;
+              const isRanch2 = currentRanch.id === 'ranch-2';
+              const gpsCoords = isRanch2 ? '36.9613° N, -120.0607° W' : '36.5963° N, -119.4504° W';
+              const locationName = isRanch2 ? 'Madera County, CA · Westside Irrigation District' : 'Fresno County, CA · Reedley · FID District';
+              const rBlocks = currentRanch.blocks || [];
+              const rTanks = currentRanch.tanks || currentRanch.tankSetups || [];
+
+              return (
+                <View style={styles.mapHudCard}>
+                  <View style={styles.mapHudHeader}>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <MaterialCommunityIcons name="crosshairs-gps" size={16} color="#0C6054" />
+                        <Text style={styles.mapHudCoords}>{gpsCoords}</Text>
+                      </View>
+                      <Text style={styles.mapHudSub}>{locationName} · Elev. 348 ft</Text>
+                    </View>
+                    <View style={styles.mapWeatherBadge}>
+                      <MaterialCommunityIcons name="weather-sunny" size={18} color="#D97706" />
+                      <Text style={styles.mapWeatherText}>78°F · ETo 0.22"</Text>
+                    </View>
+                  </View>
+
+                  {/* Aerial Field Satellite Canvas */}
+                  <View style={styles.satelliteCanvas}>
+                    <View style={styles.satelliteGridLines}>
+                      <View style={styles.satelliteHeaderBadge}>
+                        <MaterialCommunityIcons name="satellite-variant" size={14} color="#0C6054" />
+                        <Text style={styles.satelliteWaterMark}>RE-NU BIOME SATELLITE FIELD PLOT</Text>
+                      </View>
+
+                      {/* Blocks Grid Visual */}
+                      <View style={styles.mapBlocksRow}>
+                        {rBlocks.map((blk: any, bIdx: number) => {
+                          return (
+                            <TouchableOpacity
+                              key={blk.blockId || bIdx}
+                              style={styles.mapBlockCard}
+                              onPress={() => handleOpenBlockDetail(currentRanch, blk)}
+                              activeOpacity={0.85}
+                            >
+                              <View style={styles.mapBlockHeader}>
+                                <View style={styles.mapBlockBadge}>
+                                  <Text style={styles.mapBlockBadgeText}>{blk.blockId}</Text>
+                                </View>
+                                <Text style={styles.mapBlockAcres}>{blk.acreage} Ac</Text>
+                              </View>
+                              <Text style={styles.mapBlockCrop}>{blk.crop}</Text>
+                              <Text style={styles.mapBlockVariety}>{blk.variety}</Text>
+                              <View style={styles.mapBlockFooter}>
+                                <View style={styles.mapStatusDot} />
+                                <Text style={styles.mapBlockStatusText}>Optimal Vigor · Tap for Lab</Text>
+                              </View>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+
+                      {/* Tanks On Map Layer */}
+                      <View style={styles.mapTanksLayer}>
+                        <Text style={styles.mapTanksTitle}>Otodata Telemetry Tank Stations on Field:</Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                          {rTanks.map((tank: any, tIdx: number) => {
+                            const isLow = (tank.levelPercent || 68) < 25;
+                            return (
+                              <TouchableOpacity
+                                key={tank.id || tIdx}
+                                style={[styles.mapTankPin, isLow && styles.mapTankPinLow]}
+                                onPress={() => {
+                                  setSelectedTelemetryTank(tank);
+                                  setSelectedTelemetryRanch(currentRanch);
+                                  setTelemetryModalVisible(true);
+                                }}
+                              >
+                                <View style={[styles.mapTankDot, isLow && styles.mapTankDotLow]}>
+                                  <MaterialCommunityIcons
+                                    name="water-pump"
+                                    size={16}
+                                    color={isLow ? '#DC2626' : '#0C6054'}
+                                  />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={styles.mapTankName}>{tank.name}</Text>
+                                  <Text style={[styles.mapTankLevel, isLow && { color: '#DC2626' }]}>
+                                    {tank.levelPercent || 68}% · {(tank.currentGallons || 3400).toLocaleString()} Gal
+                                  </Text>
+                                </View>
+                                <MaterialCommunityIcons name="remote" size={14} color="#0C6054" />
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              );
+            })()}
+          </View>
+        ) : loading && !refreshing ? (
           <View style={{ paddingVertical: 40, alignItems: 'center' }}>
             <ActivityIndicator size="large" color={BRAND_COLORS.primaryTeal} />
             <Text style={{ marginTop: 12, color: '#64748B' }}>Loading ranches & telemetry...</Text>
@@ -685,6 +874,21 @@ export const RanchesScreen = ({ route }: any) => {
                             </Text>
                           </View>
 
+                          {/* Live Otodata Telemetry Trigger */}
+                          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8 }}>
+                            <TouchableOpacity
+                              style={styles.openTelemetryBtn}
+                              onPress={() => {
+                                setSelectedTelemetryTank(tank);
+                                setSelectedTelemetryRanch(ranch);
+                                setTelemetryModalVisible(true);
+                              }}
+                            >
+                              <MaterialCommunityIcons name="remote" size={14} color="#0C6054" />
+                              <Text style={styles.openTelemetryBtnText}>Live Otodata Telemetry Feed</Text>
+                            </TouchableOpacity>
+                          </View>
+
                           {/* Low-Tank Alert Action */}
                           {isLow && (
                             <View style={styles.tankLowAlertStrip}>
@@ -905,6 +1109,25 @@ export const RanchesScreen = ({ route }: any) => {
                               <Text style={styles.recMeta}>
                                 By {sample.recommendation.agronomistName} · {sample.recommendation.date}
                               </Text>
+
+                              {/* Accept Prescription & Request Delivery (Deferred: recommendations & ordering) */}
+                              <TouchableOpacity
+                                style={styles.acceptPrescriptionBtn}
+                                onPress={() => {
+                                  setBlockModalVisible(false);
+                                  navigation.navigate('Deliveries', {
+                                    autoOpenOrder: true,
+                                    prefillProduct: 'ReNu N-CARE 32-0-0',
+                                    prefillRanchId: selectedBlockRanch?.id,
+                                    prefillTankId: selectedBlockRanch?.tanks?.[0]?.id,
+                                  });
+                                }}
+                              >
+                                <MaterialCommunityIcons name="cart-plus" size={16} color="#FFFFFF" />
+                                <Text style={styles.acceptPrescriptionBtnText}>
+                                  Accept Prescription & Schedule Refill
+                                </Text>
+                              </TouchableOpacity>
 
                               {/* Conversation / Reply Thread */}
                               {sample.recommendation.replies?.map((r: any, rIdx: number) => (
@@ -1407,6 +1630,131 @@ export const RanchesScreen = ({ route }: any) => {
           </View>
         </View>
       </Modal>
+
+      {/* ==================== OTODATA TELEMETRY MODAL (Deferred: telemetry) ==================== */}
+      <Modal visible={telemetryModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            {selectedTelemetryTank && (
+              <>
+                <View style={styles.modalHeader}>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                      <MaterialCommunityIcons name="remote" size={16} color="#0C6054" />
+                      <Text style={styles.modalSub}>Otodata Cellular Telemetry Feed</Text>
+                    </View>
+                    <Text style={styles.modalTitle}>{selectedTelemetryTank.name}</Text>
+                    <Text style={styles.telemetryRanchSub}>
+                      {selectedTelemetryRanch?.name} · Serial #{selectedTelemetryTank.serial || 'OTO-99214'}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setTelemetryModalVisible(false)}
+                    style={styles.modalCloseBtn}
+                  >
+                    <MaterialCommunityIcons name="close" size={24} color="#64748B" />
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
+                  {/* Cellular Sensor Status Strip */}
+                  <View style={styles.telemetryStatusStrip}>
+                    <View style={styles.telemetryChip}>
+                      <MaterialCommunityIcons name="signal-cellular-3" size={14} color="#15803D" />
+                      <Text style={styles.telemetryChipText}>LTE-M Online (-74 dBm)</Text>
+                    </View>
+                    <View style={styles.telemetryChip}>
+                      <MaterialCommunityIcons name="battery-90" size={14} color="#15803D" />
+                      <Text style={styles.telemetryChipText}>Battery: 98% (Solar Active)</Text>
+                    </View>
+                    <View style={styles.telemetryChip}>
+                      <MaterialCommunityIcons name="thermometer" size={14} color="#0C6054" />
+                      <Text style={styles.telemetryChipText}>Temp: 74°F · 42 PSI</Text>
+                    </View>
+                  </View>
+
+                  {/* Big Fill Gauge Card */}
+                  <View style={styles.telemetryGaugeCard}>
+                    <Text style={styles.gaugeLabel}>CURRENT INVENTORY LEVEL</Text>
+                    <Text style={[styles.gaugePct, { color: (selectedTelemetryTank.levelPercent || 68) < 25 ? '#DC2626' : '#0C6054' }]}>
+                      {selectedTelemetryTank.levelPercent || 68}%
+                    </Text>
+                    <ProgressBar
+                      progress={(selectedTelemetryTank.levelPercent || 68) / 100}
+                      color={(selectedTelemetryTank.levelPercent || 68) < 25 ? '#DC2626' : '#0C6054'}
+                      style={styles.gaugeBar}
+                    />
+                    <View style={styles.gaugeMetaRow}>
+                      <Text style={styles.gaugeMetaText}>
+                        {(selectedTelemetryTank.currentGallons || 3400).toLocaleString()} Gallons Remaining
+                      </Text>
+                      <Text style={styles.gaugeMetaText}>
+                        Capacity: {(selectedTelemetryTank.capacityGallons || selectedTelemetryTank.capacity || 5000).toLocaleString()} Gal
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* 7-Day Tank Depletion Trend */}
+                  <View style={styles.depletionCard}>
+                    <Text style={styles.depletionTitle}>7-Day Tank Consumption History</Text>
+                    <Text style={styles.depletionSub}>Average draw: ~92 Gal / day during active fertigation</Text>
+                    <View style={styles.depletionTable}>
+                      {[
+                        { day: 'Today', gal: (selectedTelemetryTank.currentGallons || 3400), diff: '-80 Gal', event: 'Scheduled Fertigation' },
+                        { day: 'Yesterday', gal: (selectedTelemetryTank.currentGallons || 3400) + 80, diff: '-95 Gal', event: 'Drip Set 1 Active' },
+                        { day: 'Oct 23', gal: (selectedTelemetryTank.currentGallons || 3400) + 175, diff: '-85 Gal', event: 'Nutrient Injection' },
+                        { day: 'Oct 22', gal: (selectedTelemetryTank.currentGallons || 3400) + 260, diff: '-110 Gal', event: 'Micro-sprinkler Set 2' },
+                        { day: 'Oct 21', gal: (selectedTelemetryTank.currentGallons || 3400) + 370, diff: '-90 Gal', event: 'Scheduled Fertigation' },
+                      ].map((item, idx) => (
+                        <View key={idx} style={[styles.depletionRow, idx === 4 && { borderBottomWidth: 0 }]}>
+                          <Text style={[styles.depletionCell, { flex: 1.2, fontWeight: '700' }]}>{item.day}</Text>
+                          <Text style={[styles.depletionCell, { flex: 1.5 }]}>{item.gal.toLocaleString()} Gal</Text>
+                          <Text style={[styles.depletionCell, { flex: 1.2, color: '#DC2626', fontWeight: '600' }]}>{item.diff}</Text>
+                          <Text style={[styles.depletionCell, { flex: 2, color: '#64748B' }]}>{item.event}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+
+                  {/* Refill Recommendation CTA */}
+                  <View style={styles.telemetryCtaCard}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.ctaTitle}>Projected Run-Out: ~{selectedTelemetryTank.daysToEmpty || 38} Days</Text>
+                      <Text style={styles.ctaSub}>Schedule advance delivery before level drops below 20%</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.telemetryOrderBtn}
+                      onPress={() => {
+                        setTelemetryModalVisible(false);
+                        navigation.navigate('Deliveries', {
+                          autoOpenOrder: true,
+                          prefillProduct: 'ReNu N-CARE 32-0-0',
+                          prefillRanchId: selectedTelemetryRanch?.id,
+                          prefillTankId: selectedTelemetryTank?.id,
+                        });
+                      }}
+                    >
+                      <MaterialCommunityIcons name="truck-fast" size={16} color="#FFFFFF" />
+                      <Text style={styles.telemetryOrderBtnText}>Request Refill</Text>
+                    </TouchableOpacity>
+                  </View>
+                </ScrollView>
+
+                <View style={styles.modalButtonsRow}>
+                  <Button
+                    mode="contained"
+                    buttonColor={BRAND_COLORS.primaryTeal}
+                    onPress={() => setTelemetryModalVisible(false)}
+                    style={{ flex: 1, borderRadius: 8 }}
+                  >
+                    Close Feed
+                  </Button>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -1853,6 +2201,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748B',
   },
+  modalSub: {
+    fontSize: 11,
+    color: '#0F766E',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   modalTitle: {
     fontSize: 17,
     fontWeight: '800',
@@ -2186,5 +2541,410 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#DC2626',
     lineHeight: 16,
+  },
+  // Map and View Mode Styles
+  viewModeToggleRow: {
+    flexDirection: 'row',
+    backgroundColor: '#E2E8F0',
+    borderRadius: 10,
+    padding: 3,
+    marginBottom: 16,
+    gap: 4,
+  },
+  viewModeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 6,
+  },
+  viewModeBtnActive: {
+    backgroundColor: BRAND_COLORS.primaryTeal,
+  },
+  viewModeText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  viewModeTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  mapContainer: {
+    marginBottom: 24,
+  },
+  mapRanchStrip: {
+    marginBottom: 12,
+  },
+  mapRanchPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    marginRight: 8,
+    gap: 6,
+  },
+  mapRanchPillActive: {
+    backgroundColor: BRAND_COLORS.primaryTeal,
+    borderColor: BRAND_COLORS.primaryTeal,
+  },
+  mapRanchPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  mapRanchPillTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  mapHudCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  mapHudHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  mapHudCoords: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  mapHudSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  mapWeatherBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  mapWeatherText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  satelliteCanvas: {
+    backgroundColor: '#0F241E',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#164E43',
+  },
+  satelliteGridLines: {
+    gap: 12,
+  },
+  satelliteHeaderBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(12, 96, 84, 0.4)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  satelliteWaterMark: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#5EEAD4',
+    letterSpacing: 1,
+  },
+  mapBlocksRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  mapBlockCard: {
+    backgroundColor: '#1E3D35',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#2D5E52',
+    minWidth: 140,
+    flex: 1,
+  },
+  mapBlockHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  mapBlockBadge: {
+    backgroundColor: '#2D5E52',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  mapBlockBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#CCFBF1',
+  },
+  mapBlockAcres: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '600',
+  },
+  mapBlockCrop: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  mapBlockVariety: {
+    fontSize: 11,
+    color: '#A7F3D0',
+    marginBottom: 6,
+  },
+  mapBlockFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  mapStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#34D399',
+  },
+  mapBlockStatusText: {
+    fontSize: 9,
+    color: '#A7F3D0',
+  },
+  mapTanksLayer: {
+    backgroundColor: '#132E27',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#235044',
+  },
+  mapTanksTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#99F6E4',
+    marginBottom: 8,
+  },
+  mapTankPin: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 6,
+  },
+  mapTankPinLow: {
+    borderColor: '#F87171',
+    backgroundColor: '#FEF2F2',
+  },
+  mapTankDot: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#F0FDFA',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mapTankDotLow: {
+    backgroundColor: '#FEE2E2',
+  },
+  mapTankName: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  mapTankLevel: {
+    fontSize: 10,
+    color: '#0C6054',
+    fontWeight: '600',
+  },
+  openTelemetryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDFA',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    gap: 4,
+  },
+  openTelemetryBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0C6054',
+  },
+  acceptPrescriptionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0C6054',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginTop: 8,
+    marginBottom: 10,
+    gap: 6,
+  },
+  acceptPrescriptionBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  telemetryRanchSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  telemetryStatusStrip: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 14,
+  },
+  telemetryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 4,
+  },
+  telemetryChipText: {
+    fontSize: 11,
+    color: '#334155',
+    fontWeight: '600',
+  },
+  telemetryGaugeCard: {
+    backgroundColor: '#F0FDFA',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    marginBottom: 14,
+  },
+  gaugeLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#0F766E',
+    letterSpacing: 1,
+  },
+  gaugePct: {
+    fontSize: 38,
+    fontWeight: '900',
+    marginVertical: 4,
+  },
+  gaugeBar: {
+    width: '100%',
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#CCFBF1',
+    marginVertical: 8,
+  },
+  gaugeMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  gaugeMetaText: {
+    fontSize: 11,
+    color: '#0F766E',
+    fontWeight: '600',
+  },
+  depletionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 14,
+  },
+  depletionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  depletionSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+    marginBottom: 8,
+  },
+  depletionTable: {
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  depletionRow: {
+    flexDirection: 'row',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  depletionCell: {
+    fontSize: 11,
+    color: '#334155',
+  },
+  telemetryCtaCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    marginBottom: 12,
+  },
+  ctaTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  ctaSub: {
+    fontSize: 10,
+    color: '#B45309',
+    marginTop: 2,
+  },
+  telemetryOrderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#D97706',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    gap: 4,
+  },
+  telemetryOrderBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 12,
   },
 });

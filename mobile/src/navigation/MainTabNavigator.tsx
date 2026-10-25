@@ -9,7 +9,11 @@ import { DeliveriesScreen } from '../screens/DeliveriesScreen';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Text } from 'react-native-paper';
 
+import { ShopScreen } from '../screens/ShopScreen';
+import { MessagesScreen } from '../screens/MessagesScreen';
+
 const Tab = createBottomTabNavigator();
+const PRIMARY_TABS = ['Home', 'Ranches', 'Deliveries', 'Invoices', 'More'];
 
 const TabBarIcon = ({ name, isFocused, label }: { name: string; isFocused: boolean; label: string }) => {
   return (
@@ -27,46 +31,52 @@ const TabBarIcon = ({ name, isFocused, label }: { name: string; isFocused: boole
 };
 
 const CustomTabBar = ({ state, descriptors, navigation }: any) => {
+  const activeRoute = state.routes[state.index]?.name;
+  const isSecondaryScreen = !PRIMARY_TABS.includes(activeRoute);
+
   return (
     <View style={styles.tabBarWrapper}>
       <View style={styles.tabBar}>
-        {state.routes.map((route: any, index: number) => {
-          const { options } = descriptors[route.key];
-          const label = options.title !== undefined ? options.title : route.name;
-          const isFocused = state.index === index;
+        {state.routes
+          .filter((route: any) => PRIMARY_TABS.includes(route.name))
+          .map((route: any) => {
+            const index = state.routes.findIndex((r: any) => r.key === route.key);
+            const { options } = descriptors[route.key];
+            const label = options.title !== undefined ? options.title : route.name;
+            const isFocused = !isSecondaryScreen && state.index === index;
 
-          const onPress = () => {
-            const event = navigation.emit({
-              type: 'tabPress',
-              target: route.key,
-              canPreventDefault: true,
-            });
+            const onPress = () => {
+              const event = navigation.emit({
+                type: 'tabPress',
+                target: route.key,
+                canPreventDefault: true,
+              });
 
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name);
-            }
-          };
+              if (!isFocused && !event.defaultPrevented) {
+                navigation.navigate(route.name);
+              }
+            };
 
-          let iconName = 'leaf';
-          if (route.name === 'Home') iconName = 'home-outline';
-          if (route.name === 'Ranches') iconName = 'sprout';
-          if (route.name === 'Deliveries') iconName = 'truck-delivery-outline';
-          if (route.name === 'Invoices') iconName = 'receipt';
-          if (route.name === 'More') iconName = 'dots-horizontal';
+            let iconName = 'leaf';
+            if (route.name === 'Home') iconName = 'home-outline';
+            if (route.name === 'Ranches') iconName = 'sprout';
+            if (route.name === 'Deliveries') iconName = 'truck-delivery-outline';
+            if (route.name === 'Invoices') iconName = 'receipt';
+            if (route.name === 'More') iconName = 'dots-horizontal';
 
-          return (
-            <TouchableOpacity
-              key={route.key}
-              accessibilityRole="button"
-              accessibilityState={isFocused ? { selected: true } : {}}
-              onPress={onPress}
-              style={styles.tabButton}
-              activeOpacity={0.7}
-            >
-              <TabBarIcon name={iconName} isFocused={isFocused} label={label} />
-            </TouchableOpacity>
-          );
-        })}
+            return (
+              <TouchableOpacity
+                key={route.key}
+                accessibilityRole="button"
+                accessibilityState={isFocused ? { selected: true } : {}}
+                onPress={onPress}
+                style={styles.tabButton}
+                activeOpacity={0.7}
+              >
+                <TabBarIcon name={iconName} isFocused={isFocused} label={label} />
+              </TouchableOpacity>
+            );
+          })}
       </View>
     </View>
   );
@@ -78,7 +88,7 @@ export const MainTabNavigator = () => {
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        unmountOnBlur: true, // Unmount screens you leave as specified
+        unmountOnBlur: true,
       } as any}
     >
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Home' }} />
@@ -86,6 +96,8 @@ export const MainTabNavigator = () => {
       <Tab.Screen name="Deliveries" component={DeliveriesScreen} options={{ title: 'Deliveries' }} />
       <Tab.Screen name="Invoices" component={InvoicesScreen} options={{ title: 'Invoices' }} />
       <Tab.Screen name="More" component={MoreScreen} options={{ title: 'More' }} />
+      <Tab.Screen name="Shop" component={ShopScreen} options={{ title: 'Shop' }} />
+      <Tab.Screen name="Messages" component={MessagesScreen} options={{ title: 'Messages' }} />
     </Tab.Navigator>
   );
 };

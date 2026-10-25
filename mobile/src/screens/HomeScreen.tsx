@@ -357,6 +357,49 @@ export const HomeScreen = () => {
           </TouchableOpacity>
         </View>
 
+        {/* Quick Launch Capabilities (Deferred Features) */}
+        <View style={styles.quickCapabilitiesRow}>
+          <TouchableOpacity
+            style={styles.capabilityPill}
+            onPress={() => navigation.navigate('Deliveries')}
+          >
+            <View style={[styles.capabilityIconCircle, { backgroundColor: '#F0FDFA' }]}>
+              <MaterialCommunityIcons name="cart-plus" size={18} color="#0C6054" />
+            </View>
+            <Text style={styles.capabilityPillTitle}>Order Refill</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.capabilityPill}
+            onPress={() => navigation.navigate('Messages')}
+          >
+            <View style={[styles.capabilityIconCircle, { backgroundColor: '#EFF6FF' }]}>
+              <MaterialCommunityIcons name="chat-processing" size={18} color="#2563EB" />
+            </View>
+            <Text style={styles.capabilityPillTitle}>Dispatch Chat</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.capabilityPill}
+            onPress={() => navigation.navigate('More')}
+          >
+            <View style={[styles.capabilityIconCircle, { backgroundColor: '#F0FDF4' }]}>
+              <MaterialCommunityIcons name="sprout" size={18} color="#15803D" />
+            </View>
+            <Text style={styles.capabilityPillTitle}>ILRP Nitrogen</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.capabilityPill}
+            onPress={() => navigation.navigate('More')}
+          >
+            <View style={[styles.capabilityIconCircle, { backgroundColor: '#FFF7ED' }]}>
+              <MaterialCommunityIcons name="file-document-outline" size={18} color="#EA580C" />
+            </View>
+            <Text style={styles.capabilityPillTitle}>Labels & SDS</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Invoices Balance Alert Card */}
         <TouchableOpacity
           style={styles.invoiceBanner}
@@ -1141,5 +1184,40 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0F172A',
     marginTop: 2,
+  },
+  quickCapabilitiesRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    gap: 8,
+  },
+  capabilityPill: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  capabilityIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  capabilityPillTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155',
+    textAlign: 'center',
   },
 });

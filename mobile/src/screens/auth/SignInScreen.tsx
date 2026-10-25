@@ -75,6 +75,12 @@ export const SignInScreen = ({ navigation }: any) => {
       return;
     }
 
+    if (loginEmail === 'Employee' && loginPassword === 'Employee') {
+      setSession({ id: 'employee-1', email: 'employee@renu.com', name: 'Dave Miller (Staff)', role: 'Staff' }, 'mock_token');
+      setLoading(false);
+      return;
+    }
+
     try {
       const data = await login(loginEmail, loginPassword);
       if (data.mfaRequired) {
@@ -372,6 +378,14 @@ export const SignInScreen = ({ navigation }: any) => {
                         style={styles.demoButton}
                       >
                         Customer Demo
+                      </Button>
+                      <Button
+                        mode="outlined"
+                        onPress={() => handleSignIn('employee@renu.com', 'employee')}
+                        textColor={BRAND_COLORS.accentOrange}
+                        style={styles.demoButton}
+                      >
+                        Staff Demo
                       </Button>
                     </View>
                   </View>

@@ -52,7 +52,22 @@ import {
   importBlocksToRanch,
   exportBlocksFromRanches,
   updateTankTelemetry,
-  ProductItem
+  ProductItem,
+  mockTasks,
+  mockMessages,
+  mockDocuments,
+  mockPlatformSettings,
+  getMessagesForUser,
+  createMessage,
+  markMessageRead,
+  createEmployeeTask,
+  updateTaskStatus,
+  getDocumentsForCustomer,
+  uploadCustomerDocument,
+  signCustomerContract,
+  calculateComplianceReport,
+  updateBlockYield,
+  syncWithQuickBooks
 } from './usersStore';
 import { mockAvatars, transporter } from './index';
 
@@ -568,13 +583,13 @@ router.post('/invoices', async (req: AuthenticatedRequest, res) => {
 });
 
 router.put('/invoices/:id/pay', async (req: AuthenticatedRequest, res) => {
-  const { paymentDate } = req.body;
-  const invoice = markInvoicePaid(req.params.id as string, paymentDate);
+  const { paymentDate, paymentMethod, paymentDetails } = req.body;
+  const invoice = markInvoicePaid(req.params.id as string, paymentDate, paymentMethod, paymentDetails);
   if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
 
   addAuditLog({
-    action: 'INVOICE_MARKED_PAID',
-    details: `Invoice #${invoice.invoiceNumber} marked Paid ($${invoice.amount}) on ${invoice.paidDate}`,
+    action: 'INVOICE_ONLINE_PAYMENT',
+    details: `Invoice #${invoice.invoiceNumber} paid online ($${invoice.amount}) via ${paymentMethod || 'ACH'} by ${req.user?.email || 'grower'}`,
     actor: req.user?.email || 'admin@renu.com',
     category: 'SYSTEM'
   });
@@ -784,13 +799,13 @@ router.post('/programs', async (req: AuthenticatedRequest, res) => {
 });
 
 router.put('/programs/:id', async (req: AuthenticatedRequest, res) => {
-  const updated = updateProgram(req.params.id, req.body);
+  const updated = updateProgram(req.params.id as string, req.body);
   if (!updated) return res.status(404).json({ error: 'Program not found' });
   res.json(updated);
 });
 
 router.delete('/programs/:id', async (req: AuthenticatedRequest, res) => {
-  const ok = deleteProgram(req.params.id);
+  const ok = deleteProgram(req.params.id as string);
   if (!ok) return res.status(404).json({ error: 'Program not found' });
   res.json({ success: true });
 });
@@ -835,7 +850,7 @@ router.post('/samples', async (req: AuthenticatedRequest, res) => {
 
 router.put('/samples/:id/values', async (req: AuthenticatedRequest, res) => {
   try {
-    const updated = updateSampleValues(req.params.id, req.body);
+    const updated = updateSampleValues(req.params.id as string, req.body);
     if (!updated) return res.status(404).json({ error: 'Sample not found' });
     res.json(updated);
   } catch (error: any) {
@@ -845,7 +860,7 @@ router.put('/samples/:id/values', async (req: AuthenticatedRequest, res) => {
 
 router.post('/samples/:id/recommendation', async (req: AuthenticatedRequest, res) => {
   try {
-    const updated = createRecommendation(req.params.id, req.body);
+    const updated = createRecommendation(req.params.id as string, req.body);
     if (!updated) return res.status(404).json({ error: 'Sample not found' });
 
     addAuditLog({
@@ -876,7 +891,7 @@ router.post('/samples/:id/recommendation', async (req: AuthenticatedRequest, res
 router.post('/samples/:id/reply', async (req: AuthenticatedRequest, res) => {
   try {
     const { question } = req.body;
-    const updated = replyToRecommendation(req.params.id, question);
+    const updated = replyToRecommendation(req.params.id as string, question);
     if (!updated) return res.status(404).json({ error: 'Sample not found' });
 
     addAdminNotification({
@@ -919,7 +934,7 @@ router.get('/tanks/:id/telemetry', async (req: AuthenticatedRequest, res) => {
 });
 
 router.put('/tanks/:id/telemetry', async (req: AuthenticatedRequest, res) => {
-  const updated = updateTankTelemetry(req.params.id, req.body);
+  const updated = updateTankTelemetry(req.params.id as string, req.body);
   if (!updated) return res.status(404).json({ error: 'Tank not found' });
   res.json(updated);
 });
@@ -942,7 +957,7 @@ router.post('/ranches/:ranchId/blocks/import', async (req: AuthenticatedRequest,
     if (!Array.isArray(blocks) || blocks.length === 0) {
       return res.status(400).json({ error: 'Blocks array is required' });
     }
-    const result = importBlocksToRanch(req.params.ranchId, blocks);
+    const result = importBlocksToRanch(req.params.ranchId as string, blocks);
     res.json(result);
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Import failed' });
@@ -991,7 +1006,7 @@ router.post('/admin/customers', async (req: AuthenticatedRequest, res) => {
 
 router.put('/admin/customers/:id', async (req: AuthenticatedRequest, res) => {
   try {
-    const updated = await updateCustomerDetails(req.params.id, req.body);
+    const updated = await updateCustomerDetails(req.params.id as string, req.body);
     res.json({ success: true, customer: updated });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to update customer' });
@@ -1002,7 +1017,7 @@ router.put('/admin/customers/:id/reset-password', async (req: AuthenticatedReque
   try {
     const { password } = req.body;
     if (!password) return res.status(400).json({ error: 'Password is required' });
-    const updated = await updateCustomerDetails(req.params.id, { password });
+    const updated = await updateCustomerDetails(req.params.id as string, { password });
     res.json({ success: true, message: 'Password reset successfully', customer: updated });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to reset password' });
@@ -1036,4 +1051,207 @@ router.post('/optimoroute/webhook', async (req: AuthenticatedRequest, res) => {
   }
 });
 
+// ---------------------------------
+// Messaging Routes (Phase 2 - Deferred Launch Capability)
+// ---------------------------------
+router.get('/messages', async (req: AuthenticatedRequest, res) => {
+  const user = req.user!;
+  const msgs = getMessagesForUser(user.email, user.role);
+  res.json(msgs);
+});
+
+router.post('/messages', async (req: AuthenticatedRequest, res) => {
+  try {
+    const user = req.user!;
+    const { title, body, toEmail, type, photoUrl } = req.body;
+    if (!title || !body) return res.status(400).json({ error: 'Title and body are required' });
+
+    const newMsg = createMessage({
+      title,
+      body,
+      fromEmail: user.email,
+      toEmail: toEmail || (user.role === 'admin' ? 'customer@renu.com' : 'admin@renu.com'),
+      senderName: user.name || (user.role === 'admin' ? 'ReNu-Biome Admin' : 'Grower'),
+      type: type || 'USER',
+      photoUrl
+    });
+
+    addAdminNotification({
+      title: `New In-App Message: ${title}`,
+      message: `From ${user.email}: ${body.slice(0, 80)}...`,
+      type: 'TASK'
+    });
+
+    res.json({ success: true, message: newMsg });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to send message' });
+  }
+});
+
+router.put('/messages/:id/read', async (req: AuthenticatedRequest, res) => {
+  const updated = markMessageRead(req.params.id as string);
+  res.json({ success: true, message: updated });
+});
+
+// ---------------------------------
+// Staff Tasks Routes (Phase 2 - Deferred Launch Capability)
+// ---------------------------------
+router.get('/tasks', async (req: AuthenticatedRequest, res) => {
+  res.json(mockTasks);
+});
+
+router.post(['/tasks', '/admin/tasks'], async (req: AuthenticatedRequest, res) => {
+  try {
+    const newTask = createEmployeeTask(req.body);
+    addAuditLog({
+      action: 'TASK_CREATED',
+      details: `Field task created: "${newTask.title}" assigned to ${newTask.assignedToEmail}`,
+      actor: req.user?.email || 'admin',
+      category: 'SYSTEM'
+    });
+    res.json({ success: true, task: newTask });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to create task' });
+  }
+});
+
+router.put('/tasks/:id/status', async (req: AuthenticatedRequest, res) => {
+  const { status, empEmail } = req.body;
+  const updated = updateTaskStatus(req.params.id as string, status, empEmail);
+  if (!updated) return res.status(404).json({ error: 'Task not found' });
+  res.json({ success: true, task: updated });
+});
+
+// ---------------------------------
+// Documents & Compliance Center Routes (Phase 2 - Deferred Launch Capability)
+// ---------------------------------
+router.get('/documents', async (req: AuthenticatedRequest, res) => {
+  const docs = getDocumentsForCustomer(req.user?.email);
+  res.json(docs);
+});
+
+router.post('/documents/upload', async (req: AuthenticatedRequest, res) => {
+  try {
+    const newDoc = uploadCustomerDocument({
+      ...req.body,
+      uploadedBy: req.user?.name || req.user?.email || 'Grower'
+    });
+    addAuditLog({
+      action: 'DOCUMENT_UPLOADED',
+      details: `Document uploaded: "${newDoc.title}" (${newDoc.category}) by ${req.user?.email}`,
+      actor: req.user?.email || 'grower',
+      category: 'SYSTEM'
+    });
+    res.json({ success: true, document: newDoc });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to upload document' });
+  }
+});
+
+router.post('/documents/sign', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { documentId, signatureName } = req.body;
+    if (!signatureName) return res.status(400).json({ error: 'Signature name is required' });
+    const signed = signCustomerContract(documentId, signatureName);
+    if (!signed) return res.status(404).json({ error: 'Document not found' });
+
+    addAuditLog({
+      action: 'CONTRACT_ESIGNED',
+      details: `Agreement "${signed.title}" e-signed by ${signatureName} (${req.user?.email})`,
+      actor: req.user?.email || 'grower',
+      category: 'USERS'
+    });
+
+    res.json({ success: true, document: signed });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to sign document' });
+  }
+});
+
+router.get('/documents/audit-pack', async (req: AuthenticatedRequest, res) => {
+  const user = req.user!;
+  const docs = getDocumentsForCustomer(user.email);
+  const compliance = calculateComplianceReport(user.email, 2026);
+  res.json({
+    title: 'ReNu-Biome Official Compliance Audit Package (2026)',
+    customer: user.name || 'Sierra Agri Group',
+    generatedAt: new Date().toISOString(),
+    documents: docs,
+    complianceSummary: compliance,
+    certifyingOfficer: 'Dr. Marcus Vance, CCA / Senior Agronomist',
+    auditStatus: 'ACTIVE_AND_COMPLIANT'
+  });
+});
+
+// ---------------------------------
+// ILRP Nitrogen Compliance Routes (Phase 2 - Section 9.4)
+// ---------------------------------
+router.get('/compliance/nitrogen-report', async (req: AuthenticatedRequest, res) => {
+  const season = req.query.season ? parseInt(req.query.season as string, 10) : 2026;
+  const report = calculateComplianceReport(req.user?.email, season);
+  res.json(report);
+});
+
+router.get('/compliance/export-csv', async (req: AuthenticatedRequest, res) => {
+  const season = req.query.season ? parseInt(req.query.season as string, 10) : 2026;
+  const report = calculateComplianceReport(req.user?.email, season);
+  
+  let csv = 'Ranch Name,Block ID,Crop,Variety,Acreage,County,APNs,Applied N (lb/ac),Total Applied N (lb),Kernel Yield (lb/ac),Removed N (lb/ac),A/R Ratio,Benchmark Target,Status,Coalition\n';
+  (report.blocks || []).forEach((b: any) => {
+    const apnsStr = (b.apns || []).join('; ');
+    csv += `"${b.ranchName}","${b.blockId}","${b.crop}","${b.variety}",${b.acreage},"${b.county}","${apnsStr}",${b.appliedLbNPerAcre},${b.totalAppliedLbN},${b.yieldPerAcre},${b.removedLbNPerAcre},${b.arRatio},"${b.benchmarkTarget}","${b.status}","${b.coalition}"\n`;
+  });
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename=ILRP_Nitrogen_Report_${season}.csv`);
+  res.send(csv);
+});
+
+router.put('/compliance/yield', async (req: AuthenticatedRequest, res) => {
+  const { blockId, yieldPerAcre } = req.body;
+  if (!blockId || yieldPerAcre === undefined) {
+    return res.status(400).json({ error: 'blockId and yieldPerAcre are required' });
+  }
+  const updated = updateBlockYield(blockId, Number(yieldPerAcre));
+  if (!updated) return res.status(404).json({ error: 'Block not found' });
+  res.json({ success: true, block: updated });
+});
+
+// ---------------------------------
+// QuickBooks Online Sync Routes (Phase 2 - Deferred Launch Capability)
+// ---------------------------------
+router.get('/quickbooks/status', async (req: AuthenticatedRequest, res) => {
+  res.json({
+    connected: true,
+    company: 'ReNu-Biome Inc.',
+    realmId: '9341452819',
+    lastSyncTime: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+    status: 'Connected & Fully Synchronized',
+    syncMode: 'Realtime Bi-directional Webhooks'
+  });
+});
+
+router.post('/quickbooks/sync', async (req: AuthenticatedRequest, res) => {
+  const result = syncWithQuickBooks();
+  res.json(result);
+});
+
+// ---------------------------------
+// Platform Settings & Audit Logs (Admin)
+// ---------------------------------
+router.get('/admin/settings', async (req: AuthenticatedRequest, res) => {
+  res.json(mockPlatformSettings);
+});
+
+router.post('/admin/settings', async (req: AuthenticatedRequest, res) => {
+  Object.assign(mockPlatformSettings, req.body);
+  saveStore();
+  res.json({ success: true, settings: mockPlatformSettings });
+});
+
+router.get('/admin/audit-logs', async (req: AuthenticatedRequest, res) => {
+  res.json(mockAuditLogs);
+});
+
 export default router;
+

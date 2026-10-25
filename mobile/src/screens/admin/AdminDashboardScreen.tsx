@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Dimensions, TouchableOpacity, Modal, RefreshControl, Alert, Platform } from 'react-native';
-import { Text, Avatar, Button, Chip, Divider, TextInput } from 'react-native-paper';
+import { Text, Avatar, Button, Chip, Divider, TextInput, ActivityIndicator } from 'react-native-paper';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store/useAuthStore';
 import { 

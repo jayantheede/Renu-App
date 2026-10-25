@@ -185,33 +185,25 @@ app.get('/install', (req, res) => {
     const box = document.getElementById('device-instructions');
 
     if (isIOS) {
-      box.innerHTML = \`
-        <div class="instruction-header">📱 iPhone & iPad (Safari)</div>
-        <div class="step"><div class="step-num">1</div><div>Tap the <strong>Share</strong> button at the bottom of Safari (square with up arrow).</div></div>
-        <div class="step"><div class="step-num">2</div><div>Scroll down and tap <strong>Add to Home Screen</strong>.</div></div>
-        <div class="step"><div class="step-num">3</div><div>Tap <strong>Add</strong> in the top right. ReNu-Biome will appear on your home screen.</div></div>
-      \`;
+      box.innerHTML = '<div class="instruction-header">📱 iPhone & iPad (Safari)</div>' +
+        '<div class="step"><div class="step-num">1</div><div>Tap the <strong>Share</strong> button at the bottom of Safari (square with up arrow).</div></div>' +
+        '<div class="step"><div class="step-num">2</div><div>Scroll down and tap <strong>Add to Home Screen</strong>.</div></div>' +
+        '<div class="step"><div class="step-num">3</div><div>Tap <strong>Add</strong> in the top right. ReNu-Biome will appear on your home screen.</div></div>';
     } else if (isAndroid) {
-      box.innerHTML = \`
-        <div class="instruction-header">🤖 Android (Chrome)</div>
-        <div class="step"><div class="step-num">1</div><div>Tap the browser menu (<strong>⋮</strong> three dots) in Chrome.</div></div>
-        <div class="step"><div class="step-num">2</div><div>Select <strong>Install app</strong> or <strong>Add to Home screen</strong>.</div></div>
-        <div class="step"><div class="step-num">3</div><div>Tap <strong>Add</strong> to confirm.</div></div>
-      \`;
+      box.innerHTML = '<div class="instruction-header">🤖 Android (Chrome)</div>' +
+        '<div class="step"><div class="step-num">1</div><div>Tap the browser menu (<strong>⋮</strong> three dots) in Chrome.</div></div>' +
+        '<div class="step"><div class="step-num">2</div><div>Select <strong>Install app</strong> or <strong>Add to Home screen</strong>.</div></div>' +
+        '<div class="step"><div class="step-num">3</div><div>Tap <strong>Add</strong> to confirm.</div></div>';
     } else {
-      box.innerHTML = \`
-        <div class="instruction-header">📷 Scan to Install on Mobile</div>
-        <p style="font-size:12px;color:#64748B;margin-bottom:12px;">Open your phone camera and point it at the QR code below:</p>
-        <div class="qr-container">
-          <img src="/brand/renu-biome-install-qr-300dpi.png" class="qr-img" alt="ReNu-Biome Install QR">
-          <div class="qr-url">app.renu-biome.com/install</div>
-        </div>
-        <p style="font-size:11px;color:#94A3B8;margin-top:8px;">Or on desktop Chrome/Edge, click the install icon in the address bar.</p>
-      \`;
+      box.innerHTML = '<div class="instruction-header">📷 Scan to Install on Mobile</div>' +
+        '<p style="font-size:12px;color:#64748B;margin-bottom:12px;">Open your phone camera and point it at the QR code below:</p>' +
+        '<div class="qr-container"><img src="/brand/renu-biome-install-qr-300dpi.png" class="qr-img" alt="ReNu-Biome Install QR">' +
+        '<div class="qr-url">app.renu-biome.com/install</div></div>' +
+        '<p style="font-size:11px;color:#94A3B8;margin-top:8px;">Or on desktop Chrome/Edge, click the install icon in the address bar.</p>';
     }
   </script>
 </body>
-</html>\`);
+</html>`);
 });
 
 // Auth Routes (Custom OTP Flow)

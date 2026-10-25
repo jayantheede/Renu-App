@@ -11,6 +11,7 @@ import {
   fetchDeliveries,
   fetchCustomers
 } from '../../api/client';
+import { printInvoiceDocument } from '../../utils/printInvoice';
 
 export const AdminInvoicesScreen = () => {
   const [invoices, setInvoices] = useState<any[]>([]);
@@ -197,8 +198,8 @@ export const AdminInvoicesScreen = () => {
   };
 
   const handlePrintPdf = () => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      window.print();
+    if (selectedInvoiceForPdf) {
+      printInvoiceDocument(selectedInvoiceForPdf);
     } else {
       Alert.alert('Print Statement', 'Use the print command from your mobile share menu.');
     }
