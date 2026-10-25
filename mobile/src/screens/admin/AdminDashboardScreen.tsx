@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Dimensions, TouchableOpacity, Modal, RefreshControl, Alert, Platform } from 'react-native';
+import { View, StyleSheet, ScrollView, Dimensions, TouchableOpacity, Modal, RefreshControl, Alert, Platform, Linking } from 'react-native';
 import { Text, Avatar, Button, Chip, Divider, TextInput, ActivityIndicator } from 'react-native-paper';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -49,6 +49,27 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
   const [invoiceAmount, setInvoiceAmount] = useState('');
   const [quickbooksId, setQuickbooksId] = useState('');
   const [savingDelivery, setSavingDelivery] = useState(false);
+
+  const handleOpenDocument = (fileData?: string, fileName?: string) => {
+    if (!fileData) {
+      Alert.alert('No Document', 'No document file data is attached to this assay.');
+      return;
+    }
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const win = window.open();
+      if (win) {
+        win.document.write(
+          `<html><head><title>${fileName || 'Lab Assay Document'}</title></head><body style="margin:0;display:flex;align-items:center;justify-content:center;background:#0F172A;"><iframe src="${fileData}" frameborder="0" style="border:none;width:100vw;height:100vh;"></iframe></body></html>`
+        );
+        return;
+      }
+    }
+    if (fileData.startsWith('http')) {
+      Linking.openURL(fileData).catch(() => Alert.alert('Unable to open document link'));
+    } else {
+      Alert.alert('Attached Document', `File: ${fileName || 'Assay Result'}\n(Format preserved in database)`);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -297,10 +318,24 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
             </View>
             {pendingSamplesAlerts.map((samp: any) => (
               <View key={samp.id} style={styles.alertItemRow}>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, marginRight: 8 }}>
                   <Text style={styles.alertCustomerName}>{samp.ranchName} · Block {samp.blockId}</Text>
                   <Text style={styles.alertSub}>{samp.sampleType} from {samp.labName} ({samp.samplingDate})</Text>
                   <Text style={styles.alertTimeMeta}>Sample ID: {samp.id}</Text>
+
+                  {/* Attached Document in any format */}
+                  {(samp.pdfFileName || samp.pdfData || samp.pdfUrl) && (
+                    <TouchableOpacity
+                      onPress={() => handleOpenDocument(samp.pdfData || samp.pdfUrl, samp.pdfFileName)}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4, backgroundColor: '#F0FDFA', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, alignSelf: 'flex-start', borderWidth: 1, borderColor: '#99F6E4' }}
+                    >
+                      <MaterialCommunityIcons name="file-document-outline" size={14} color={BRAND_COLORS.primaryTeal} />
+                      <Text style={{ fontSize: 11, color: '#0C6054', fontWeight: '700' }} numberOfLines={1}>
+                        View Attached: {samp.pdfFileName || 'Document'}
+                      </Text>
+                      <MaterialCommunityIcons name="open-in-new" size={12} color="#0C6054" />
+                    </TouchableOpacity>
+                  )}
                 </View>
                 <Button
                   mode="outlined"
@@ -308,7 +343,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
                   style={{ borderColor: BRAND_COLORS.primaryTeal, borderRadius: 8 }}
                   onPress={() => Alert.alert(
                     'Prescribe Nutrition Recommendation',
-                    `Sample ID: ${samp.id}\nRanch: ${samp.ranchName}\nBlock: ${samp.blockId}\nLab: ${samp.labName}\n\nPrescribed: ReNu N-32% K-28% Blend at 25 gal/acre to correct mid-season N & K deficits.`,
+                    `Sample ID: ${samp.id}\nRanch: ${samp.ranchName}\nBlock: ${samp.blockId}\nLab: ${samp.labName}\nAttached File: ${samp.pdfFileName || 'None'}\n\nPrescribed: ReNu N-32% K-28% Blend at 25 gal/acre to correct mid-season N & K deficits.`,
                     [{ text: 'Close' }]
                   )}
                 >
@@ -760,6 +795,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 12,
     paddingTop: 54,
     paddingBottom: 16,
   },

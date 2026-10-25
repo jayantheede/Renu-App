@@ -44,19 +44,21 @@ export const AdminApprovalsScreen = () => {
   const handleAction = async (type: 'order' | 'customer' | 'ranch' | 'tank', id: string, status: string) => {
     try {
       if (type === 'order') {
-        await acceptAdminOrder(id);
+        const res = await acceptAdminOrder(id);
+        Alert.alert('Order Accepted', res?.message || 'Order accepted! Confirmation request emailed to customer.');
       } else if (type === 'customer') {
         await approveCustomer(id, status);
+        Alert.alert('Success', `CUSTOMER ${status}`);
       } else if (type === 'ranch') {
         await approveRanch(id, status);
+        Alert.alert('Success', `RANCH ${status}`);
       } else {
         await approveTank(id, status);
+        Alert.alert('Success', `TANK ${status}`);
       }
-
-      Alert.alert('Success', `${type.toUpperCase()} ${status}`);
       loadData();
-    } catch (error) {
-      Alert.alert('Error', `Failed to ${status} ${type}`);
+    } catch (error: any) {
+      Alert.alert('Error', error.message || `Failed to ${status} ${type}`);
     }
   };
 

@@ -108,6 +108,13 @@ export const HomeScreen = () => {
   // Active nutrition program
   const activeProgram = programs.find((p: any) => p.status === 'active') || programs[0];
 
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour >= 4 && hour < 12) return 'Good morning';
+    if (hour >= 12 && hour < 17) return 'Good afternoon';
+    return 'Good evening';
+  };
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -159,7 +166,11 @@ export const HomeScreen = () => {
               </View>
 
               {/* Customer Greeting */}
-              <Text style={styles.greetingTitle}>{customerName}</Text>
+              <View style={styles.greetingContainer}>
+                <Text style={styles.greetingPrefix}>{getGreeting()},</Text>
+                <Text style={styles.greetingTitle}>{customerName} 👋</Text>
+                <Text style={styles.greetingSubtext}>Welcome to your ReNu-Biome Farm Operations Portal</Text>
+              </View>
 
               {/* Weather & Location Strip */}
               <View style={styles.weatherStrip}>
@@ -170,7 +181,7 @@ export const HomeScreen = () => {
           </ImageBackground>
         </View>
 
-        {/* 4 Quick Actions Grid */}
+        {/* 4 Quick Actions Responsive Grid (2x2 on Mobile View) */}
         <View style={styles.quickActionsContainer}>
           <TouchableOpacity
             style={styles.actionButton}
@@ -181,6 +192,7 @@ export const HomeScreen = () => {
               <MaterialCommunityIcons name="flask-outline" size={22} color={BRAND_COLORS.primaryTeal} />
             </View>
             <Text style={styles.actionLabel}>Send Lab Results</Text>
+            <Text style={styles.actionSubLabel}>Assays & Samples</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -192,6 +204,7 @@ export const HomeScreen = () => {
               <MaterialCommunityIcons name="truck-delivery-outline" size={22} color={BRAND_COLORS.accentOrange} />
             </View>
             <Text style={styles.actionLabel}>View Deliveries</Text>
+            <Text style={styles.actionSubLabel}>OptimoRoute Live</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -203,6 +216,7 @@ export const HomeScreen = () => {
               <MaterialCommunityIcons name="receipt-text-outline" size={22} color="#2563EB" />
             </View>
             <Text style={styles.actionLabel}>View Invoices</Text>
+            <Text style={styles.actionSubLabel}>Statements & PDF</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -214,6 +228,7 @@ export const HomeScreen = () => {
               <MaterialCommunityIcons name="headset" size={22} color="#059669" />
             </View>
             <Text style={styles.actionLabel}>Contact Support</Text>
+            <Text style={styles.actionSubLabel}>Agronomy Team</Text>
           </TouchableOpacity>
         </View>
 
@@ -244,10 +259,19 @@ export const HomeScreen = () => {
                   style={{ borderRadius: 8 }}
                   onPress={() => {
                     Alert.alert(
-                      'Request Refill',
-                      `To schedule a refill for ${tank.name} (${tank.ranchName}), call ReNu-Biome dispatch at (559) 555-0199 or email dispatch@renu-biome.com.`,
+                      'Request Tank Refill',
+                      `Would you like to schedule an in-app refill for ${tank.name} (${tank.ranchName || 'Ranch'}) or call dispatch directly?`,
                       [
-                        { text: 'Close', style: 'cancel' },
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Order Refill',
+                          onPress: () => navigation.navigate('Deliveries', {
+                            autoOpenOrder: true,
+                            prefillRanchId: tank.ranchId,
+                            prefillTankId: tank.id,
+                            prefillProduct: tank.currentProduct || 'ReNu N-CARE 32-0-0',
+                          }),
+                        },
                         {
                           text: 'Call Dispatch',
                           onPress: () => Linking.openURL('tel:5595550199').catch(() => {}),
@@ -600,7 +624,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   scrollContent: {
-    paddingBottom: 96,
+    paddingBottom: 110,
   },
   headerWrapper: {
     width: '100%',
@@ -652,7 +676,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   taglineText: {
     color: '#E0EDE9',
@@ -680,11 +704,26 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.5,
   },
+  greetingContainer: {
+    marginBottom: 10,
+  },
+  greetingPrefix: {
+    color: '#A7F3D0',
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
   greetingTitle: {
     color: '#FFFFFF',
     fontSize: 24,
     fontWeight: '800',
-    marginBottom: 6,
+    marginTop: 2,
+    marginBottom: 2,
+  },
+  greetingSubtext: {
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontSize: 12,
+    fontWeight: '400',
   },
   weatherStrip: {
     flexDirection: 'row',
@@ -698,37 +737,48 @@ const styles = StyleSheet.create({
   },
   quickActionsContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     marginBottom: 16,
+    rowGap: 10,
   },
   actionButton: {
-    flex: 1,
+    width: '48.5%',
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 6,
-    marginHorizontal: 4,
+    paddingVertical: 14,
+    paddingHorizontal: 10,
     alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: '#000',
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.04,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   actionIconBox: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   actionLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#334155',
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1E293B',
     textAlign: 'center',
+  },
+  actionSubLabel: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 2,
   },
   tankAlertCard: {
     marginHorizontal: 16,
@@ -752,9 +802,11 @@ const styles = StyleSheet.create({
   },
   tankAlertItem: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
+    marginBottom: 6,
   },
   tankAlertName: {
     fontSize: 14,

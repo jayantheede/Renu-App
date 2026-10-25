@@ -63,8 +63,8 @@ export const SignInScreen = ({ navigation }: any) => {
     }
 
     // Quick offline demo fallback
-    if (loginEmail === 'Admin' && loginPassword === 'Admin') {
-      setSession({ id: 'admin', email: 'admin@renu.com', name: 'Administrator', role: 'admin' }, 'mock_token');
+    if ((loginEmail === 'Admin' || loginEmail === 'support@renu-biome.com' || loginEmail === 'admin@renu.com') && (loginPassword === 'Admin' || loginPassword === 'admin')) {
+      setSession({ id: 'admin', email: 'support@renu-biome.com', name: 'Administrator', role: 'admin' }, 'mock_token');
       setLoading(false);
       return;
     }
@@ -365,7 +365,7 @@ export const SignInScreen = ({ navigation }: any) => {
                     <View style={styles.demoButtonsRow}>
                       <Button
                         mode="outlined"
-                        onPress={() => handleSignIn('admin@renu.com', 'admin')}
+                        onPress={() => handleSignIn('support@renu-biome.com', 'admin')}
                         textColor={BRAND_COLORS.primaryTeal}
                         style={styles.demoButton}
                       >

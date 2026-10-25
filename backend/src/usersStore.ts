@@ -2,6 +2,23 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import * as fs from 'fs';
 import * as path from 'path';
+import nodemailer from 'nodemailer';
+
+export const mockAvatars: Record<string, string> = {
+  'mock-admin': '',
+  'mock-emp': '',
+  'mock-cust': ''
+};
+
+export const transporter = nodemailer.createTransport({
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
 
 const prisma = new PrismaClient();
 
@@ -64,9 +81,12 @@ export async function syncStoreFromDB(): Promise<void> {
       const data = JSON.parse(record.payload);
       if (Array.isArray(data.users)) {
         for (const u of data.users) {
-          const idx = mockUsers.findIndex(m => m.id === u.id || m.email.toLowerCase() === u.email.toLowerCase());
+          if (u.role === 'admin' || u.email?.toLowerCase() === 'admin@renu.com') {
+            u.email = 'support@renu-biome.com';
+          }
+          const idx = mockUsers.findIndex(m => m.id === u.id || (m.role === 'admin' && u.role === 'admin') || m.email.toLowerCase() === u.email.toLowerCase());
           if (idx >= 0) {
-            mockUsers[idx] = { ...mockUsers[idx], ...u };
+            mockUsers[idx] = { ...mockUsers[idx], ...u, email: (u.role === 'admin' ? 'support@renu-biome.com' : u.email) };
           } else {
             mockUsers.push(u);
           }
@@ -172,24 +192,73 @@ export interface BlockItem {
   createdAt?: string;
 }
 
+export interface TankMedicineItem {
+  id: string;
+  name: string;
+  type: string;
+  dosage: string;
+  batchNumber?: string;
+  dateAdded: string;
+  targetDeficiency?: string;
+  addedBy?: string;
+  status: 'Active' | 'Completed' | 'Standby';
+  notes?: string;
+}
+
+export interface TankTrackerItem {
+  id: string;
+  trackerType?: string;
+  serialNumber: string;
+  cellularId?: string;
+  cellularUnitId?: string;
+  batteryLevel?: number;
+  batteryLevelPercent?: number;
+  signalDbm?: number;
+  signalStrengthDbm?: number;
+  status: 'Online' | 'Standby' | 'Offline' | string;
+  alertThresholdPercent?: number;
+  reorderThresholdPercent?: number;
+  updateIntervalMinutes?: number;
+  lastPingTime?: string;
+  lastReportedAt?: string;
+}
+
+export interface TankReportItem {
+  id: string;
+  title: string;
+  reportType: string;
+  date: string;
+  notes?: string;
+  fileName?: string;
+  fileData?: string;
+  author?: string;
+  createdAt: string;
+}
+
 export interface TankItem {
   id: string;
   ranchId: string;
   name: string;
   capacity: number;
+  capacityGallons?: number;
   location: string;
   level?: string;
   pressure?: string;
   approvalStatus: string;
   ranch?: { name: string };
   otodataDeviceId?: string;
+  serial?: string;
   levelPercent?: number;
   levelGallons?: number;
+  currentGallons?: number;
   weeklyUsageAvg?: number;
   daysToEmpty?: number;
   reorderThresholdPercent?: number;
   lastReadingTime?: string;
   status?: string;
+  medicines?: TankMedicineItem[];
+  trackers?: TankTrackerItem[];
+  reports?: TankReportItem[];
 }
 
 export interface RanchItem {
@@ -228,6 +297,16 @@ export interface OrderItem {
   contactOnArrival?: string;
   whoToCall?: string;
   notes?: string;
+  deliveryAddress?: string;
+  contactPhone?: string;
+  contactPerson?: string;
+  confirmationStatus?: 'PENDING_CUSTOMER' | 'CUSTOMER_SUBMITTED' | 'DISPATCH_ACCEPTED' | 'RESCHEDULE_REQUESTED';
+  rescheduleReason?: string;
+  rescheduledDeliveryWindow?: string;
+  adminAcceptedAt?: string;
+  customerConfirmedAt?: string;
+  dispatchDecision?: 'ACCEPTED' | 'RESCHEDULE';
+  dispatchDecisionAt?: string;
   status: 'Scheduled' | 'Out for delivery' | 'Delivered' | 'Cancelled';
   cancelReason?: string;
   invoiceId?: string;
@@ -360,6 +439,8 @@ export interface LabSample {
   pdfData?: string;
   pdfFileName?: string;
   pdfUrl?: string;
+  documentType?: string;
+  documentSize?: string;
   values?: Record<string, number>;
   recommendation?: {
     id: string;
@@ -421,9 +502,9 @@ export const mockUsers: AppUser[] = (_persistedStore.users && _persistedStore.us
   : [
       {
         id: 'mock-admin',
-        email: 'admin@renu.com',
+        email: 'support@renu-biome.com',
         password: 'admin',
-        name: 'Admin Demo',
+        name: 'Administrator',
         role: 'admin',
         phone: '(559) 555-0100',
         approvalStatus: 'APPROVED',
@@ -530,7 +611,76 @@ export const CANONICAL_RANCHES: RanchItem[] = [
         location: 'North Pump Station',
         level: '78%',
         pressure: '32 PSI',
-        approvalStatus: 'APPROVED'
+        approvalStatus: 'APPROVED',
+        levelPercent: 78,
+        currentGallons: 1950,
+        capacityGallons: 2500,
+        serial: 'OTO-99214',
+        reorderThresholdPercent: 25,
+        medicines: [
+          {
+            id: 'med-101',
+            name: 'ReNu Bio-Gold NPK 10-5-5',
+            type: 'Bio-Fertilizer',
+            dosage: '45 Gallons',
+            batchNumber: 'BAT-2026-904',
+            dateAdded: '2026-10-18',
+            targetDeficiency: 'Pre-bloom root & canopy fortification',
+            addedBy: 'Agronomist Dave',
+            status: 'Active',
+            notes: 'Injected into Drip Set 1-A during morning 4-hour cycle'
+          },
+          {
+            id: 'med-102',
+            name: 'MicrobeShield Fungi-Stop',
+            type: 'Biological Fungicide',
+            dosage: '10 Gallons',
+            batchNumber: 'BAT-2026-812',
+            dateAdded: '2026-10-12',
+            targetDeficiency: 'Pythium root rot suppression',
+            addedBy: 'Joe Miller (Ranch Mgr)',
+            status: 'Active',
+            notes: 'Secondary injection for Block N-4 almond blocks'
+          }
+        ],
+        trackers: [
+          {
+            id: 'trk-101',
+            trackerType: 'Otodata Cellular Telemetry',
+            serialNumber: 'OTO-99214',
+            cellularId: 'LTE-M-8821',
+            batteryLevel: 98,
+            signalDbm: -74,
+            status: 'Online',
+            alertThresholdPercent: 25,
+            updateIntervalMinutes: 60,
+            lastPingTime: '2026-10-25T18:00:00.000Z'
+          }
+        ],
+        reports: [
+          {
+            id: 'rpt-101',
+            title: 'Seasonal Tank Flush & Calibration Report',
+            reportType: 'Refill & Level Log',
+            date: '2026-10-15',
+            notes: 'Calibrated diaphragm injector pump to 2.4 GPH delivery.',
+            fileName: 'Tank_T101_Calibration_Oct2026.pdf',
+            fileData: 'JVBERi0xLjQKJeLjz9MKMSAwIG9iajw8L1R5cGUvQ2F0YWxvZy9QYWdlcyAyIDAgUj4+ZW5kb2JqCg==',
+            author: 'Joe Miller',
+            createdAt: '2026-10-15T14:30:00.000Z'
+          },
+          {
+            id: 'rpt-102',
+            title: 'Otodata Flow Meter Verification',
+            reportType: 'Maintenance & Sensor Check',
+            date: '2026-09-28',
+            notes: 'Verified solar panel 12V output and transducer accuracy.',
+            fileName: 'Flow_Meter_Verify_Q3.pdf',
+            fileData: 'JVBERi0xLjQKJeLjz9MKMSAwIG9iajw8L1R5cGUvQ2F0YWxvZy9QYWdlcyAyIDAgUj4+ZW5kb2JqCg==',
+            author: 'Tech Services',
+            createdAt: '2026-09-28T10:15:00.000Z'
+          }
+        ]
       },
       {
         id: 'tank-1-2',
@@ -540,7 +690,53 @@ export const CANONICAL_RANCHES: RanchItem[] = [
         location: 'South Perimeter Pad',
         level: '45%',
         pressure: '28 PSI',
-        approvalStatus: 'APPROVED'
+        approvalStatus: 'APPROVED',
+        levelPercent: 45,
+        currentGallons: 675,
+        capacityGallons: 1500,
+        serial: 'OTO-99215',
+        reorderThresholdPercent: 20,
+        medicines: [
+          {
+            id: 'med-103',
+            name: 'Fulvic Acid Solution 12%',
+            type: 'Soil Conditioner',
+            dosage: '25 Gallons',
+            batchNumber: 'BAT-2026-771',
+            dateAdded: '2026-10-20',
+            targetDeficiency: 'Micronutrient chelation & saline soil conditioning',
+            addedBy: 'Joe Miller',
+            status: 'Active',
+            notes: 'Blended with irrigation water for micro-sprinklers'
+          }
+        ],
+        trackers: [
+          {
+            id: 'trk-102',
+            trackerType: 'Otodata Cellular Telemetry',
+            serialNumber: 'OTO-99215',
+            cellularId: 'LTE-M-8822',
+            batteryLevel: 94,
+            signalDbm: -78,
+            status: 'Online',
+            alertThresholdPercent: 20,
+            updateIntervalMinutes: 60,
+            lastPingTime: '2026-10-25T17:45:00.000Z'
+          }
+        ],
+        reports: [
+          {
+            id: 'rpt-103',
+            title: 'Tank Pressure Test & Fill Log',
+            reportType: 'Refill & Level Log',
+            date: '2026-10-02',
+            notes: 'Inspected tank valves, gasket seals, and cellular antenna mount.',
+            fileName: 'Holding_Tank_Inspection.pdf',
+            fileData: 'JVBERi0xLjQKJeLjz9MKMSAwIG9iajw8L1R5cGUvQ2F0YWxvZy9QYWdlcyAyIDAgUj4+ZW5kb2JqCg==',
+            author: 'Operations Team',
+            createdAt: '2026-10-02T11:00:00.000Z'
+          }
+        ]
       }
     ],
     ac: 85
@@ -593,7 +789,53 @@ export const CANONICAL_RANCHES: RanchItem[] = [
         location: 'Central Injector Pad',
         level: '85%',
         pressure: '40 PSI',
-        approvalStatus: 'APPROVED'
+        approvalStatus: 'APPROVED',
+        levelPercent: 85,
+        currentGallons: 4250,
+        capacityGallons: 5000,
+        serial: 'OTO-88102',
+        reorderThresholdPercent: 25,
+        medicines: [
+          {
+            id: 'med-201',
+            name: 'ReNu N-CARE 32-0-0 Liquid Nitrogen',
+            type: 'Bio-Fertilizer',
+            dosage: '100 Gallons',
+            batchNumber: 'BAT-2026-955',
+            dateAdded: '2026-10-22',
+            targetDeficiency: 'Post-harvest nitrogen recharge',
+            addedBy: 'Valley Farm Crew',
+            status: 'Active',
+            notes: 'High efficiency stabilized liquid nitrogen'
+          }
+        ],
+        trackers: [
+          {
+            id: 'trk-201',
+            trackerType: 'Otodata Cellular Telemetry',
+            serialNumber: 'OTO-88102',
+            cellularId: 'LTE-M-7731',
+            batteryLevel: 99,
+            signalDbm: -71,
+            status: 'Online',
+            alertThresholdPercent: 25,
+            updateIntervalMinutes: 60,
+            lastPingTime: '2026-10-25T18:10:00.000Z'
+          }
+        ],
+        reports: [
+          {
+            id: 'rpt-201',
+            title: 'Nitrogen Storage Safety Audit',
+            reportType: 'Compliance Inspection',
+            date: '2026-09-15',
+            notes: 'Secondary containment berm cleaned, pressure relief valve operational.',
+            fileName: 'ValleyGreen_Containment_Audit.pdf',
+            fileData: 'JVBERi0xLjQKJeLjz9MKMSAwIG9iajw8L1R5cGUvQ2F0YWxvZy9QYWdlcyAyIDAgUj4+ZW5kb2JqCg==',
+            author: 'Fresno Co. Inspector',
+            createdAt: '2026-09-15T09:00:00.000Z'
+          }
+        ]
       }
     ],
     ac: 265
@@ -646,7 +888,53 @@ export const CANONICAL_RANCHES: RanchItem[] = [
         location: 'East Pump House',
         level: '92%',
         pressure: '45 PSI',
-        approvalStatus: 'APPROVED'
+        approvalStatus: 'APPROVED',
+        levelPercent: 92,
+        currentGallons: 9200,
+        capacityGallons: 10000,
+        serial: 'OTO-77140',
+        reorderThresholdPercent: 30,
+        medicines: [
+          {
+            id: 'med-301',
+            name: 'Potassium Thiosulfate 0-0-25 Bio-Blend',
+            type: 'Bio-Fertilizer',
+            dosage: '250 Gallons',
+            batchNumber: 'BAT-2026-440',
+            dateAdded: '2026-10-10',
+            targetDeficiency: 'Potassium replenishment',
+            addedBy: 'John Grower',
+            status: 'Active',
+            notes: 'High-K formula for kernel fill'
+          }
+        ],
+        trackers: [
+          {
+            id: 'trk-301',
+            trackerType: 'Otodata Cellular Telemetry',
+            serialNumber: 'OTO-77140',
+            cellularId: 'LTE-M-3301',
+            batteryLevel: 92,
+            signalDbm: -80,
+            status: 'Online',
+            alertThresholdPercent: 30,
+            updateIntervalMinutes: 60,
+            lastPingTime: '2026-10-25T17:30:00.000Z'
+          }
+        ],
+        reports: [
+          {
+            id: 'rpt-301',
+            title: 'Kern County Ag Commission Backflow Report',
+            reportType: 'Compliance Inspection',
+            date: '2026-08-14',
+            notes: 'Passed annual certified backflow device test.',
+            fileName: 'Kern_Backflow_Cert_2026.pdf',
+            fileData: 'JVBERi0xLjQKJeLjz9MKMSAwIG9iajw8L1R5cGUvQ2F0YWxvZy9QYWdlcyAyIDAgUj4+ZW5kb2JqCg==',
+            author: 'Kern Ag Commissioner',
+            createdAt: '2026-08-14T15:00:00.000Z'
+          }
+        ]
       }
     ],
     ac: 900
@@ -1094,15 +1382,40 @@ export function computeRanchAcreage(ranch: RanchItem): number {
 // -----------------------------------------------------------------------
 export async function findUserByEmail(email: string): Promise<AppUser | null> {
   const normalized = email.trim().toLowerCase();
-  const mock = mockUsers.find(u => u.email.toLowerCase() === normalized);
-  if (mock) return mock;
+  const isAdminQuery = normalized === 'support@renu-biome.com' || normalized === 'admin@renu.com' || normalized === 'admin';
+  
+  const mock = mockUsers.find(u => {
+    const uEmail = u.email.toLowerCase();
+    if (isAdminQuery && (uEmail === 'support@renu-biome.com' || uEmail === 'admin@renu.com' || u.role === 'admin')) {
+      return true;
+    }
+    return uEmail === normalized;
+  });
+
+  if (mock) {
+    if (mock.role === 'admin') {
+      mock.email = 'support@renu-biome.com';
+    }
+    return mock;
+  }
 
   try {
-    const dbUser = await prisma.user.findUnique({ where: { email: normalized } });
+    let dbUser = await prisma.user.findUnique({ where: { email: normalized } });
+    if (!dbUser && isAdminQuery) {
+      dbUser = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { email: 'support@renu-biome.com' },
+            { email: 'admin@renu.com' },
+            { role: 'admin' }
+          ]
+        }
+      });
+    }
     if (dbUser) {
       return {
         id: dbUser.id,
-        email: dbUser.email,
+        email: dbUser.role === 'admin' ? 'support@renu-biome.com' : dbUser.email,
         passwordHash: dbUser.passwordHash,
         name: dbUser.name,
         role: dbUser.role,
@@ -1282,12 +1595,36 @@ export function getRanchesForCustomer(customerIdOrEmail: string, role?: string):
     );
   }
 
-  // Ensure computed acreage is attached
-  return list.map(r => ({
-    ...r,
-    ac: computeRanchAcreage(r),
-    tankSetups: r.tanks || []
-  }));
+  // Ensure computed acreage is attached and tank sub-collections are initialized
+  return list.map(r => {
+    const enrichedTanks = (r.tanks || []).map(t => ({
+      ...t,
+      medicines: t.medicines || [],
+      trackers: t.trackers && t.trackers.length > 0 ? t.trackers : [
+        {
+          id: `trk-${t.id}`,
+          trackerType: 'Otodata Cellular Gauge',
+          serialNumber: t.serial || 'OTO-99214',
+          cellularUnitId: `LTE-M-${t.serial || '99214'}`,
+          status: 'Online',
+          batteryLevelPercent: 98,
+          batteryLevel: 98,
+          lastReportedAt: new Date().toISOString().split('T')[0],
+          signalStrengthDbm: -74,
+          signalDbm: -74,
+          alertThresholdPercent: t.reorderThresholdPercent || 25,
+          reorderThresholdPercent: t.reorderThresholdPercent || 25,
+        }
+      ],
+      reports: t.reports || []
+    }));
+    return {
+      ...r,
+      ac: computeRanchAcreage(r),
+      tanks: enrichedTanks,
+      tankSetups: enrichedTanks
+    };
+  });
 }
 
 export function createRanch(params: {
@@ -1391,7 +1728,27 @@ export function addTankToRanch(ranchId: string, tankData: Partial<TankItem>): Ta
     location: (tankData.location || 'Ranch Pump Station').trim(),
     level: tankData.level || '80%',
     pressure: tankData.pressure || '40 PSI',
-    approvalStatus: 'APPROVED'
+    approvalStatus: 'APPROVED',
+    levelPercent: tankData.levelPercent || 80,
+    currentGallons: Math.round(((tankData.levelPercent || 80) / 100) * (Number(tankData.capacity) || 5000)),
+    capacityGallons: Number(tankData.capacity) || 5000,
+    serial: tankData.serial || `OTO-${Math.floor(10000 + Math.random() * 90000)}`,
+    medicines: tankData.medicines || [],
+    trackers: tankData.trackers || [
+      {
+        id: `trk-${Date.now()}`,
+        trackerType: 'Otodata Cellular Telemetry',
+        serialNumber: tankData.serial || `OTO-${Math.floor(10000 + Math.random() * 90000)}`,
+        cellularId: `LTE-M-${Math.floor(1000 + Math.random() * 9000)}`,
+        batteryLevel: 98,
+        signalDbm: -74,
+        status: 'Online',
+        alertThresholdPercent: 25,
+        updateIntervalMinutes: 60,
+        lastPingTime: new Date().toISOString()
+      }
+    ],
+    reports: tankData.reports || []
   };
 
   ranch.tanks.push(newTank);
@@ -1411,6 +1768,11 @@ export function updateTank(tankId: string, updates: Partial<TankItem>): TankItem
       if (updates.location) tank.location = updates.location.trim();
       if (updates.level) tank.level = updates.level;
       if (updates.pressure) tank.pressure = updates.pressure;
+      if (updates.levelPercent !== undefined) {
+        tank.levelPercent = updates.levelPercent;
+        tank.currentGallons = Math.round((updates.levelPercent / 100) * tank.capacity);
+      }
+      if (updates.serial) tank.serial = updates.serial;
       saveStore();
       return tank;
     }
@@ -1426,6 +1788,120 @@ export function deleteTank(tankId: string): boolean {
       ranch.tankSetups = ranch.tanks;
       saveStore();
       return true;
+    }
+  }
+  return false;
+}
+
+export function addMedicineToTank(tankId: string, medData: Partial<TankMedicineItem>): TankMedicineItem | null {
+  for (const ranch of mockRanches) {
+    const tank = (ranch.tanks || []).find(t => t.id === tankId);
+    if (tank) {
+      if (!tank.medicines) tank.medicines = [];
+      const newMed: TankMedicineItem = {
+        id: `med-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        name: (medData.name || 'Bio-Nutrient Solution').trim(),
+        type: medData.type || 'Bio-Fertilizer',
+        dosage: medData.dosage || '20 Gallons',
+        batchNumber: medData.batchNumber || `BAT-${Math.floor(1000 + Math.random() * 9000)}`,
+        dateAdded: medData.dateAdded || new Date().toISOString().split('T')[0],
+        targetDeficiency: medData.targetDeficiency || 'Seasonal Crop Fortification',
+        addedBy: medData.addedBy || 'Grower',
+        status: (medData.status as any) || 'Active',
+        notes: medData.notes || ''
+      };
+      tank.medicines.unshift(newMed);
+      saveStore();
+      return newMed;
+    }
+  }
+  return null;
+}
+
+export function deleteMedicineFromTank(tankId: string, medId: string): boolean {
+  for (const ranch of mockRanches) {
+    const tank = (ranch.tanks || []).find(t => t.id === tankId);
+    if (tank && tank.medicines) {
+      const idx = tank.medicines.findIndex(m => m.id === medId);
+      if (idx >= 0) {
+        tank.medicines.splice(idx, 1);
+        saveStore();
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+export function updateTankTracker(tankId: string, trackerData: Partial<TankTrackerItem>): TankTrackerItem | null {
+  for (const ranch of mockRanches) {
+    const tank = (ranch.tanks || []).find(t => t.id === tankId);
+    if (tank) {
+      if (!tank.trackers) tank.trackers = [];
+      const existing = tank.trackers[0];
+      const threshold = trackerData.alertThresholdPercent !== undefined
+        ? trackerData.alertThresholdPercent
+        : (trackerData as any).reorderThresholdPercent !== undefined
+        ? Number((trackerData as any).reorderThresholdPercent)
+        : (existing?.alertThresholdPercent || 25);
+
+      const tracker: TankTrackerItem = {
+        id: existing?.id || `trk-${Date.now()}`,
+        trackerType: trackerData.trackerType || existing?.trackerType || 'Otodata Cellular Telemetry',
+        serialNumber: trackerData.serialNumber || existing?.serialNumber || tank.serial || `OTO-${Math.floor(10000 + Math.random() * 90000)}`,
+        cellularId: trackerData.cellularId || existing?.cellularId || `LTE-M-${Math.floor(1000 + Math.random() * 9000)}`,
+        batteryLevel: trackerData.batteryLevel !== undefined ? trackerData.batteryLevel : (existing?.batteryLevel || 98),
+        signalDbm: trackerData.signalDbm !== undefined ? trackerData.signalDbm : (existing?.signalDbm || -74),
+        status: trackerData.status || existing?.status || 'Online',
+        alertThresholdPercent: threshold,
+        reorderThresholdPercent: threshold,
+        updateIntervalMinutes: trackerData.updateIntervalMinutes || existing?.updateIntervalMinutes || 60,
+        lastPingTime: new Date().toISOString()
+      };
+      tank.trackers = [tracker];
+      tank.serial = tracker.serialNumber;
+      tank.reorderThresholdPercent = threshold;
+      saveStore();
+      return tracker;
+    }
+  }
+  return null;
+}
+
+export function addReportToTank(tankId: string, reportData: Partial<TankReportItem>): TankReportItem | null {
+  for (const ranch of mockRanches) {
+    const tank = (ranch.tanks || []).find(t => t.id === tankId);
+    if (tank) {
+      if (!tank.reports) tank.reports = [];
+      const newReport: TankReportItem = {
+        id: `rpt-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        title: (reportData.title || 'Tank Operation Report').trim(),
+        reportType: reportData.reportType || 'Refill & Level Log',
+        date: reportData.date || new Date().toISOString().split('T')[0],
+        notes: reportData.notes || '',
+        fileName: reportData.fileName || 'Report_Document.pdf',
+        fileData: reportData.fileData || '',
+        author: reportData.author || 'Grower',
+        createdAt: new Date().toISOString()
+      };
+      tank.reports.unshift(newReport);
+      saveStore();
+      return newReport;
+    }
+  }
+  return null;
+}
+
+export function deleteReportFromTank(tankId: string, reportId: string): boolean {
+  for (const ranch of mockRanches) {
+    const tank = (ranch.tanks || []).find(t => t.id === tankId);
+    if (tank && tank.reports) {
+      const idx = tank.reports.findIndex(r => r.id === reportId);
+      if (idx >= 0) {
+        tank.reports.splice(idx, 1);
+        saveStore();
+        return true;
+      }
     }
   }
   return false;
@@ -1712,7 +2188,7 @@ export function createMessage(data: any) {
     title: data.title || 'Inquiry',
     body: data.body || '',
     fromEmail: data.fromEmail || 'customer@renu.com',
-    toEmail: data.toEmail || 'admin@renu.com',
+    toEmail: data.toEmail || 'support@renu-biome.com',
     senderName: data.senderName || 'Sierra Agri Group',
     date: new Date().toISOString(),
     type: data.type || 'USER',
@@ -1743,12 +2219,14 @@ export function getDocumentsForCustomer(customerIdOrEmail?: string) {
 export function uploadCustomerDocument(data: any) {
   const newDoc = {
     id: `doc-${Date.now()}`,
-    title: data.title || 'Customer Uploaded File',
+    title: data.title || data.fileName || 'Customer Uploaded File',
     category: data.category || 'CUSTOMER_UPLOAD',
     docType: data.docType || 'Uploaded Document',
     regNumber: data.regNumber || `UPL-${Date.now().toString().slice(-4)}`,
     issueDate: data.issueDate || new Date().toISOString().split('T')[0],
-    fileUrl: data.fileUrl || '/assets/documents/customer_upload.pdf',
+    fileUrl: data.fileUrl || (data.fileData ? data.fileData : '/assets/documents/customer_upload.pdf'),
+    fileName: data.fileName || 'document.pdf',
+    fileData: data.fileData || '',
     fileSize: data.fileSize || '1.1 MB',
     description: data.description || 'Uploaded file for compliance record.',
     uploadedBy: data.uploadedBy || 'Grower',
@@ -1759,11 +2237,23 @@ export function uploadCustomerDocument(data: any) {
   return newDoc;
 }
 
+export function deleteCustomerDocument(docId: string): boolean {
+  const idx = mockDocuments.findIndex(d => d.id === docId);
+  if (idx !== -1) {
+    mockDocuments.splice(idx, 1);
+    saveStore();
+    return true;
+  }
+  return false;
+}
+
 export function signCustomerContract(docId: string, signedBy: string) {
   const doc = mockDocuments.find(d => d.id === docId || d.contractId === docId);
   if (doc) {
     doc.isSigned = true;
+    doc.signed = true;
     doc.signedBy = signedBy;
+    doc.signature = signedBy;
     doc.signedDate = new Date().toISOString().split('T')[0];
     saveStore();
     return doc;
@@ -1848,6 +2338,17 @@ export function calculateComplianceReport(customerIdOrEmail?: string, season: nu
   });
 
   const overallArRatio = totalRemovedN > 0 ? Number((totalAppliedN / totalRemovedN).toFixed(2)) : 1.44;
+  const isCompliant = overallArRatio >= 1.30 && overallArRatio <= 1.55;
+
+  const summary = {
+    overallRatio: overallArRatio,
+    overallArRatio: overallArRatio,
+    totalAppliedLbN: totalAppliedN,
+    totalRemovedLbN: totalRemovedN,
+    totalAcres,
+    complianceStatus: isCompliant ? 'Compliant' : 'Review Required',
+    status: isCompliant ? 'Compliant' : 'Review Required'
+  };
 
   return {
     season,
@@ -1856,8 +2357,10 @@ export function calculateComplianceReport(customerIdOrEmail?: string, season: nu
     totalAppliedLbN: totalAppliedN,
     totalRemovedLbN: totalRemovedN,
     overallArRatio,
+    overallRatio: overallArRatio,
     coalitionBenchmark: '1.43 - 1.44 (Mature Almonds)',
-    complianceStatus: overallArRatio >= 1.30 && overallArRatio <= 1.55 ? 'Compliant' : 'Review Required',
+    complianceStatus: isCompliant ? 'Compliant' : 'Review Required',
+    summary,
     blocks: blockReports,
     waterBoardReportId: `ILRP-2026-CVWB-${season}-7741`,
     generatedAt: new Date().toISOString()
@@ -1890,7 +2393,7 @@ export function syncWithQuickBooks() {
   addAuditLog({
     action: 'QUICKBOOKS_TWO_WAY_SYNC',
     details: `Synchronized ${mockInvoices.length} invoices, ${mockProducts.length} formulations, and customer balances with QuickBooks Online company ReNu-Biome Inc.`,
-    actor: 'admin@renu.com',
+    actor: 'support@renu-biome.com',
     category: 'SYSTEM'
   });
 
@@ -1907,8 +2410,132 @@ export function syncWithQuickBooks() {
     status: 'Connected & Fully Synchronized'
   };
 }
+export function adminAcceptOrder(orderId: string) {
+  const order = mockOrdersList.find(o => o.id === orderId || o.orderId === orderId);
+  if (!order) return null;
+
+  order.status = 'Out for delivery';
+  order.confirmationStatus = 'PENDING_CUSTOMER';
+  order.adminAcceptedAt = new Date().toISOString();
+
+  if (!order.timeline) {
+    order.timeline = [
+      { stage: 'Scheduled', date: order.date, done: true },
+      { stage: 'Out for delivery', date: 'Pending', done: false },
+      { stage: 'Delivered', date: 'Pending', done: false }
+    ];
+  }
+  const acceptedStage = order.timeline.find(t => t.stage === 'Accepted by Admin');
+  if (!acceptedStage) {
+    order.timeline.splice(1, 0, {
+      stage: 'Accepted by Admin',
+      date: new Date().toISOString().replace('T', ' ').substring(0, 16),
+      done: true
+    });
+  } else {
+    acceptedStage.date = new Date().toISOString().replace('T', ' ').substring(0, 16);
+    acceptedStage.done = true;
+  }
+
+  saveStore();
+  return order;
+}
+
+export function customerConfirmDelivery(
+  orderId: string,
+  details: {
+    deliveryAddress: string;
+    gateCode?: string;
+    contactOnArrival?: string;
+    contactPhone?: string;
+    deliveryWindow?: string;
+    notes?: string;
+  }
+) {
+  const order = mockOrdersList.find(o => o.id === orderId || o.orderId === orderId);
+  if (!order) return null;
+
+  order.deliveryAddress = details.deliveryAddress || order.deliveryAddress || '';
+  if (details.gateCode !== undefined) order.gateCode = details.gateCode;
+  if (details.contactOnArrival !== undefined) order.contactOnArrival = details.contactOnArrival;
+  if (details.contactPhone !== undefined) order.contactPhone = details.contactPhone;
+  if (details.deliveryWindow) order.deliveryWindow = details.deliveryWindow;
+  if (details.notes !== undefined) order.notes = details.notes;
+
+  order.confirmationStatus = 'CUSTOMER_SUBMITTED';
+  order.customerConfirmedAt = new Date().toISOString();
+
+  if (!order.timeline) {
+    order.timeline = [
+      { stage: 'Scheduled', date: order.date, done: true },
+      { stage: 'Out for delivery', date: 'Pending', done: false },
+      { stage: 'Delivered', date: 'Pending', done: false }
+    ];
+  }
+  const confirmedStage = order.timeline.find(t => t.stage === 'Customer Confirmed');
+  if (!confirmedStage) {
+    order.timeline.splice(2, 0, {
+      stage: 'Customer Confirmed',
+      date: new Date().toISOString().replace('T', ' ').substring(0, 16),
+      done: true
+    });
+  } else {
+    confirmedStage.date = new Date().toISOString().replace('T', ' ').substring(0, 16);
+    confirmedStage.done = true;
+  }
+
+  saveStore();
+  return order;
+}
+
+export function dispatchProcessDecision(
+  orderId: string,
+  decision: 'ACCEPTED' | 'RESCHEDULE',
+  rescheduleDetails?: { newWindow?: string; reason?: string }
+) {
+  const order = mockOrdersList.find(o => o.id === orderId || o.orderId === orderId);
+  if (!order) return null;
+
+  order.dispatchDecision = decision;
+  order.dispatchDecisionAt = new Date().toISOString();
+
+  if (decision === 'ACCEPTED') {
+    order.confirmationStatus = 'DISPATCH_ACCEPTED';
+    order.status = 'Scheduled';
+    if (!order.timeline) {
+      order.timeline = [
+        { stage: 'Scheduled', date: order.date, done: true },
+        { stage: 'Out for delivery', date: 'Pending', done: false },
+        { stage: 'Delivered', date: 'Pending', done: false }
+      ];
+    }
+    const slotStage = order.timeline.find(t => t.stage === 'Dispatch Confirmed');
+    if (!slotStage) {
+      order.timeline.push({
+        stage: 'Dispatch Confirmed',
+        date: new Date().toISOString().replace('T', ' ').substring(0, 16),
+        done: true
+      });
+    }
+  } else {
+    order.confirmationStatus = 'RESCHEDULE_REQUESTED';
+    order.rescheduledDeliveryWindow = rescheduleDetails?.newWindow || '';
+    order.rescheduleReason = rescheduleDetails?.reason || '';
+    if (order.timeline) {
+      order.timeline.push({
+        stage: 'Reschedule Requested',
+        date: new Date().toISOString().replace('T', ' ').substring(0, 16),
+        done: true
+      });
+    }
+  }
+
+  saveStore();
+  return order;
+}
+
 export function acceptOrderAndSendPaymentEmail(orderId: string) {
-  return updateDeliveryStatus(orderId, 'Out for delivery');
+  return adminAcceptOrder(orderId);
 }
 export function payOrderAndGenerateInvoice(orderId: string) {
   const order = mockOrdersList.find(o => o.id === orderId || o.orderId === orderId);
@@ -1989,7 +2616,7 @@ export function enrichDelivery(d: OrderItem): OrderItem {
          u.email.toLowerCase() === (d.customerEmail || '').toLowerCase()
   );
   const ranch = mockRanches.find(r => r.id === d.ranchId);
-  const tank = ranch ? (ranch.tanks || []).find(t => t.id === d.tankId) : null;
+  const tank = ranch ? (ranch.tanks || (ranch as any).tankSetups || []).find((t: any) => t.id === d.tankId) : null;
   const productObj = mockProducts.find(p => p.name.toLowerCase() === (d.product || '').toLowerCase());
 
   // Compute lbN and lbK2O if not already explicitly stored
@@ -2092,8 +2719,11 @@ export function createSample(data: any): LabSample {
     labName: data.labName || 'Deng Agronomics Lab',
     status: 'Received',
     customerNotes: data.customerNotes || data.notes || '',
-    pdfData: data.pdfData || 'JVBERi0xLjQKJeLjz9MKMSAwIG9iajw8L1R5cGUvQ2F0YWxvZy9QYWdlcyAyIDAgUj4+ZW5kb2JqCg==',
-    pdfFileName: data.pdfFileName || 'Lab_Assay_Report.pdf',
+    pdfData: data.pdfData || (data.fileData ? data.fileData : 'JVBERi0xLjQKJeLjz9MKMSAwIG9iajw8L1R5cGUvQ2F0YWxvZy9QYWdlcyAyIDAgUj4+ZW5kb2JqCg=='),
+    pdfFileName: data.pdfFileName || data.fileName || 'Lab_Assay_Report.pdf',
+    pdfUrl: data.pdfUrl || (data.fileData ? data.fileData : undefined),
+    documentType: data.documentType || data.fileType || 'application/pdf',
+    documentSize: data.documentSize || data.fileSize || '1.2 MB',
     createdAt: new Date().toISOString()
   };
 
@@ -2174,16 +2804,32 @@ export function updateTankTelemetry(tankId: string, data: any) {
   for (const ranch of mockRanches) {
     const tank = (ranch.tanks || []).find(t => t.id === tankId);
     if (tank) {
+      if (data.serial !== undefined) tank.serial = data.serial;
       if (data.otodataDeviceId !== undefined) tank.otodataDeviceId = data.otodataDeviceId;
       if (data.levelPercent !== undefined) tank.levelPercent = Number(data.levelPercent);
-      if (data.levelGallons !== undefined) tank.levelGallons = Number(data.levelGallons);
+      if (data.levelGallons !== undefined) {
+        tank.levelGallons = Number(data.levelGallons);
+        tank.currentGallons = Number(data.levelGallons);
+      }
+      if (data.currentGallons !== undefined) {
+        tank.currentGallons = Number(data.currentGallons);
+        tank.levelGallons = Number(data.currentGallons);
+      }
+      if (data.pressurePsi !== undefined) tank.pressure = String(data.pressurePsi);
+      if (data.pressurePSI !== undefined) tank.pressure = String(data.pressurePSI);
       if (data.weeklyUsageAvg !== undefined) tank.weeklyUsageAvg = Number(data.weeklyUsageAvg);
       if (data.daysToEmpty !== undefined) tank.daysToEmpty = Number(data.daysToEmpty);
       if (data.reorderThresholdPercent !== undefined) tank.reorderThresholdPercent = Number(data.reorderThresholdPercent);
       if (data.status !== undefined) tank.status = data.status;
       tank.lastReadingTime = new Date().toISOString();
       saveStore();
-      return tank;
+      return {
+        ...tank,
+        serial: tank.otodataDeviceId || tank.serial || 'OTO-99214',
+        otodataDeviceId: tank.otodataDeviceId || tank.serial || 'OTO-99214',
+        currentGallons: tank.currentGallons || tank.levelGallons || 3600,
+        levelGallons: tank.levelGallons || tank.currentGallons || 3600
+      };
     }
   }
   return null;

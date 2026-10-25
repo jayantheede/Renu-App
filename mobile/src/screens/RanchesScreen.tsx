@@ -25,6 +25,11 @@ import {
   submitRanch,
   submitBlock,
   submitTankSetup,
+  addTankMedicine,
+  deleteTankMedicine,
+  updateTankTracker,
+  addTankReport,
+  deleteTankReport,
   fetchDeliveries,
   fetchPrograms,
   fetchSamples,
@@ -107,7 +112,40 @@ export const RanchesScreen = ({ route }: any) => {
   const [sampleDate, setSampleDate] = useState(new Date().toISOString().split('T')[0]);
   const [sampleLabName, setSampleLabName] = useState('Dellavalle Laboratory');
   const [sampleNotes, setSampleNotes] = useState('');
+  const [sampleDocument, setSampleDocument] = useState<{ name: string; type: string; size: string; data: string } | null>(null);
   const [submittingSample, setSubmittingSample] = useState(false);
+
+  // Tank Hub Modal (Medicines, Trackers, Reports)
+  const [tankHubModalVisible, setTankHubModalVisible] = useState(false);
+  const [selectedHubTank, setSelectedHubTank] = useState<any>(null);
+  const [selectedHubRanch, setSelectedHubRanch] = useState<any>(null);
+  const [hubActiveTab, setHubActiveTab] = useState<'medicines' | 'trackers' | 'reports'>('medicines');
+
+  // Add Medicine Form
+  const [showAddMedForm, setShowAddMedForm] = useState(false);
+  const [medName, setMedName] = useState('');
+  const [medType, setMedType] = useState('Bio-Fertilizer');
+  const [medDosage, setMedDosage] = useState('');
+  const [medBatch, setMedBatch] = useState('');
+  const [medTarget, setMedTarget] = useState('');
+  const [medNotes, setMedNotes] = useState('');
+  const [submittingMed, setSubmittingMed] = useState(false);
+
+  // Configure Tracker Form
+  const [showTrackerForm, setShowTrackerForm] = useState(false);
+  const [trkType, setTrkType] = useState('Otodata Cellular Telemetry');
+  const [trkSerial, setTrkSerial] = useState('');
+  const [trkCellularId, setTrkCellularId] = useState('');
+  const [trkThreshold, setTrkThreshold] = useState('25');
+  const [submittingTrk, setSubmittingTrk] = useState(false);
+
+  // Add Tank Report Form
+  const [showAddReportForm, setShowAddReportForm] = useState(false);
+  const [rptTitle, setRptTitle] = useState('');
+  const [rptType, setRptType] = useState('Refill & Level Log');
+  const [rptNotes, setRptNotes] = useState('');
+  const [rptDocument, setRptDocument] = useState<{ name: string; type: string; size: string; data: string } | null>(null);
+  const [submittingRpt, setSubmittingRpt] = useState(false);
 
   // Recommendation Reply State
   const [replyText, setReplyText] = useState('');
@@ -269,6 +307,82 @@ export const RanchesScreen = ({ route }: any) => {
     }
   };
 
+  const pickFile = (onPicked: (file: { name: string; type: string; size: string; data: string }) => void) => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '*/*'; // Accept any format!
+      input.onchange = (e: any) => {
+        const file = e.target?.files?.[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const dataUri = reader.result as string;
+            const sizeKb = file.size / 1024;
+            const formattedSize = sizeKb > 1024 ? `${(sizeKb / 1024).toFixed(1)} MB` : `${Math.round(sizeKb)} KB`;
+            onPicked({
+              name: file.name,
+              type: file.type || 'application/octet-stream',
+              size: formattedSize,
+              data: dataUri,
+            });
+          };
+          reader.readAsDataURL(file);
+        }
+      };
+      input.click();
+    } else {
+      Alert.alert(
+        'Attach Document',
+        'Upload your lab assay or report document in any format.',
+        [
+          {
+            text: 'Attach Sample PDF',
+            onPress: () =>
+              onPicked({
+                name: 'Lab_Assay_Report.pdf',
+                type: 'application/pdf',
+                size: '1.2 MB',
+                data: 'data:application/pdf;base64,JVBERi0xLjQKJeLjz9MKMSAwIG9iajw8L1R5cGUvQ2F0YWxvZy9QYWdlcyAyIDAgUj4+ZW5kb2JqCg==',
+              }),
+          },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+    }
+  };
+
+  const handleOpenDocument = (fileDataOrUrl?: string, fileName?: string) => {
+    if (!fileDataOrUrl) {
+      Alert.alert('Notice', 'No document file data is attached.');
+      return;
+    }
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const win = window.open();
+      if (win) {
+        if (fileDataOrUrl.startsWith('data:image')) {
+          win.document.write(`<img src="${fileDataOrUrl}" style="max-width:100%;height:auto;margin:20px auto;display:block;" />`);
+        } else if (fileDataOrUrl.startsWith('data:application/pdf') || fileDataOrUrl.startsWith('data:')) {
+          win.document.write(`
+            <html>
+              <head><title>${fileName || 'Attached Document'}</title></head>
+              <body style="margin:0;padding:20px;font-family:sans-serif;background:#F8FAFC;">
+                <h3 style="color:#0C6054;">${fileName || 'Attached Document'}</h3>
+                <iframe src="${fileDataOrUrl}" width="100%" height="800px" style="border:1px solid #CBD5E1;border-radius:8px;"></iframe>
+              </body>
+            </html>
+          `);
+        } else {
+          win.location.href = fileDataOrUrl;
+        }
+      } else {
+        window.location.href = fileDataOrUrl;
+      }
+    } else {
+      Alert.alert('Document Attached', `Document "${fileName || 'File'}" is saved and available for viewing.`);
+    }
+  };
+
   const handleSubmitSample = async () => {
     if (!sampleRanchId || !sampleBlockId) {
       Alert.alert('Selection Required', 'Please select a ranch and block for this assay sample.');
@@ -285,9 +399,14 @@ export const RanchesScreen = ({ route }: any) => {
         samplingDate: sampleDate,
         labName: sampleLabName,
         notes: sampleNotes,
+        pdfFileName: sampleDocument?.name || 'Lab_Assay_Report.pdf',
+        pdfData: sampleDocument?.data || undefined,
+        documentType: sampleDocument?.type || 'application/pdf',
+        documentSize: sampleDocument?.size || '1.2 MB',
       });
       setSampleModalVisible(false);
       setSampleNotes('');
+      setSampleDocument(null);
       loadAll();
       Alert.alert(
         'Sample Submitted',
@@ -297,6 +416,113 @@ export const RanchesScreen = ({ route }: any) => {
       Alert.alert('Error', e.message || 'Failed to submit lab sample');
     } finally {
       setSubmittingSample(false);
+    }
+  };
+
+  const handleOpenTankHub = (ranch: any, tank: any) => {
+    setSelectedHubRanch(ranch);
+    setSelectedHubTank(tank);
+    setHubActiveTab('medicines');
+    setShowAddMedForm(false);
+    setShowTrackerForm(false);
+    setShowAddReportForm(false);
+    setTrkSerial(tank.serial || '');
+    setTrkThreshold(String(tank.reorderThresholdPercent || 25));
+    setTankHubModalVisible(true);
+  };
+
+  const handleAddMedicine = async () => {
+    if (!medName.trim()) {
+      Alert.alert('Required', 'Please enter a medicine or nutrient product name.');
+      return;
+    }
+    setSubmittingMed(true);
+    try {
+      await addTankMedicine(selectedHubTank.id, {
+        name: medName.trim(),
+        type: medType,
+        dosage: medDosage.trim() || '25 Gallons',
+        batchNumber: medBatch.trim() || `BAT-${Math.floor(1000 + Math.random() * 9000)}`,
+        targetDeficiency: medTarget.trim() || 'Crop Fortification',
+        notes: medNotes.trim(),
+        status: 'Active',
+      });
+      setMedName('');
+      setMedDosage('');
+      setMedBatch('');
+      setMedTarget('');
+      setMedNotes('');
+      setShowAddMedForm(false);
+      await loadAll();
+      Alert.alert('Medicine Added', 'Treatment recorded for this tank.');
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to add medicine');
+    } finally {
+      setSubmittingMed(false);
+    }
+  };
+
+  const handleDeleteMedicine = async (medId: string) => {
+    try {
+      await deleteTankMedicine(selectedHubTank.id, medId);
+      await loadAll();
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to remove medicine');
+    }
+  };
+
+  const handleUpdateTracker = async () => {
+    setSubmittingTrk(true);
+    try {
+      await updateTankTracker(selectedHubTank.id, {
+        trackerType: trkType,
+        serialNumber: trkSerial.trim() || selectedHubTank.serial,
+        cellularId: trkCellularId.trim() || undefined,
+        alertThresholdPercent: parseInt(trkThreshold, 10) || 25,
+      });
+      setShowTrackerForm(false);
+      await loadAll();
+      Alert.alert('Tracker Updated', 'Telemetry configuration saved.');
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to update tracker');
+    } finally {
+      setSubmittingTrk(false);
+    }
+  };
+
+  const handleAddTankReport = async () => {
+    if (!rptTitle.trim()) {
+      Alert.alert('Required', 'Please enter a report title.');
+      return;
+    }
+    setSubmittingRpt(true);
+    try {
+      await addTankReport(selectedHubTank.id, {
+        title: rptTitle.trim(),
+        reportType: rptType,
+        notes: rptNotes.trim(),
+        fileName: rptDocument?.name || 'Tank_Report.pdf',
+        fileData: rptDocument?.data || undefined,
+      });
+      setRptTitle('');
+      setRptNotes('');
+      setRptDocument(null);
+      setShowAddReportForm(false);
+      await loadAll();
+      Alert.alert('Report Saved', 'Report logged for this tank.');
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to add report');
+    } finally {
+      setSubmittingRpt(false);
+    }
+  };
+
+  const handleDeleteTankReport = async (reportId: string) => {
+    try {
+      await deleteTankReport(selectedHubTank.id, reportId);
+      await loadAll();
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to remove report');
     }
   };
 
@@ -806,18 +1032,16 @@ export const RanchesScreen = ({ route }: any) => {
                       Otodata Monitored Tanks ({tanks.length})
                     </Text>
                   </View>
-                  {isAdmin && (
-                    <TouchableOpacity
-                      onPress={() => {
-                        setTargetRanchForTank(ranch);
-                        setAddTankModalVisible(true);
-                      }}
-                      style={styles.addInlineBtn}
-                    >
-                      <MaterialCommunityIcons name="plus-circle-outline" size={16} color={BRAND_COLORS.primaryTeal} />
-                      <Text style={styles.addInlineBtnText}>Add Tank</Text>
-                    </TouchableOpacity>
-                  )}
+                  <TouchableOpacity
+                    onPress={() => {
+                      setTargetRanchForTank(ranch);
+                      setAddTankModalVisible(true);
+                    }}
+                    style={styles.addInlineBtn}
+                  >
+                    <MaterialCommunityIcons name="plus-circle-outline" size={16} color={BRAND_COLORS.primaryTeal} />
+                    <Text style={styles.addInlineBtnText}>Add Tank</Text>
+                  </TouchableOpacity>
                 </View>
 
                 {tanks.length === 0 ? (
@@ -834,7 +1058,7 @@ export const RanchesScreen = ({ route }: any) => {
                       return (
                         <View key={tank.id || tIdx} style={[styles.tankCard, isLow && styles.tankCardLow]}>
                           <View style={styles.tankCardHeader}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
                               <View style={[styles.tankIconBox, { backgroundColor: isLow ? '#FEF2F2' : '#F0FDFA' }]}>
                                 <MaterialCommunityIcons
                                   name="water-pump"
@@ -842,9 +1066,9 @@ export const RanchesScreen = ({ route }: any) => {
                                   color={isLow ? '#DC2626' : BRAND_COLORS.primaryTeal}
                                 />
                               </View>
-                              <View style={{ marginLeft: 12 }}>
-                                <Text style={styles.tankName}>{tank.name || `Tank #${tIdx + 1}`}</Text>
-                                <Text style={styles.tankLocation}>
+                              <View style={{ marginLeft: 12, flex: 1 }}>
+                                <Text style={styles.tankName} numberOfLines={1}>{tank.name || `Tank #${tIdx + 1}`}</Text>
+                                <Text style={styles.tankLocation} numberOfLines={1}>
                                   {tank.location || 'Injection Station'} · Cellular: <Text style={{ fontWeight: '600' }}>{tank.serial || 'OTO-99214'}</Text>
                                 </Text>
                               </View>
@@ -874,8 +1098,38 @@ export const RanchesScreen = ({ route }: any) => {
                             </Text>
                           </View>
 
-                          {/* Live Otodata Telemetry Trigger */}
-                          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8 }}>
+                          {/* Tank Pills Summary (Medicines, Trackers, Reports) */}
+                          <View style={styles.tankSummaryPillsRow}>
+                            <View style={styles.tankPill}>
+                              <MaterialCommunityIcons name="pill" size={13} color="#0D9488" />
+                              <Text style={styles.tankPillText}>
+                                {tank.medicines?.length || 0} Medicines
+                              </Text>
+                            </View>
+                            <View style={styles.tankPill}>
+                              <MaterialCommunityIcons name="satellite-variant" size={13} color="#2563EB" />
+                              <Text style={styles.tankPillText}>
+                                {tank.trackers?.length || 1} Tracker
+                              </Text>
+                            </View>
+                            <View style={styles.tankPill}>
+                              <MaterialCommunityIcons name="file-document-outline" size={13} color="#7C3AED" />
+                              <Text style={styles.tankPillText}>
+                                {tank.reports?.length || 0} Reports
+                              </Text>
+                            </View>
+                          </View>
+
+                          {/* Tank Actions: Hub & Live Feed */}
+                          <View style={styles.tankActionsRow}>
+                            <TouchableOpacity
+                              style={styles.tankHubBtn}
+                              onPress={() => handleOpenTankHub(ranch, tank)}
+                            >
+                              <MaterialCommunityIcons name="layers-outline" size={14} color="#FFFFFF" />
+                              <Text style={styles.tankHubBtnText}>Tank Hub (Medicines, Trackers, Reports)</Text>
+                            </TouchableOpacity>
+
                             <TouchableOpacity
                               style={styles.openTelemetryBtn}
                               onPress={() => {
@@ -885,7 +1139,7 @@ export const RanchesScreen = ({ route }: any) => {
                               }}
                             >
                               <MaterialCommunityIcons name="remote" size={14} color="#0C6054" />
-                              <Text style={styles.openTelemetryBtnText}>Live Otodata Telemetry Feed</Text>
+                              <Text style={styles.openTelemetryBtnText}>Live Feed</Text>
                             </TouchableOpacity>
                           </View>
 
@@ -1024,6 +1278,39 @@ export const RanchesScreen = ({ route }: any) => {
                               {sample.status}
                             </Chip>
                           </View>
+
+                          {sample.customerNotes ? (
+                            <Text style={styles.sampleNotesText}>
+                              "{sample.customerNotes}"
+                            </Text>
+                          ) : null}
+
+                          {/* Attached Lab Document (Any Format) */}
+                          {(sample.pdfData || sample.pdfUrl || sample.pdfFileName) && (
+                            <View style={styles.sampleDocStrip}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                                <MaterialCommunityIcons
+                                  name={
+                                    sample.pdfFileName?.match(/\.(png|jpg|jpeg|webp)$/i) ? 'file-image' :
+                                    sample.pdfFileName?.match(/\.(xls|xlsx|csv)$/i) ? 'file-excel' :
+                                    sample.pdfFileName?.match(/\.(doc|docx)$/i) ? 'file-word' : 'file-pdf-box'
+                                  }
+                                  size={18}
+                                  color={BRAND_COLORS.primaryTeal}
+                                />
+                                <Text style={styles.sampleDocName} numberOfLines={1}>
+                                  {sample.pdfFileName || 'Lab_Assay_Report.pdf'}
+                                </Text>
+                              </View>
+                              <TouchableOpacity
+                                style={styles.viewDocBadgeBtn}
+                                onPress={() => handleOpenDocument(sample.pdfData || sample.pdfUrl, sample.pdfFileName)}
+                              >
+                                <MaterialCommunityIcons name="open-in-new" size={14} color="#0C6054" />
+                                <Text style={styles.viewDocBadgeText}>View Document</Text>
+                              </TouchableOpacity>
+                            </View>
+                          )}
 
                           {/* UC Reference Ranges Comparison Table */}
                           {sample.values && (
@@ -1312,6 +1599,59 @@ export const RanchesScreen = ({ route }: any) => {
                 activeOutlineColor={BRAND_COLORS.primaryTeal}
                 placeholder="e.g. July almond leaf analysis from Dellavalle. Noted yellowing on lower leaves."
               />
+
+              {/* Attach Document of Result (Any format) */}
+              <Text style={styles.formLabel}>Attach Document of Result (Any Format) *</Text>
+              {sampleDocument ? (
+                <View style={styles.attachedDocCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 10 }}>
+                    <View style={styles.docIconBox}>
+                      <MaterialCommunityIcons
+                        name={
+                          sampleDocument.name.endsWith('.pdf') ? 'file-pdf-box' :
+                          sampleDocument.name.match(/\.(png|jpg|jpeg|webp)$/i) ? 'file-image' :
+                          sampleDocument.name.match(/\.(xls|xlsx|csv)$/i) ? 'file-excel' :
+                          sampleDocument.name.match(/\.(doc|docx)$/i) ? 'file-word' : 'file-document-outline'
+                        }
+                        size={28}
+                        color={BRAND_COLORS.primaryTeal}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.docFileName} numberOfLines={1}>
+                        {sampleDocument.name}
+                      </Text>
+                      <Text style={styles.docFileSize}>{sampleDocument.size}</Text>
+                    </View>
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                    <TouchableOpacity
+                      onPress={() => pickFile(setSampleDocument)}
+                      style={styles.changeDocBtn}
+                    >
+                      <Text style={styles.changeDocBtnText}>Change</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setSampleDocument(null)}
+                      style={styles.removeDocBtn}
+                    >
+                      <MaterialCommunityIcons name="close-circle" size={20} color="#EF4444" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  onPress={() => pickFile(setSampleDocument)}
+                  style={styles.docUploadDashedBox}
+                  activeOpacity={0.7}
+                >
+                  <MaterialCommunityIcons name="cloud-upload-outline" size={28} color={BRAND_COLORS.primaryTeal} />
+                  <Text style={styles.docUploadTitle}>Upload Result Document (Any Format)</Text>
+                  <Text style={styles.docUploadSubtitle}>
+                    Accepts PDF, Word documents (.doc/.docx), Excel spreadsheets (.xls/.xlsx), CSV, images (.png/.jpg), or text files
+                  </Text>
+                </TouchableOpacity>
+              )}
 
               <View style={styles.modalButtonsRow}>
                 <Button
@@ -1755,6 +2095,539 @@ export const RanchesScreen = ({ route }: any) => {
           </View>
         </View>
       </Modal>
+
+      {/* Tank Operations Hub Modal: Medicines, Trackers, Reports */}
+      <Modal visible={tankHubModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '92%' }]}>
+            {selectedHubTank && (
+              <>
+                <View style={styles.modalHeader}>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                      <MaterialCommunityIcons name="layers-outline" size={16} color={BRAND_COLORS.primaryTeal} />
+                      <Text style={styles.modalSub}>Tank Operations & Inventory Hub</Text>
+                    </View>
+                    <Text style={styles.modalTitle}>{selectedHubTank.name}</Text>
+                    <Text style={styles.telemetryRanchSub}>
+                      {selectedHubRanch?.name} · {selectedHubTank.location || 'Pump Pad'} · Serial #{selectedHubTank.serial || 'OTO-99214'}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setTankHubModalVisible(false)}
+                    style={styles.modalCloseBtn}
+                  >
+                    <MaterialCommunityIcons name="close" size={24} color="#64748B" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Level Snapshot Bar */}
+                <View style={styles.hubSnapshotCard}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <Text style={styles.hubSnapshotLabel}>CURRENT INVENTORY LEVEL</Text>
+                    <Text style={[styles.hubSnapshotPct, { color: (selectedHubTank.levelPercent || 78) < 25 ? '#DC2626' : BRAND_COLORS.primaryTeal }]}>
+                      {selectedHubTank.levelPercent || 78}%
+                    </Text>
+                  </View>
+                  <ProgressBar
+                    progress={(selectedHubTank.levelPercent || 78) / 100}
+                    color={(selectedHubTank.levelPercent || 78) < 25 ? '#DC2626' : BRAND_COLORS.primaryTeal}
+                    style={styles.gaugeBar}
+                  />
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+                    <Text style={styles.hubSnapshotMeta}>
+                      {(selectedHubTank.currentGallons || Math.round(((selectedHubTank.levelPercent || 78) / 100) * (selectedHubTank.capacity || 5000))).toLocaleString()} Gallons
+                    </Text>
+                    <Text style={styles.hubSnapshotMeta}>
+                      Capacity: {(selectedHubTank.capacityGallons || selectedHubTank.capacity || 5000).toLocaleString()} Gal
+                    </Text>
+                  </View>
+                </View>
+
+                {/* 3 Hub Tabs */}
+                <View style={styles.hubTabsRow}>
+                  <TouchableOpacity
+                    style={[styles.hubTabBtn, hubActiveTab === 'medicines' && styles.hubTabBtnActive]}
+                    onPress={() => setHubActiveTab('medicines')}
+                  >
+                    <MaterialCommunityIcons
+                      name="pill"
+                      size={15}
+                      color={hubActiveTab === 'medicines' ? BRAND_COLORS.primaryTeal : '#64748B'}
+                    />
+                    <Text style={[styles.hubTabText, hubActiveTab === 'medicines' && styles.hubTabTextActive]}>
+                      Medicines ({selectedHubTank.medicines?.length || 0})
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.hubTabBtn, hubActiveTab === 'trackers' && styles.hubTabBtnActive]}
+                    onPress={() => setHubActiveTab('trackers')}
+                  >
+                    <MaterialCommunityIcons
+                      name="satellite-variant"
+                      size={15}
+                      color={hubActiveTab === 'trackers' ? BRAND_COLORS.primaryTeal : '#64748B'}
+                    />
+                    <Text style={[styles.hubTabText, hubActiveTab === 'trackers' && styles.hubTabTextActive]}>
+                      Trackers
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.hubTabBtn, hubActiveTab === 'reports' && styles.hubTabBtnActive]}
+                    onPress={() => setHubActiveTab('reports')}
+                  >
+                    <MaterialCommunityIcons
+                      name="file-document-outline"
+                      size={15}
+                      color={hubActiveTab === 'reports' ? BRAND_COLORS.primaryTeal : '#64748B'}
+                    />
+                    <Text style={[styles.hubTabText, hubActiveTab === 'reports' && styles.hubTabTextActive]}>
+                      Reports ({selectedHubTank.reports?.length || 0})
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 400 }}>
+                  {/* TAB 1: MEDICINES & TREATMENTS */}
+                  {hubActiveTab === 'medicines' && (
+                    <View style={styles.tabContentArea}>
+                      <View style={styles.tabHeaderRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.tabHeading}>Tank Injected Treatments</Text>
+                          <Text style={styles.tabSubheading}>
+                            Bio-fertilizers, biological fungicides, and conditioning brews
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.hubAddActionBtn}
+                          onPress={() => setShowAddMedForm(!showAddMedForm)}
+                        >
+                          <MaterialCommunityIcons name={showAddMedForm ? 'minus' : 'plus'} size={14} color="#FFFFFF" />
+                          <Text style={styles.hubAddActionBtnText}>
+                            {showAddMedForm ? 'Cancel' : 'Add Medicine'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {showAddMedForm && (
+                        <View style={styles.hubFormCard}>
+                          <Text style={styles.hubFormTitle}>Record Injected Treatment</Text>
+                          <TextInput
+                            label="Medicine / Product Name *"
+                            value={medName}
+                            onChangeText={setMedName}
+                            mode="outlined"
+                            style={styles.hubInput}
+                            placeholder="e.g. ReNu Bio-Gold NPK 10-5-5"
+                          />
+
+                          <Text style={styles.formLabel}>Treatment Category</Text>
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                            {['Bio-Fertilizer', 'Biological Fungicide', 'Micro-Nutrient', 'Soil Conditioner', 'Inoculant'].map((cat) => (
+                              <TouchableOpacity
+                                key={cat}
+                                onPress={() => setMedType(cat)}
+                                style={[styles.selectorChip, medType === cat && styles.selectorChipActive]}
+                              >
+                                <Text style={[styles.selectorChipText, medType === cat && styles.selectorChipTextActive]}>
+                                  {cat}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+
+                          <TextInput
+                            label="Dosage / Volume Added *"
+                            value={medDosage}
+                            onChangeText={setMedDosage}
+                            mode="outlined"
+                            style={styles.hubInput}
+                            placeholder="e.g. 50 Gallons or 5 gal/1000 gal"
+                          />
+
+                          <TextInput
+                            label="Batch / Lot Number"
+                            value={medBatch}
+                            onChangeText={setMedBatch}
+                            mode="outlined"
+                            style={styles.hubInput}
+                            placeholder="e.g. BAT-2026-904"
+                          />
+
+                          <TextInput
+                            label="Target Deficiency / Condition"
+                            value={medTarget}
+                            onChangeText={setMedTarget}
+                            mode="outlined"
+                            style={styles.hubInput}
+                            placeholder="e.g. Pre-bloom root feeding"
+                          />
+
+                          <TextInput
+                            label="Application Notes"
+                            value={medNotes}
+                            onChangeText={setMedNotes}
+                            mode="outlined"
+                            multiline
+                            numberOfLines={2}
+                            style={[styles.hubInput, { height: 60 }]}
+                            placeholder="e.g. Injected into Drip Set 1 during 4-hour cycle"
+                          />
+
+                          <Button
+                            mode="contained"
+                            buttonColor={BRAND_COLORS.primaryTeal}
+                            loading={submittingMed}
+                            onPress={handleAddMedicine}
+                            style={{ borderRadius: 8, marginTop: 4 }}
+                          >
+                            Save Medicine to Tank
+                          </Button>
+                        </View>
+                      )}
+
+                      {(!selectedHubTank.medicines || selectedHubTank.medicines.length === 0) ? (
+                        <View style={styles.hubEmptyBox}>
+                          <MaterialCommunityIcons name="pill" size={24} color="#94A3B8" />
+                          <Text style={styles.hubEmptyText}>No medicines or treatments logged for this tank yet.</Text>
+                        </View>
+                      ) : (
+                        selectedHubTank.medicines.map((m: any) => (
+                          <View key={m.id} style={styles.hubItemCard}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                              <View style={{ flex: 1, marginRight: 8 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                  <Text style={styles.hubItemName}>{m.name}</Text>
+                                  <View style={styles.hubBadgePill}>
+                                    <Text style={styles.hubBadgeText}>{m.type}</Text>
+                                  </View>
+                                </View>
+                                <Text style={styles.hubItemMeta}>
+                                  Dosage: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{m.dosage}</Text> · Batch: {m.batchNumber || 'N/A'} · Added: {m.dateAdded}
+                                </Text>
+                                {m.targetDeficiency ? (
+                                  <Text style={styles.hubItemTarget}>Target: {m.targetDeficiency}</Text>
+                                ) : null}
+                                {m.notes ? (
+                                  <Text style={styles.hubItemNotes}>"{m.notes}"</Text>
+                                ) : null}
+                              </View>
+                              <TouchableOpacity
+                                onPress={() => handleDeleteMedicine(m.id)}
+                                style={{ padding: 4 }}
+                              >
+                                <MaterialCommunityIcons name="trash-can-outline" size={18} color="#94A3B8" />
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        ))
+                      )}
+                    </View>
+                  )}
+
+                  {/* TAB 2: TRACKERS & TELEMETRY */}
+                  {hubActiveTab === 'trackers' && (
+                    <View style={styles.tabContentArea}>
+                      <View style={styles.tabHeaderRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.tabHeading}>Paired Cellular Tracker</Text>
+                          <Text style={styles.tabSubheading}>
+                            Otodata cellular unit, level sensors, and alert thresholds
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.hubAddActionBtn}
+                          onPress={() => setShowTrackerForm(!showTrackerForm)}
+                        >
+                          <MaterialCommunityIcons name="cog-outline" size={14} color="#FFFFFF" />
+                          <Text style={styles.hubAddActionBtnText}>
+                            {showTrackerForm ? 'Cancel' : 'Configure'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {showTrackerForm && (
+                        <View style={styles.hubFormCard}>
+                          <Text style={styles.hubFormTitle}>Configure Telemetry Tracker</Text>
+                          <TextInput
+                            label="Tracker Device Serial Number *"
+                            value={trkSerial}
+                            onChangeText={setTrkSerial}
+                            mode="outlined"
+                            style={styles.hubInput}
+                            placeholder="e.g. OTO-99214"
+                          />
+
+                          <TextInput
+                            label="Cellular Unit ID (LTE-M)"
+                            value={trkCellularId}
+                            onChangeText={setTrkCellularId}
+                            mode="outlined"
+                            style={styles.hubInput}
+                            placeholder="e.g. LTE-M-8821"
+                          />
+
+                          <TextInput
+                            label="Low-Level Alert Threshold (% remaining) *"
+                            value={trkThreshold}
+                            onChangeText={setTrkThreshold}
+                            mode="outlined"
+                            keyboardType="numeric"
+                            style={styles.hubInput}
+                            placeholder="25"
+                          />
+
+                          <Button
+                            mode="contained"
+                            buttonColor={BRAND_COLORS.primaryTeal}
+                            loading={submittingTrk}
+                            onPress={handleUpdateTracker}
+                            style={{ borderRadius: 8, marginTop: 4 }}
+                          >
+                            Update Tracker Settings
+                          </Button>
+                        </View>
+                      )}
+
+                      <View style={styles.trackerDetailCard}>
+                        <View style={styles.trackerDetailHeader}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <View style={styles.trackerIconBox}>
+                              <MaterialCommunityIcons name="satellite-variant" size={20} color="#2563EB" />
+                            </View>
+                            <View>
+                              <Text style={styles.trackerTitle}>Otodata Cellular Telemetry Unit</Text>
+                              <Text style={styles.trackerSerial}>
+                                Serial: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{selectedHubTank.serial || 'OTO-99214'}</Text>
+                              </Text>
+                            </View>
+                          </View>
+                          <View style={styles.trackerStatusPill}>
+                            <View style={styles.trackerStatusDot} />
+                            <Text style={styles.trackerStatusText}>Online</Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.trackerGrid}>
+                          <View style={styles.trackerGridItem}>
+                            <Text style={styles.trackerGridLabel}>Cellular Link</Text>
+                            <Text style={styles.trackerGridVal}>LTE-M Active</Text>
+                            <Text style={styles.trackerGridSub}>-74 dBm (Strong)</Text>
+                          </View>
+                          <View style={styles.trackerGridItem}>
+                            <Text style={styles.trackerGridLabel}>Battery</Text>
+                            <Text style={styles.trackerGridVal}>98%</Text>
+                            <Text style={styles.trackerGridSub}>Solar Recharging</Text>
+                          </View>
+                          <View style={styles.trackerGridItem}>
+                            <Text style={styles.trackerGridLabel}>Sensor Pressure</Text>
+                            <Text style={styles.trackerGridVal}>{selectedHubTank.pressurePsi || '42'} PSI</Text>
+                            <Text style={styles.trackerGridSub}>Submersible transducer</Text>
+                          </View>
+                          <View style={styles.trackerGridItem}>
+                            <Text style={styles.trackerGridLabel}>Refill Alert At</Text>
+                            <Text style={[styles.trackerGridVal, { color: BRAND_COLORS.accentOrange }]}>
+                              &lt; {selectedHubTank.reorderThresholdPercent || 25}%
+                            </Text>
+                            <Text style={styles.trackerGridSub}>Automated trigger</Text>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* TAB 3: TANK REPORTS & LOGS */}
+                  {hubActiveTab === 'reports' && (
+                    <View style={styles.tabContentArea}>
+                      <View style={styles.tabHeaderRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.tabHeading}>Tank Reports & Documents</Text>
+                          <Text style={styles.tabSubheading}>
+                            Refill logs, calibration audits, inspections, and attached documents
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.hubAddActionBtn}
+                          onPress={() => setShowAddReportForm(!showAddReportForm)}
+                        >
+                          <MaterialCommunityIcons name={showAddReportForm ? 'minus' : 'plus'} size={14} color="#FFFFFF" />
+                          <Text style={styles.hubAddActionBtnText}>
+                            {showAddReportForm ? 'Cancel' : 'Add Report'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {showAddReportForm && (
+                        <View style={styles.hubFormCard}>
+                          <Text style={styles.hubFormTitle}>Create Tank Report</Text>
+                          <TextInput
+                            label="Report Title *"
+                            value={rptTitle}
+                            onChangeText={setRptTitle}
+                            mode="outlined"
+                            style={styles.hubInput}
+                            placeholder="e.g. Seasonal Tank Flush & Inspection"
+                          />
+
+                          <Text style={styles.formLabel}>Report Category</Text>
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                            {['Refill & Level Log', 'Quality & Assay Report', 'Maintenance & Sensor Check', 'Compliance Inspection'].map((rcat) => (
+                              <TouchableOpacity
+                                key={rcat}
+                                onPress={() => setRptType(rcat)}
+                                style={[styles.selectorChip, rptType === rcat && styles.selectorChipActive]}
+                              >
+                                <Text style={[styles.selectorChipText, rptType === rcat && styles.selectorChipTextActive]}>
+                                  {rcat}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+
+                          <TextInput
+                            label="Report Notes / Key Findings"
+                            value={rptNotes}
+                            onChangeText={setRptNotes}
+                            mode="outlined"
+                            multiline
+                            numberOfLines={2}
+                            style={[styles.hubInput, { height: 60 }]}
+                            placeholder="e.g. Pump pressure verified, clean discharge line"
+                          />
+
+                          {/* Document Attachment in Any Format */}
+                          <Text style={styles.formLabel}>Attach Report Document (Any Format)</Text>
+                          {rptDocument ? (
+                            <View style={styles.attachedDocCard}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 10 }}>
+                                <MaterialCommunityIcons
+                                  name={
+                                    rptDocument.name.endsWith('.pdf') ? 'file-pdf-box' :
+                                    rptDocument.name.match(/\.(png|jpg|jpeg|webp)$/i) ? 'file-image' :
+                                    rptDocument.name.match(/\.(xls|xlsx|csv)$/i) ? 'file-excel' :
+                                    rptDocument.name.match(/\.(doc|docx)$/i) ? 'file-word' : 'file-document-outline'
+                                  }
+                                  size={24}
+                                  color={BRAND_COLORS.primaryTeal}
+                                />
+                                <View style={{ flex: 1 }}>
+                                  <Text style={styles.docFileName} numberOfLines={1}>
+                                    {rptDocument.name}
+                                  </Text>
+                                  <Text style={styles.docFileSize}>{rptDocument.size}</Text>
+                                </View>
+                              </View>
+                              <TouchableOpacity
+                                onPress={() => setRptDocument(null)}
+                                style={styles.removeDocBtn}
+                              >
+                                <MaterialCommunityIcons name="close-circle" size={18} color="#EF4444" />
+                              </TouchableOpacity>
+                            </View>
+                          ) : (
+                            <TouchableOpacity
+                              onPress={() => pickFile(setRptDocument)}
+                              style={styles.docUploadDashedBox}
+                              activeOpacity={0.7}
+                            >
+                              <MaterialCommunityIcons name="cloud-upload-outline" size={24} color={BRAND_COLORS.primaryTeal} />
+                              <Text style={styles.docUploadTitle}>Attach Document (PDF, Word, Excel, Image, etc.)</Text>
+                            </TouchableOpacity>
+                          )}
+
+                          <Button
+                            mode="contained"
+                            buttonColor={BRAND_COLORS.primaryTeal}
+                            loading={submittingRpt}
+                            onPress={handleAddTankReport}
+                            style={{ borderRadius: 8, marginTop: 10 }}
+                          >
+                            Save Tank Report
+                          </Button>
+                        </View>
+                      )}
+
+                      {(!selectedHubTank.reports || selectedHubTank.reports.length === 0) ? (
+                        <View style={styles.hubEmptyBox}>
+                          <MaterialCommunityIcons name="file-document-outline" size={24} color="#94A3B8" />
+                          <Text style={styles.hubEmptyText}>No reports or compliance documents logged for this tank yet.</Text>
+                        </View>
+                      ) : (
+                        selectedHubTank.reports.map((r: any) => (
+                          <View key={r.id} style={styles.hubItemCard}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                              <View style={{ flex: 1, marginRight: 8 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                  <Text style={styles.hubItemName}>{r.title}</Text>
+                                  <View style={styles.hubBadgePill}>
+                                    <Text style={styles.hubBadgeText}>{r.reportType}</Text>
+                                  </View>
+                                </View>
+                                <Text style={styles.hubItemMeta}>
+                                  Logged: {r.date} · Author: {r.author || 'Grower'}
+                                </Text>
+                                {r.notes ? (
+                                  <Text style={styles.hubItemNotes}>"{r.notes}"</Text>
+                                ) : null}
+
+                                {/* Attached Document */}
+                                {(r.fileData || r.fileName) && (
+                                  <View style={[styles.sampleDocStrip, { marginTop: 6 }]}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                                      <MaterialCommunityIcons
+                                        name={
+                                          r.fileName?.match(/\.(png|jpg|jpeg|webp)$/i) ? 'file-image' :
+                                          r.fileName?.match(/\.(xls|xlsx|csv)$/i) ? 'file-excel' :
+                                          r.fileName?.match(/\.(doc|docx)$/i) ? 'file-word' : 'file-pdf-box'
+                                        }
+                                        size={18}
+                                        color={BRAND_COLORS.primaryTeal}
+                                      />
+                                      <Text style={styles.sampleDocName} numberOfLines={1}>
+                                        {r.fileName || 'Report_Document.pdf'}
+                                      </Text>
+                                    </View>
+                                    <TouchableOpacity
+                                      style={styles.viewDocBadgeBtn}
+                                      onPress={() => handleOpenDocument(r.fileData, r.fileName)}
+                                    >
+                                      <MaterialCommunityIcons name="open-in-new" size={14} color="#0C6054" />
+                                      <Text style={styles.viewDocBadgeText}>View</Text>
+                                    </TouchableOpacity>
+                                  </View>
+                                )}
+                              </View>
+                              <TouchableOpacity
+                                onPress={() => handleDeleteTankReport(r.id)}
+                                style={{ padding: 4 }}
+                              >
+                                <MaterialCommunityIcons name="trash-can-outline" size={18} color="#94A3B8" />
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        ))
+                      )}
+                    </View>
+                  )}
+                </ScrollView>
+
+                <View style={[styles.modalButtonsRow, { marginTop: 12 }]}>
+                  <Button
+                    mode="contained"
+                    buttonColor={BRAND_COLORS.primaryTeal}
+                    onPress={() => setTankHubModalVisible(false)}
+                    style={{ flex: 1, borderRadius: 8 }}
+                  >
+                    Close Tank Hub
+                  </Button>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -1767,12 +2640,14 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 96,
+    paddingBottom: 110,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    flexWrap: 'wrap',
+    gap: 10,
     marginBottom: 16,
   },
   title: {
@@ -1784,7 +2659,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748B',
     marginTop: 2,
-    maxWidth: 240,
   },
   labSampleBtn: {
     flexDirection: 'row',
@@ -1964,6 +2838,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
     marginBottom: 10,
   },
   blocksSectionTitle: {
@@ -1973,6 +2849,7 @@ const styles = StyleSheet.create({
   },
   blockActionsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 6,
   },
   actionPill: {
@@ -2132,6 +3009,8 @@ const styles = StyleSheet.create({
   telemetryMetricsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 6,
   },
   telemetryMetricItem: {
     fontSize: 11,
@@ -2946,5 +3825,408 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 12,
+  },
+
+  // Document Upload & Attachment Styles
+  attachedDocCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
+  docIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    backgroundColor: '#CCFBF1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  docFileName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  docFileSize: {
+    fontSize: 11,
+    color: '#0F766E',
+    marginTop: 2,
+  },
+  changeDocBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+  },
+  changeDocBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: BRAND_COLORS.primaryTeal,
+  },
+  removeDocBtn: {
+    padding: 4,
+  },
+  docUploadDashedBox: {
+    borderWidth: 1.5,
+    borderColor: '#99F6E4',
+    borderStyle: 'dashed',
+    borderRadius: 12,
+    backgroundColor: '#F0FDFA',
+    padding: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  docUploadTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: BRAND_COLORS.primaryTeal,
+    marginTop: 6,
+    textAlign: 'center',
+  },
+  docUploadSubtitle: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 4,
+    textAlign: 'center',
+    lineHeight: 15,
+  },
+  sampleDocStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CCFBF1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginTop: 8,
+    gap: 8,
+  },
+  sampleDocName: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  viewDocBadgeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F0FDFA',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+  },
+  viewDocBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0C6054',
+  },
+
+  // Tank Summary Pills & Actions Row
+  tankSummaryPillsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 10,
+  },
+  tankPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  tankPillText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  tankActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  tankHubBtn: {
+    flex: 1,
+    minWidth: 180,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: BRAND_COLORS.primaryTeal,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    gap: 6,
+  },
+  tankHubBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 11,
+  },
+
+  // Tank Hub Modal Elements
+  hubSnapshotCard: {
+    backgroundColor: '#F0FDFA',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    marginBottom: 12,
+  },
+  hubSnapshotLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#0F766E',
+    letterSpacing: 0.5,
+  },
+  hubSnapshotPct: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  hubSnapshotMeta: {
+    fontSize: 11,
+    color: '#0F766E',
+    fontWeight: '600',
+  },
+  hubTabsRow: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 10,
+    padding: 3,
+    marginBottom: 14,
+    gap: 4,
+  },
+  hubTabBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 5,
+  },
+  hubTabBtnActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  hubTabText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  hubTabTextActive: {
+    color: BRAND_COLORS.primaryTeal,
+    fontWeight: '700',
+  },
+  tabContentArea: {
+    paddingBottom: 8,
+  },
+  tabHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  tabHeading: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  tabSubheading: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  hubAddActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: BRAND_COLORS.primaryTeal,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  hubAddActionBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  hubFormCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    marginBottom: 12,
+  },
+  hubFormTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 8,
+  },
+  hubInput: {
+    backgroundColor: '#FFFFFF',
+    marginBottom: 8,
+    fontSize: 12,
+  },
+  hubEmptyBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  hubEmptyText: {
+    fontSize: 12,
+    color: '#94A3B8',
+    textAlign: 'center',
+  },
+  hubItemCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  hubItemName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  hubBadgePill: {
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  hubBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: BRAND_COLORS.primaryTeal,
+  },
+  hubItemMeta: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 3,
+  },
+  hubItemTarget: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#0F766E',
+    marginTop: 3,
+  },
+  hubItemNotes: {
+    fontSize: 11,
+    color: '#334155',
+    fontStyle: 'italic',
+    marginTop: 3,
+  },
+  trackerDetailCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  trackerDetailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  trackerIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  trackerTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  trackerSerial: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  trackerStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  trackerStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#16A34A',
+  },
+  trackerStatusText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  trackerGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  trackerGridItem: {
+    width: '48%',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  trackerGridLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#64748B',
+    textTransform: 'uppercase',
+  },
+  trackerGridVal: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 2,
+  },
+  trackerGridSub: {
+    fontSize: 10,
+    color: '#94A3B8',
+    marginTop: 2,
   },
 });

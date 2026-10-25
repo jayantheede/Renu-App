@@ -25,8 +25,16 @@ import {
   addTankToRanch,
   updateTank,
   deleteTank,
+  addMedicineToTank,
+  deleteMedicineFromTank,
+  updateTankTracker,
+  addReportToTank,
+  deleteReportFromTank,
   createDeliveryOrder,
   updateDeliveryStatus,
+  adminAcceptOrder,
+  customerConfirmDelivery,
+  dispatchProcessDecision,
   getInvoicesList,
   createHandEnteredInvoice,
   markInvoicePaid,
@@ -64,12 +72,21 @@ import {
   updateTaskStatus,
   getDocumentsForCustomer,
   uploadCustomerDocument,
+  deleteCustomerDocument,
   signCustomerContract,
   calculateComplianceReport,
   updateBlockYield,
   syncWithQuickBooks
 } from './usersStore';
-import { mockAvatars, transporter } from './index';
+import { mockAvatars, transporter } from './usersStore';
+import {
+  sendOrderAcceptedEmailToCustomer,
+  sendCustomerConfirmedEmailToDispatch,
+  renderCustomerConfirmHtmlPage,
+  renderDispatchActionHtmlPage,
+  getBaseBackendUrl,
+  DISPATCH_NOTIFICATION_EMAIL
+} from './orderEmailService';
 
 const router = Router();
 
@@ -359,6 +376,54 @@ router.delete('/tanks/:id', async (req: AuthenticatedRequest, res) => {
   res.status(404).json({ error: 'Tank not found' });
 });
 
+// Tank Medicines
+router.post('/tanks/:id/medicines', async (req: AuthenticatedRequest, res) => {
+  try {
+    const med = addMedicineToTank(req.params.id as string, req.body);
+    if (!med) return res.status(404).json({ error: 'Tank not found' });
+    res.json({ success: true, medicine: med });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Failed to add medicine' });
+  }
+});
+
+router.delete('/tanks/:id/medicines/:medId', async (req: AuthenticatedRequest, res) => {
+  const ok = deleteMedicineFromTank(req.params.id as string, req.params.medId as string);
+  if (ok) return res.json({ success: true, message: 'Medicine removed' });
+  res.status(404).json({ error: 'Tank or medicine not found' });
+});
+
+// Tank Trackers
+router.post('/tanks/:id/trackers', async (req: AuthenticatedRequest, res) => {
+  try {
+    const tracker = updateTankTracker(req.params.id as string, req.body);
+    if (!tracker) return res.status(404).json({ error: 'Tank not found' });
+    res.json({ success: true, tracker });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Failed to update tracker' });
+  }
+});
+
+// Tank Reports
+router.post('/tanks/:id/reports', async (req: AuthenticatedRequest, res) => {
+  try {
+    const report = addReportToTank(req.params.id as string, {
+      ...req.body,
+      author: req.user?.name || req.user?.email || 'Grower'
+    });
+    if (!report) return res.status(404).json({ error: 'Tank not found' });
+    res.json({ success: true, report });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Failed to add report' });
+  }
+});
+
+router.delete('/tanks/:id/reports/:reportId', async (req: AuthenticatedRequest, res) => {
+  const ok = deleteReportFromTank(req.params.id as string, req.params.reportId as string);
+  if (ok) return res.json({ success: true, message: 'Report removed' });
+  res.status(404).json({ error: 'Tank or report not found' });
+});
+
 // ---------------------------------
 // Deliveries (Orders) Routes
 // ---------------------------------
@@ -369,8 +434,9 @@ router.get(['/deliveries', '/orders'], async (req: AuthenticatedRequest, res) =>
     return res.json(mockOrdersList.map(d => enrichDelivery(d)));
   }
   const norm = user.email.toLowerCase().trim();
+  const userId = user.id ? user.id.toLowerCase().trim() : '';
   const userDeliveries = mockOrdersList.filter(
-    d => (d.customerId && d.customerId.toLowerCase() === norm) ||
+    d => (d.customerId && (d.customerId.toLowerCase() === norm || d.customerId.toLowerCase() === userId)) ||
          (d.customerEmail && d.customerEmail.toLowerCase() === norm)
   );
   res.json(userDeliveries.map(d => enrichDelivery(d)));
@@ -409,37 +475,35 @@ router.post(['/deliveries', '/orders'], async (req: AuthenticatedRequest, res) =
       notes
     });
 
-    // Send email notification to customer on Scheduled
-    if (transporter && targetEmail) {
-      try {
-        await transporter.sendMail({
-          from: `"ReNu-Biome Deliveries" <${process.env.SMTP_USER || 'deliveries@renubiome.com'}>`,
-          to: targetEmail,
-          subject: `Delivery Scheduled: Order #${delivery.orderId} (${delivery.product})`,
-          html: `
-            <div style="font-family: sans-serif; padding: 20px; color: #1E293B;">
-              <h2 style="color: #2E5D36;">ReNu-Biome Delivery Scheduled</h2>
-              <p>Your delivery has been scheduled with the following details:</p>
-              <ul>
-                <li><strong>Order #:</strong> ${delivery.orderId}</li>
-                <li><strong>Product:</strong> ${delivery.product}</li>
-                <li><strong>Gallons:</strong> ${delivery.gallons.toLocaleString()} Gal</li>
-                <li><strong>Delivery Window:</strong> ${delivery.deliveryWindow}</li>
-                <li><strong>Status:</strong> Scheduled</li>
-              </ul>
-              <p>You can track delivery status anytime in the ReNu-Biome portal.</p>
-            </div>
-          `
-        });
-      } catch (err: any) {
+    // Send email notification to customer on Scheduled (non-blocking)
+    if (process.env.SMTP_USER && process.env.SMTP_PASS && targetEmail) {
+      transporter.sendMail({
+        from: `"ReNu-Biome Deliveries" <${process.env.SMTP_USER}>`,
+        to: targetEmail,
+        subject: `Delivery Scheduled: Order #${delivery.orderId} (${delivery.product})`,
+        html: `
+          <div style="font-family: sans-serif; padding: 20px; color: #1E293B;">
+            <h2 style="color: #2E5D36;">ReNu-Biome Delivery Scheduled</h2>
+            <p>Your delivery has been scheduled with the following details:</p>
+            <ul>
+              <li><strong>Order #:</strong> ${delivery.orderId}</li>
+              <li><strong>Product:</strong> ${delivery.product}</li>
+              <li><strong>Gallons:</strong> ${delivery.gallons.toLocaleString()} Gal</li>
+              <li><strong>Delivery Window:</strong> ${delivery.deliveryWindow}</li>
+              <li><strong>Status:</strong> Scheduled</li>
+            </ul>
+            <p>You can track delivery status anytime in the ReNu-Biome portal.</p>
+          </div>
+        `
+      }).catch((err: any) => {
         console.warn('[Email Warning] Could not send scheduled delivery email:', err.message);
-      }
+      });
     }
 
     addAuditLog({
       action: 'DELIVERY_CREATED',
       details: `Order #${delivery.orderId} created for ${targetEmail} (${delivery.gallons} Gal ${delivery.product})`,
-      actor: req.user?.email || 'admin@renu.com',
+      actor: req.user?.email || 'support@renu-biome.com',
       category: 'ORDERS'
     });
 
@@ -460,49 +524,47 @@ router.put(['/deliveries/:id/status', '/orders/:id/status'], async (req: Authent
 
     if (!delivery) return res.status(404).json({ error: 'Delivery not found' });
 
-    // Email notification on status changes
-    if (transporter && delivery.customerEmail) {
-      try {
-        let subject = `Delivery Update: Order #${delivery.orderId} is ${status}`;
-        let msg = `<p>Your delivery status has changed to <strong>${status}</strong>.</p>`;
+    // Email notification on status changes (non-blocking)
+    if (process.env.SMTP_USER && process.env.SMTP_PASS && delivery.customerEmail) {
+      let subject = `Delivery Update: Order #${delivery.orderId} is ${status}`;
+      let msg = `<p>Your delivery status has changed to <strong>${status}</strong>.</p>`;
 
-        if (status === 'Out for delivery') {
-          subject = `Out for Delivery: Order #${delivery.orderId} (${delivery.product})`;
-          msg = `<p>Our dispatch truck is en route with <strong>${delivery.gallons} Gal</strong> of <strong>${delivery.product}</strong> for injection.</p>`;
-        } else if (status === 'Delivered') {
-          subject = `Delivery Completed: Order #${delivery.orderId} (${delivery.product})`;
-          msg = `<p>Successfully injected <strong>${delivery.deliveredGallons || delivery.gallons} Gal</strong> of <strong>${delivery.product}</strong> on ${delivery.deliveredDate || 'today'}.</p>`;
-        }
-
-        await transporter.sendMail({
-          from: `"ReNu-Biome Deliveries" <${process.env.SMTP_USER || 'deliveries@renubiome.com'}>`,
-          to: delivery.customerEmail,
-          subject,
-          html: `
-            <div style="font-family: sans-serif; padding: 20px; color: #1E293B;">
-              <h2 style="color: #2E5D36;">ReNu-Biome Delivery Update</h2>
-              ${msg}
-              <ul>
-                <li><strong>Order #:</strong> ${delivery.orderId}</li>
-                <li><strong>Product:</strong> ${delivery.product}</li>
-                <li><strong>Delivered Quantity:</strong> ${(delivery.deliveredGallons || delivery.gallons).toLocaleString()} Gal</li>
-                <li><strong>Status:</strong> ${status}</li>
-              </ul>
-            </div>
-          `
-        });
-
-        // If delivered, notify other admin as required:
-        if (status === 'Delivered') {
-          addAdminNotification({
-            title: 'Delivery Marked Delivered',
-            message: `Delivery #${delivery.orderId} (${delivery.product}, ${delivery.deliveredGallons || delivery.gallons} Gal) marked delivered for ${delivery.customerEmail}.`,
-            type: 'DELIVERY'
-          });
-        }
-      } catch (err: any) {
-        console.warn('[Email Warning] Status update email failed:', err.message);
+      if (status === 'Out for delivery') {
+        subject = `Out for Delivery: Order #${delivery.orderId} (${delivery.product})`;
+        msg = `<p>Our dispatch truck is en route with <strong>${delivery.gallons} Gal</strong> of <strong>${delivery.product}</strong> for injection.</p>`;
+      } else if (status === 'Delivered') {
+        subject = `Delivery Completed: Order #${delivery.orderId} (${delivery.product})`;
+        msg = `<p>Successfully injected <strong>${delivery.deliveredGallons || delivery.gallons} Gal</strong> of <strong>${delivery.product}</strong> on ${delivery.deliveredDate || 'today'}.</p>`;
       }
+
+      transporter.sendMail({
+        from: `"ReNu-Biome Deliveries" <${process.env.SMTP_USER}>`,
+        to: delivery.customerEmail,
+        subject,
+        html: `
+          <div style="font-family: sans-serif; padding: 20px; color: #1E293B;">
+            <h2 style="color: #2E5D36;">ReNu-Biome Delivery Update</h2>
+            ${msg}
+            <ul>
+              <li><strong>Order #:</strong> ${delivery.orderId}</li>
+              <li><strong>Product:</strong> ${delivery.product}</li>
+              <li><strong>Delivered Quantity:</strong> ${(delivery.deliveredGallons || delivery.gallons).toLocaleString()} Gal</li>
+              <li><strong>Status:</strong> ${status}</li>
+            </ul>
+          </div>
+        `
+      }).catch((err: any) => {
+        console.warn('[Email Warning] Status update email failed:', err.message);
+      });
+    }
+
+    // If delivered, notify other admin as required:
+    if (status === 'Delivered') {
+      addAdminNotification({
+        title: 'Delivery Marked Delivered',
+        message: `Delivery #${delivery.orderId} (${delivery.product}, ${delivery.deliveredGallons || delivery.gallons} Gal) marked delivered for ${delivery.customerEmail}.`,
+        type: 'DELIVERY'
+      });
     }
 
     res.json({ success: true, delivery, order: delivery });
@@ -525,6 +587,230 @@ router.put(['/deliveries/:id', '/orders/:id'], async (req: AuthenticatedRequest,
 
   saveStore();
   res.json({ success: true, delivery, order: delivery });
+});
+
+router.post([
+  '/admin/orders/:id/accept',
+  '/admin/orders/:id/accept-and-email',
+  '/orders/:id/accept'
+], async (req: AuthenticatedRequest, res) => {
+  try {
+    const order = adminAcceptOrder(req.params.id as string);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+
+    // Send confirmation request to the customer asynchronously
+    sendOrderAcceptedEmailToCustomer(order, req).catch((err: any) => {
+      console.warn('[Email Warning] Error sending customer confirmation email:', err.message);
+    });
+
+    addAuditLog({
+      action: 'ORDER_ACCEPTED',
+      details: `Order #${order.orderId} accepted by admin ${req.user?.email || 'admin'}. Confirmation request dispatched to customer ${order.customerEmail}.`,
+      actor: req.user?.email || 'admin@renu-biome.com',
+      category: 'ORDERS'
+    });
+
+    res.json({
+      success: true,
+      order,
+      delivery: order,
+      message: `Order #${order.orderId} accepted! Confirmation request emailed to customer.`
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to accept order' });
+  }
+});
+
+router.post([
+  '/orders/:id/confirm-delivery',
+  '/deliveries/:id/confirm-delivery'
+], async (req: AuthenticatedRequest, res) => {
+  try {
+    const { deliveryAddress, gateCode, contactOnArrival, contactPhone, deliveryWindow, notes } = req.body;
+    const order = customerConfirmDelivery(req.params.id as string, {
+      deliveryAddress,
+      gateCode,
+      contactOnArrival,
+      contactPhone,
+      deliveryWindow,
+      notes
+    });
+
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+
+    // Send detailed delivery details to eedevnsskjayanth.asa@gmail.com with Accept and Reschedule buttons
+    sendCustomerConfirmedEmailToDispatch(order, req).catch((err: any) => {
+      console.warn('[Email Warning] Error sending dispatch confirmation email:', err.message);
+    });
+
+    addAuditLog({
+      action: 'DELIVERY_CONFIRMED',
+      details: `Customer confirmed delivery for order #${order.orderId} at ${order.deliveryAddress || 'Ranch'}. Dispatch notification sent to ${DISPATCH_NOTIFICATION_EMAIL}.`,
+      actor: req.user?.email || order.customerEmail,
+      category: 'ORDERS'
+    });
+
+    res.json({
+      success: true,
+      order,
+      delivery: order,
+      message: `Delivery details confirmed! Dispatch notified at ${DISPATCH_NOTIFICATION_EMAIL}.`
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to confirm delivery' });
+  }
+});
+
+// Public Web Link: Customer fills delivery details
+router.get(['/public/orders/:id/confirm', '/orders/:id/confirm'], async (req: AuthenticatedRequest, res) => {
+  const orderId = req.params.id as string;
+  const order = mockOrdersList.find(o => o.id === orderId || o.orderId === orderId);
+  if (!order) {
+    return res.status(404).send('<h2 style="font-family:sans-serif;text-align:center;margin-top:40px;color:#B91C1C;">Order not found or link has expired.</h2>');
+  }
+
+  const backendUrl = getBaseBackendUrl(req);
+  const html = renderCustomerConfirmHtmlPage(order, backendUrl);
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(html);
+});
+
+// Public Web Link: Customer submits delivery details
+router.post(['/public/orders/:id/confirm-delivery'], async (req: AuthenticatedRequest, res) => {
+  try {
+    const orderId = req.params.id as string;
+    const { deliveryAddress, gateCode, contactOnArrival, contactPhone, deliveryWindow, notes } = req.body;
+
+    const order = customerConfirmDelivery(orderId, {
+      deliveryAddress,
+      gateCode,
+      contactOnArrival,
+      contactPhone,
+      deliveryWindow,
+      notes
+    });
+
+    if (!order) {
+      return res.status(404).send('<h2 style="font-family:sans-serif;text-align:center;margin-top:40px;color:#B91C1C;">Order not found.</h2>');
+    }
+
+    sendCustomerConfirmedEmailToDispatch(order, req).catch((err: any) => {
+      console.warn('[Email Warning] Could not send dispatch email:', err.message);
+    });
+
+    addAuditLog({
+      action: 'DELIVERY_CONFIRMED',
+      details: `Customer confirmed delivery details for #${order.orderId} (${order.deliveryAddress || 'Ranch'}). Dispatch notified at ${DISPATCH_NOTIFICATION_EMAIL}.`,
+      actor: order.customerEmail,
+      category: 'ORDERS'
+    });
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Delivery Confirmed</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #F8FAFC; color: #1E293B; margin: 0; padding: 40px 20px; text-align: center; }
+          .card { max-width: 500px; margin: 0 auto; background: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0; padding: 32px 24px; box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
+          .icon { font-size: 50px; margin-bottom: 12px; }
+          h1 { color: #0C6054; margin: 0 0 10px 0; font-size: 22px; }
+          p { color: #475569; font-size: 14px; line-height: 1.5; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <div class="icon">✅</div>
+          <h1>Delivery Details Confirmed!</h1>
+          <p>Thank you! Your verified delivery address and access details for <strong>Order #${order.orderId}</strong> (${order.product}) have been committed to the database.</p>
+          <p>Our dispatch team has been notified at <strong>${DISPATCH_NOTIFICATION_EMAIL}</strong> to schedule injection.</p>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error: any) {
+    res.status(500).send(`<h2 style="color:#B91C1C;text-align:center;margin-top:40px;">Error: ${error.message}</h2>`);
+  }
+});
+
+// Public Dispatch Action (Accept or Reschedule from Email)
+router.get(['/public/orders/:id/dispatch-action', '/orders/:id/dispatch-action'], async (req: AuthenticatedRequest, res) => {
+  const orderId = req.params.id as string;
+  const action = (req.query.action as string) || 'accept';
+  const newWindow = req.query.newWindow as string;
+  const reason = req.query.reason as string;
+  const backendUrl = getBaseBackendUrl(req);
+
+  const order = mockOrdersList.find(o => o.id === orderId || o.orderId === orderId);
+  if (!order) {
+    return res.status(404).send('<h2 style="font-family:sans-serif;text-align:center;margin-top:40px;color:#B91C1C;">Order not found.</h2>');
+  }
+
+  if (action === 'accept') {
+    dispatchProcessDecision(orderId, 'ACCEPTED');
+    addAuditLog({
+      action: 'DISPATCH_ACCEPTED',
+      details: `Delivery slot for Order #${order.orderId} accepted by dispatch staff.`,
+      actor: DISPATCH_NOTIFICATION_EMAIL,
+      category: 'ORDERS'
+    });
+    const html = renderDispatchActionHtmlPage(order, 'accept', undefined, false, backendUrl);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.send(html);
+  }
+
+  if (action === 'reschedule') {
+    if (newWindow) {
+      dispatchProcessDecision(orderId, 'RESCHEDULE', { newWindow, reason });
+      addAuditLog({
+        action: 'DISPATCH_RESCHEDULED',
+        details: `Order #${order.orderId} reschedule requested to "${newWindow}". Reason: "${reason || 'None'}"`,
+        actor: DISPATCH_NOTIFICATION_EMAIL,
+        category: 'ORDERS'
+      });
+      const html = renderDispatchActionHtmlPage(order, 'reschedule', `Reschedule recorded in database for window: ${newWindow}`, false, backendUrl);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.send(html);
+    }
+
+    const html = renderDispatchActionHtmlPage(order, 'reschedule', undefined, true, backendUrl);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.send(html);
+  }
+
+  res.status(400).send('Invalid dispatch action.');
+});
+
+router.post(['/public/orders/:id/dispatch-action', '/orders/:id/dispatch-action'], async (req: AuthenticatedRequest, res) => {
+  const orderId = req.params.id as string;
+  const { action, newWindow, reason } = req.body;
+  const backendUrl = getBaseBackendUrl(req);
+
+  const order = mockOrdersList.find(o => o.id === orderId || o.orderId === orderId);
+  if (!order) {
+    return res.status(404).send('<h2 style="color:#B91C1C;text-align:center;margin-top:40px;">Order not found.</h2>');
+  }
+
+  if (action === 'reschedule') {
+    dispatchProcessDecision(orderId, 'RESCHEDULE', { newWindow, reason });
+    addAuditLog({
+      action: 'DISPATCH_RESCHEDULED',
+      details: `Order #${order.orderId} reschedule requested to "${newWindow}". Reason: "${reason || 'None'}"`,
+      actor: DISPATCH_NOTIFICATION_EMAIL,
+      category: 'ORDERS'
+    });
+    const html = renderDispatchActionHtmlPage(order, 'reschedule', `Reschedule recorded in database for window: ${newWindow}`, false, backendUrl);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.send(html);
+  }
+
+  dispatchProcessDecision(orderId, 'ACCEPTED');
+  const html = renderDispatchActionHtmlPage(order, 'accept', undefined, false, backendUrl);
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(html);
 });
 
 // ---------------------------------
@@ -572,7 +858,7 @@ router.post('/invoices', async (req: AuthenticatedRequest, res) => {
     addAuditLog({
       action: 'INVOICE_ENTERED',
       details: `Invoice #${invoice.invoiceNumber} entered from QuickBooks ($${invoice.amount}) for ${invoice.customerEmail}`,
-      actor: req.user?.email || 'admin@renu.com',
+      actor: req.user?.email || 'support@renu-biome.com',
       category: 'SYSTEM'
     });
 
@@ -590,7 +876,7 @@ router.put('/invoices/:id/pay', async (req: AuthenticatedRequest, res) => {
   addAuditLog({
     action: 'INVOICE_ONLINE_PAYMENT',
     details: `Invoice #${invoice.invoiceNumber} paid online ($${invoice.amount}) via ${paymentMethod || 'ACH'} by ${req.user?.email || 'grower'}`,
-    actor: req.user?.email || 'admin@renu.com',
+    actor: req.user?.email || 'support@renu-biome.com',
     category: 'SYSTEM'
   });
 
@@ -734,7 +1020,7 @@ router.post('/admin/products', async (req: AuthenticatedRequest, res) => {
     addAuditLog({
       action: 'PRODUCT_CREATED',
       details: `Product "${newProd.name}" added to catalogue`,
-      actor: req.user?.email || 'admin@renu.com',
+      actor: req.user?.email || 'support@renu-biome.com',
       category: 'SYSTEM'
     });
 
@@ -789,7 +1075,7 @@ router.post('/programs', async (req: AuthenticatedRequest, res) => {
     addAuditLog({
       action: 'PROGRAM_CREATED',
       details: `Program "${program.name}" created for ranch ${program.ranchName}`,
-      actor: req.user?.email || 'admin@renu.com',
+      actor: req.user?.email || 'support@renu-biome.com',
       category: 'RANCHES'
     });
     res.json(program);
@@ -866,7 +1152,7 @@ router.post('/samples/:id/recommendation', async (req: AuthenticatedRequest, res
     addAuditLog({
       action: 'RECOMMENDATION_SENT',
       details: `Custom nutrition recommendation sent for Sample ${updated.id}`,
-      actor: req.user?.email || 'admin@renu.com',
+      actor: req.user?.email || 'support@renu-biome.com',
       category: 'RANCHES'
     });
 
@@ -913,14 +1199,18 @@ router.get('/tanks/:id/telemetry', async (req: AuthenticatedRequest, res) => {
   for (const ranch of mockRanches) {
     const tank = (ranch.tanks || []).find(t => t.id === req.params.id);
     if (tank) {
+      const levelPercent = tank.levelPercent !== undefined ? tank.levelPercent : parseInt(tank.level || '75', 10);
+      const levelGallons = tank.levelGallons || tank.currentGallons || Math.round(tank.capacity * 0.75);
       return res.json({
         tankId: tank.id,
         tankName: tank.name,
         ranchName: ranch.name,
         capacity: tank.capacity,
-        otodataDeviceId: tank.otodataDeviceId || 'OTO-99214',
-        levelPercent: tank.levelPercent !== undefined ? tank.levelPercent : parseInt(tank.level || '75', 10),
-        levelGallons: tank.levelGallons || Math.round(tank.capacity * 0.75),
+        serial: tank.otodataDeviceId || tank.serial || 'OTO-99214',
+        otodataDeviceId: tank.otodataDeviceId || tank.serial || 'OTO-99214',
+        levelPercent,
+        currentGallons: levelGallons,
+        levelGallons,
         pressurePSI: parseInt(tank.pressure || '32', 10),
         lastReadingTime: tank.lastReadingTime || new Date().toISOString(),
         weeklyUsageAvg: tank.weeklyUsageAvg || 210,
@@ -1027,10 +1317,10 @@ router.put('/admin/customers/:id/reset-password', async (req: AuthenticatedReque
 // ---------------------------------
 // OptimoRoute Integration Routes (Phase 2 - Section 2)
 // ---------------------------------
-router.post('/optimoroute/webhook', async (req: AuthenticatedRequest, res) => {
+router.post(['/optimoroute/webhook', '/webhooks/optimoroute'], async (req: AuthenticatedRequest, res) => {
   try {
     const { orderId, status, driverName, eta, completionTime } = req.body;
-    const order = mockOrdersList.find(o => o.orderId === orderId || o.optimoRouteOrderId === orderId);
+    const order = mockOrdersList.find(o => o.id === orderId || o.orderId === orderId || o.optimoRouteOrderId === orderId);
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
     if (status === 'Out for delivery' || status === 'en_route') {
@@ -1070,7 +1360,7 @@ router.post('/messages', async (req: AuthenticatedRequest, res) => {
       title,
       body,
       fromEmail: user.email,
-      toEmail: toEmail || (user.role === 'admin' ? 'customer@renu.com' : 'admin@renu.com'),
+      toEmail: toEmail || (user.role === 'admin' ? 'customer@renu.com' : 'support@renu-biome.com'),
       senderName: user.name || (user.role === 'admin' ? 'ReNu-Biome Admin' : 'Grower'),
       type: type || 'USER',
       photoUrl
@@ -1145,6 +1435,16 @@ router.post('/documents/upload', async (req: AuthenticatedRequest, res) => {
     res.json({ success: true, document: newDoc });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to upload document' });
+  }
+});
+
+router.delete('/documents/:id', async (req: AuthenticatedRequest, res) => {
+  try {
+    const success = deleteCustomerDocument(req.params.id as string);
+    if (!success) return res.status(404).json({ error: 'Document not found' });
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Failed to delete document' });
   }
 });
 
@@ -1253,5 +1553,6 @@ router.get('/admin/audit-logs', async (req: AuthenticatedRequest, res) => {
   res.json(mockAuditLogs);
 });
 
+export { router };
 export default router;
 

@@ -60,20 +60,41 @@ export default function App() {
         document.head.appendChild(meta);
       }
 
-      // 3. Register service worker for offline caching
+      // 3. Ensure responsive mobile viewport meta tag
+      let viewportMeta = document.querySelector('meta[name="viewport"]');
+      if (!viewportMeta) {
+        viewportMeta = document.createElement('meta');
+        viewportMeta.setAttribute('name', 'viewport');
+        document.head.appendChild(viewportMeta);
+      }
+      viewportMeta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover');
+
+      // 4. Register service worker for offline caching
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js').catch((err) => {
           console.warn('Service worker registration failed:', err);
         });
       }
 
-      // 4. Offline vector icon font fallback
+      // 5. Offline vector icon font fallback & mobile alignment CSS
       const styleId = 'expo-vector-icons-web-fonts';
       if (!document.getElementById(styleId)) {
         const style = document.createElement('style');
         style.id = styleId;
         style.type = 'text/css';
         style.appendChild(document.createTextNode(`
+          html, body, #root {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            -webkit-overflow-scrolling: touch;
+          }
+          * {
+            box-sizing: border-box;
+          }
           @font-face {
             font-family: 'Ionicons';
             src: local('Ionicons'),

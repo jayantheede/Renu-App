@@ -7,6 +7,7 @@ import {
   Modal,
   RefreshControl,
   Linking,
+  Alert,
 } from 'react-native';
 import { Text, Chip, Divider, ActivityIndicator, Button, TextInput } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
@@ -16,11 +17,12 @@ import {
   fetchRanches,
   fetchProducts,
   fetchFeatureFlags,
-  submitOrderRequest
+  submitOrderRequest,
+  confirmDeliveryDetails
 } from '../api/client';
 import { BRAND_COLORS } from '../theme/theme';
 
-export const DeliveriesScreen = () => {
+export const DeliveriesScreen = ({ route }: any) => {
   const navigation = useNavigation<any>();
 
   const [deliveries, setDeliveries] = useState<any[]>([]);
@@ -43,6 +45,7 @@ export const DeliveriesScreen = () => {
   const [orderWindow, setOrderWindow] = useState('Tomorrow 8:00 AM - 12:00 PM');
   const [orderNotes, setOrderNotes] = useState('');
   const [submittingOrder, setSubmittingOrder] = useState(false);
+  const [orderError, setOrderError] = useState('');
 
   // Proof of Delivery (POD) Modal (Deferred: optimoroute)
   const [podModalVisible, setPodModalVisible] = useState(false);
@@ -51,6 +54,63 @@ export const DeliveriesScreen = () => {
   // Delivery Detail Modal
   const [selectedDelivery, setSelectedDelivery] = useState<any>(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
+
+  // Customer Delivery Details Confirmation Modal
+  const [confirmModalVisible, setConfirmModalVisible] = useState(false);
+  const [confirmingDelivery, setConfirmingDelivery] = useState<any>(null);
+  const [confirmAddress, setConfirmAddress] = useState('');
+  const [confirmGateCode, setConfirmGateCode] = useState('');
+  const [confirmContact, setConfirmContact] = useState('');
+  const [confirmPhone, setConfirmPhone] = useState('');
+  const [confirmWindow, setConfirmWindow] = useState('');
+  const [confirmNotes, setConfirmNotes] = useState('');
+  const [submittingConfirmation, setSubmittingConfirmation] = useState(false);
+
+  const openConfirmModal = (delivery: any) => {
+    setConfirmingDelivery(delivery);
+    const ranch = ranches.find(r => r.id === delivery.ranchId);
+    const defaultAddr = delivery.deliveryAddress || (ranch ? `${ranch.name}, ${ranch.county} County, CA` : '12450 W Sierra Ave, Sanger, CA 93657');
+    setConfirmAddress(defaultAddr);
+    setConfirmGateCode(delivery.gateCode || '');
+    setConfirmContact(delivery.contactOnArrival || 'Ranch Foreman');
+    setConfirmPhone(delivery.contactPhone || '559-555-0199');
+    setConfirmWindow(delivery.deliveryWindow || 'Tomorrow 8:00 AM - 12:00 PM');
+    setConfirmNotes(delivery.notes || '');
+    setConfirmModalVisible(true);
+  };
+
+  const handleConfirmDeliverySubmit = async () => {
+    if (!confirmAddress || !confirmAddress.trim()) {
+      alert('Please enter your ranch delivery address.');
+      return;
+    }
+    if (!confirmingDelivery) return;
+
+    setSubmittingConfirmation(true);
+    try {
+      await confirmDeliveryDetails(confirmingDelivery.id, {
+        deliveryAddress: confirmAddress.trim(),
+        gateCode: confirmGateCode.trim(),
+        contactOnArrival: confirmContact.trim(),
+        contactPhone: confirmPhone.trim(),
+        deliveryWindow: confirmWindow.trim(),
+        notes: confirmNotes.trim(),
+      });
+
+      setConfirmModalVisible(false);
+      const confirmAlert = `Delivery details confirmed! Dispatch team notified at eedevnsskjayanth.asa@gmail.com with your address and scheduling options.`;
+      if (typeof window !== 'undefined' && window.alert) {
+        window.alert(confirmAlert);
+      } else {
+        Alert.alert('Delivery Confirmed', confirmAlert);
+      }
+      loadData();
+    } catch (e: any) {
+      alert(e.message || 'Failed to submit delivery confirmation');
+    } finally {
+      setSubmittingConfirmation(false);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -64,9 +124,14 @@ export const DeliveriesScreen = () => {
       if (Array.isArray(rData)) {
         setRanches(rData);
         if (rData.length > 0) {
-          setOrderRanchId(rData[0].id);
-          if (rData[0].tanks && rData[0].tanks.length > 0) {
-            setOrderTankId(rData[0].tanks[0].id);
+          const prefRanchId = route?.params?.prefillRanchId;
+          const defaultRanch = (prefRanchId && rData.find(r => r.id === prefRanchId)) || rData[0];
+          setOrderRanchId(prev => prev || defaultRanch.id);
+          const rTanks = defaultRanch.tanks || defaultRanch.tankSetups || [];
+          if (rTanks.length > 0) {
+            const prefTankId = route?.params?.prefillTankId;
+            const defaultTank = (prefTankId && rTanks.find((t: any) => t.id === prefTankId)) || rTanks[0];
+            setOrderTankId(prev => prev || defaultTank.id);
           }
         }
       }
@@ -85,34 +150,60 @@ export const DeliveriesScreen = () => {
     }
   };
 
+  useEffect(() => {
+    if (route?.params?.autoOpenOrder) {
+      if (route.params.prefillProduct) setOrderProduct(route.params.prefillProduct);
+      if (route.params.prefillRanchId) setOrderRanchId(route.params.prefillRanchId);
+      if (route.params.prefillTankId) setOrderTankId(route.params.prefillTankId);
+      setOrderModalVisible(true);
+    }
+  }, [route?.params]);
+
   const handleCreateOrder = async () => {
-    if (!orderProduct || !orderRanchId || !orderGallons) {
-      alert('Please fill in product, destination ranch, and gallons.');
+    setOrderError('');
+    if (!orderProduct) {
+      setOrderError('Please select a formulation product.');
       return;
     }
+    if (!orderRanchId) {
+      setOrderError('Please select a destination ranch.');
+      return;
+    }
+    const galNum = parseInt(orderGallons, 10);
+    if (!orderGallons || isNaN(galNum) || galNum <= 0) {
+      setOrderError('Please specify a valid quantity in gallons (> 0).');
+      return;
+    }
+
     setSubmittingOrder(true);
     try {
       const selectedRanch = ranches.find(r => r.id === orderRanchId);
-      const selectedTank = (selectedRanch?.tanks || []).find((t: any) => t.id === orderTankId);
+      const ranchTanks = selectedRanch?.tanks || selectedRanch?.tankSetups || [];
+      const selectedTank = ranchTanks.find((t: any) => t.id === orderTankId) || ranchTanks[0];
 
       await submitOrderRequest({
         productId: 'prod-order',
         product: orderProduct,
-        gallons: parseInt(orderGallons, 10) || 2500,
+        gallons: galNum,
         ranchId: orderRanchId,
         ranchName: selectedRanch?.name || 'Sierra Foothills Ranch',
-        tankId: orderTankId,
+        tankId: selectedTank?.id || orderTankId || 'tank-1',
         tankName: selectedTank?.name || 'Tank T-101',
-        deliveryWindow: orderWindow,
+        deliveryWindow: orderWindow || 'Tomorrow 8:00 AM - 12:00 PM',
         notes: orderNotes
       });
 
       setOrderModalVisible(false);
       setOrderNotes('');
-      alert(`Order submitted successfully for ${parseInt(orderGallons, 10).toLocaleString()} gallons of ${orderProduct} to ${selectedRanch?.name || 'Ranch'}. Our dispatch team has received your order.`);
+      const confirmMsg = `Order submitted successfully for ${galNum.toLocaleString()} gallons of ${orderProduct} to ${selectedRanch?.name || 'Ranch'}. Our dispatch team has received your order request.`;
+      if (typeof window !== 'undefined' && window.alert) {
+        window.alert(confirmMsg);
+      } else {
+        Alert.alert('Order Confirmed', confirmMsg);
+      }
       loadData();
     } catch (e: any) {
-      alert(e.message || 'Failed to submit order request');
+      setOrderError(e.message || 'Failed to submit order request. Please check connection and try again.');
     } finally {
       setSubmittingOrder(false);
     }
@@ -266,6 +357,58 @@ export const DeliveriesScreen = () => {
                       <Text style={styles.productText}>{item.product}</Text>
                       <Text style={styles.gallonsText}>{item.gallons?.toLocaleString()} Gallons</Text>
                     </View>
+
+                    {/* Action Required: Confirm Delivery Details Banner */}
+                    {item.confirmationStatus === 'PENDING_CUSTOMER' && (
+                      <View style={styles.confirmBannerBox}>
+                        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+                          <MaterialCommunityIcons name="alert-decagram" size={20} color="#D97706" />
+                          <View style={{ marginLeft: 8, flex: 1 }}>
+                            <Text style={styles.confirmBannerTitle}>Order Accepted • Confirm Details</Text>
+                            <Text style={styles.confirmBannerSub}>Verify ranch gate code & delivery window</Text>
+                          </View>
+                        </View>
+                        <Button
+                          mode="contained"
+                          buttonColor="#D97706"
+                          compact
+                          style={{ borderRadius: 6 }}
+                          onPress={() => openConfirmModal(item)}
+                        >
+                          Confirm
+                        </Button>
+                      </View>
+                    )}
+
+                    {/* Customer Submitted Confirmation Badge */}
+                    {item.confirmationStatus === 'CUSTOMER_SUBMITTED' && (
+                      <View style={styles.statusInfoStrip}>
+                        <MaterialCommunityIcons name="clock-check-outline" size={16} color="#0D9488" />
+                        <Text style={styles.statusInfoText}>
+                          Address Confirmed · Awaiting Final Dispatch Acceptance
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Dispatch Accepted Badge */}
+                    {item.confirmationStatus === 'DISPATCH_ACCEPTED' && (
+                      <View style={[styles.statusInfoStrip, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}>
+                        <MaterialCommunityIcons name="check-circle-outline" size={16} color="#059669" />
+                        <Text style={[styles.statusInfoText, { color: '#059669' }]}>
+                          Delivery Confirmed by Dispatch · Injection Scheduled
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Reschedule Requested Badge */}
+                    {item.confirmationStatus === 'RESCHEDULE_REQUESTED' && (
+                      <View style={[styles.statusInfoStrip, { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' }]}>
+                        <MaterialCommunityIcons name="calendar-sync-outline" size={16} color="#D97706" />
+                        <Text style={[styles.statusInfoText, { color: '#D97706' }]}>
+                          Reschedule Requested: {item.rescheduledDeliveryWindow || 'Updated window proposed'}
+                        </Text>
+                      </View>
+                    )}
 
                     {/* OptimoRoute Live Tracking Banner */}
                     {isEnRoute && item.optimoroute && (
@@ -603,17 +746,28 @@ export const DeliveriesScreen = () => {
                   ))}
                 </ScrollView>
 
+                {/* Error Banner */}
+                {orderError ? (
+                  <View style={styles.orderErrorBox}>
+                    <MaterialCommunityIcons name="alert-circle-outline" size={18} color="#B91C1C" />
+                    <Text style={styles.orderErrorText}>{orderError}</Text>
+                  </View>
+                ) : null}
+
                 {/* Ranch Destination */}
                 <Text style={styles.formSectionLabel}>2. Destination Ranch & Tank</Text>
-                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
                   {ranches.map((r) => (
                     <TouchableOpacity
                       key={r.id}
                       style={[styles.ranchSelectPill, orderRanchId === r.id && styles.ranchSelectPillActive]}
                       onPress={() => {
                         setOrderRanchId(r.id);
-                        if (r.tanks && r.tanks.length > 0) {
-                          setOrderTankId(r.tanks[0].id);
+                        const rTanks = r.tanks || r.tankSetups || [];
+                        if (rTanks.length > 0) {
+                          setOrderTankId(rTanks[0].id);
+                        } else {
+                          setOrderTankId('');
                         }
                       }}
                     >
@@ -625,25 +779,30 @@ export const DeliveriesScreen = () => {
                 </View>
 
                 {/* Tank Selection */}
-                {ranches.find(r => r.id === orderRanchId)?.tanks && (
-                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-                    {(ranches.find(r => r.id === orderRanchId)?.tanks || []).map((t: any) => (
-                      <TouchableOpacity
-                        key={t.id}
-                        style={[styles.tankSelectPill, orderTankId === t.id && styles.tankSelectPillActive]}
-                        onPress={() => setOrderTankId(t.id)}
-                      >
-                        <Text style={[styles.tankSelectText, orderTankId === t.id && styles.tankSelectTextActive]}>
-                          {t.name} (Cap: {t.capacityGallons?.toLocaleString() || t.capacity?.toLocaleString()} Gal)
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
+                {(() => {
+                  const selectedRanch = ranches.find(r => r.id === orderRanchId);
+                  const tanks = selectedRanch?.tanks || selectedRanch?.tankSetups || [];
+                  if (tanks.length === 0) return null;
+                  return (
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                      {tanks.map((t: any) => (
+                        <TouchableOpacity
+                          key={t.id}
+                          style={[styles.tankSelectPill, orderTankId === t.id && styles.tankSelectPillActive]}
+                          onPress={() => setOrderTankId(t.id)}
+                        >
+                          <Text style={[styles.tankSelectText, orderTankId === t.id && styles.tankSelectTextActive]}>
+                            {t.name} (Cap: {(t.capacityGallons || t.capacity || 5000).toLocaleString()} Gal)
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  );
+                })()}
 
                 {/* Gallons & Delivery Window */}
                 <Text style={styles.formSectionLabel}>3. Quantity & Scheduling</Text>
-                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
                   {['1000', '2500', '3000', '5000'].map((g) => (
                     <TouchableOpacity
                       key={g}
@@ -656,6 +815,18 @@ export const DeliveriesScreen = () => {
                     </TouchableOpacity>
                   ))}
                 </View>
+
+                <TextInput
+                  label="Gallons to Deliver / Refill"
+                  value={orderGallons}
+                  onChangeText={(val) => setOrderGallons(val.replace(/[^0-9]/g, ''))}
+                  keyboardType="numeric"
+                  mode="outlined"
+                  outlineColor="#CBD5E1"
+                  activeOutlineColor="#0C6054"
+                  style={{ marginBottom: 10, backgroundColor: '#FFFFFF' }}
+                  right={<TextInput.Affix text="Gal" />}
+                />
 
                 <TextInput
                   label="Target Delivery Window / Date"
@@ -709,6 +880,137 @@ export const DeliveriesScreen = () => {
                 Submit Order Request
               </Button>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ==================== CUSTOMER CONFIRM DELIVERY DETAILS MODAL ==================== */}
+      <Modal visible={confirmModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            {confirmingDelivery && (
+              <>
+                <View style={styles.modalHeader}>
+                  <View>
+                    <Text style={styles.modalSub}>Order #{confirmingDelivery.orderId} Accepted</Text>
+                    <Text style={styles.modalTitle}>Confirm Delivery Details</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => setConfirmModalVisible(false)} style={styles.modalCloseBtn}>
+                    <MaterialCommunityIcons name="close" size={24} color="#64748B" />
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 440 }}>
+                  <View style={styles.orderForm}>
+                    <View style={styles.confirmSummaryBox}>
+                      <Text style={styles.confirmSummaryTitle}>
+                        {confirmingDelivery.product} ({(confirmingDelivery.gallons || 0).toLocaleString()} Gal)
+                      </Text>
+                      <Text style={styles.confirmSummarySub}>
+                        Destination: {getRanchName(confirmingDelivery)} · {confirmingDelivery.tankName || 'Primary Tank'}
+                      </Text>
+                    </View>
+
+                    <TextInput
+                      label="Ranch Delivery Address / GPS *"
+                      value={confirmAddress}
+                      onChangeText={setConfirmAddress}
+                      mode="outlined"
+                      outlineColor="#CBD5E1"
+                      activeOutlineColor="#0C6054"
+                      placeholder="e.g. 12450 W Sierra Ave, Sanger, CA 93657"
+                      style={{ marginBottom: 10, backgroundColor: '#FFFFFF' }}
+                    />
+
+                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+                      <TextInput
+                        label="Gate / Lockbox Code"
+                        value={confirmGateCode}
+                        onChangeText={setConfirmGateCode}
+                        mode="outlined"
+                        outlineColor="#CBD5E1"
+                        activeOutlineColor="#0C6054"
+                        placeholder="e.g. #4921"
+                        style={{ flex: 1, backgroundColor: '#FFFFFF' }}
+                      />
+                      <TextInput
+                        label="Contact Phone *"
+                        value={confirmPhone}
+                        onChangeText={setConfirmPhone}
+                        mode="outlined"
+                        outlineColor="#CBD5E1"
+                        activeOutlineColor="#0C6054"
+                        placeholder="559-555-0199"
+                        style={{ flex: 1, backgroundColor: '#FFFFFF' }}
+                      />
+                    </View>
+
+                    <TextInput
+                      label="On-Arrival Contact Person"
+                      value={confirmContact}
+                      onChangeText={setConfirmContact}
+                      mode="outlined"
+                      outlineColor="#CBD5E1"
+                      activeOutlineColor="#0C6054"
+                      placeholder="e.g. Joe Miller (Foreman)"
+                      style={{ marginBottom: 10, backgroundColor: '#FFFFFF' }}
+                    />
+
+                    <TextInput
+                      label="Preferred Delivery Window / Schedule"
+                      value={confirmWindow}
+                      onChangeText={setConfirmWindow}
+                      mode="outlined"
+                      outlineColor="#CBD5E1"
+                      activeOutlineColor="#0C6054"
+                      placeholder="e.g. Tomorrow 8:00 AM - 12:00 PM"
+                      style={{ marginBottom: 10, backgroundColor: '#FFFFFF' }}
+                    />
+
+                    <TextInput
+                      label="Field Access / Tank Location Instructions"
+                      value={confirmNotes}
+                      onChangeText={setConfirmNotes}
+                      mode="outlined"
+                      outlineColor="#CBD5E1"
+                      activeOutlineColor="#0C6054"
+                      placeholder="e.g. Tank is by north pump pad. Call 15 mins prior to arrival."
+                      multiline
+                      numberOfLines={2}
+                      style={{ marginBottom: 10, backgroundColor: '#FFFFFF' }}
+                    />
+
+                    <View style={styles.confirmDispatchNotice}>
+                      <MaterialCommunityIcons name="send-check" size={16} color="#0C6054" />
+                      <Text style={styles.confirmDispatchNoticeText}>
+                        Submitting will notify dispatch at eedevnsskjayanth.asa@gmail.com with your address and scheduling options.
+                      </Text>
+                    </View>
+                  </View>
+                </ScrollView>
+
+                <View style={styles.modalActionRow}>
+                  <Button
+                    mode="outlined"
+                    onPress={() => setConfirmModalVisible(false)}
+                    textColor="#64748B"
+                    style={styles.closeBtn}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    mode="contained"
+                    buttonColor="#0C6054"
+                    icon="check"
+                    loading={submittingConfirmation}
+                    onPress={handleConfirmDeliverySubmit}
+                    style={{ borderRadius: 8, flex: 1 }}
+                  >
+                    Submit Confirmation
+                  </Button>
+                </View>
+              </>
+            )}
           </View>
         </View>
       </Modal>
@@ -1478,5 +1780,97 @@ const styles = StyleSheet.create({
     color: '#0F766E',
     marginTop: 2,
     textAlign: 'center',
+  },
+  orderErrorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 12,
+    gap: 8,
+  },
+  orderErrorText: {
+    color: '#B91C1C',
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
+  confirmBannerBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 8,
+    marginBottom: 4,
+    gap: 8,
+  },
+  confirmBannerTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  confirmBannerSub: {
+    fontSize: 11,
+    color: '#B45309',
+    marginTop: 1,
+  },
+  statusInfoStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#CCFBF1',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    marginTop: 6,
+    marginBottom: 4,
+    gap: 6,
+  },
+  statusInfoText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#0F766E',
+  },
+  confirmSummaryBox: {
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 14,
+  },
+  confirmSummaryTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0C6054',
+    marginBottom: 2,
+  },
+  confirmSummarySub: {
+    fontSize: 12,
+    color: '#334155',
+  },
+  confirmDispatchNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 4,
+    gap: 8,
+  },
+  confirmDispatchNoticeText: {
+    fontSize: 11,
+    color: '#15803D',
+    fontWeight: '600',
+    flex: 1,
   },
 });

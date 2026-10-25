@@ -62,7 +62,7 @@ export const MessagesScreen = () => {
     }
     setSending(true);
     try {
-      await sendMessage({ title: msgTitle.trim(), body: msgBody.trim(), toEmail: 'admin@renu.com' });
+      await sendMessage({ title: msgTitle.trim(), body: msgBody.trim(), toEmail: 'support@renu-biome.com' });
       Alert.alert('Sent!', 'Your message has been sent to the Renu Biome team.');
       setComposeVisible(false);
       setMsgTitle('');
@@ -243,7 +243,7 @@ export const MessagesScreen = () => {
 
             <View style={styles.toBox}>
               <MaterialCommunityIcons name="account-tie" size={16} color="#0C6054" style={{ marginRight: 6 }} />
-              <Text style={{ color: '#334155', fontSize: 14 }}>To: <Text style={{ fontWeight: 'bold' }}>Renu Biome Team (admin@renu.com)</Text></Text>
+              <Text style={{ color: '#334155', fontSize: 14 }}>To: <Text style={{ fontWeight: 'bold' }}>ReNu-Biome Team (support@renu-biome.com)</Text></Text>
             </View>
 
             <TextInput

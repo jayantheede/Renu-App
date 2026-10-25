@@ -210,6 +210,36 @@ export const deleteTank = async (tankId: string) => {
   return res;
 };
 
+export const addTankMedicine = async (tankId: string, data: any) => {
+  const res = await apiClient(`/app/tanks/${tankId}/medicines`, { method: 'POST', body: JSON.stringify(data) });
+  fetchRanches().catch(() => {});
+  return res;
+};
+
+export const deleteTankMedicine = async (tankId: string, medId: string) => {
+  const res = await apiClient(`/app/tanks/${tankId}/medicines/${medId}`, { method: 'DELETE' });
+  fetchRanches().catch(() => {});
+  return res;
+};
+
+export const updateTankTracker = async (tankId: string, data: any) => {
+  const res = await apiClient(`/app/tanks/${tankId}/trackers`, { method: 'POST', body: JSON.stringify(data) });
+  fetchRanches().catch(() => {});
+  return res;
+};
+
+export const addTankReport = async (tankId: string, data: any) => {
+  const res = await apiClient(`/app/tanks/${tankId}/reports`, { method: 'POST', body: JSON.stringify(data) });
+  fetchRanches().catch(() => {});
+  return res;
+};
+
+export const deleteTankReport = async (tankId: string, reportId: string) => {
+  const res = await apiClient(`/app/tanks/${tankId}/reports/${reportId}`, { method: 'DELETE' });
+  fetchRanches().catch(() => {});
+  return res;
+};
+
 // -----------------------------------------------------------------------
 // Deliveries (with offline cache)
 // -----------------------------------------------------------------------
@@ -482,8 +512,16 @@ export const importData = (entity: string, items: any[]) => apiClient(`/app/impo
 export const payOrder = (id: string) => updateDeliveryStatus(id, 'Delivered');
 export const cancelOrder = (id: string, reason: string) => updateDeliveryStatus(id, 'Cancelled', { cancelReason: reason });
 export const updateOrderTracking = (id: string, status: any, step: number) => updateDeliveryStatus(id, status);
-export const acceptAdminOrder = (id: string) => updateDeliveryStatus(id, 'Out for delivery');
-export const acceptOrderAndEmail = (id: string) => updateDeliveryStatus(id, 'Out for delivery');
+export const acceptAdminOrder = (id: string) => apiClient(`/app/admin/orders/${id}/accept`, { method: 'POST' });
+export const acceptOrderAndEmail = acceptAdminOrder;
+export const confirmDeliveryDetails = (id: string, details: {
+  deliveryAddress: string;
+  gateCode?: string;
+  contactOnArrival?: string;
+  contactPhone?: string;
+  deliveryWindow?: string;
+  notes?: string;
+}) => apiClient(`/app/orders/${id}/confirm-delivery`, { method: 'POST', body: JSON.stringify(details) });
 export const submitApplicationLog = (data: any) => apiClient('/app/utilization', { method: 'POST', body: JSON.stringify(data) });
 export const fetchTasks = () => apiClient('/app/tasks');
 export const createAdminTask = (data: any) => apiClient('/app/admin/tasks', { method: 'POST', body: JSON.stringify(data) });
@@ -505,6 +543,7 @@ export const markMessageRead = (id: string) => apiClient(`/app/messages/${id}/re
 // -----------------------------------------------------------------------
 export const fetchDocuments = () => apiClient('/app/documents');
 export const uploadDocument = (data: any) => apiClient('/app/documents/upload', { method: 'POST', body: JSON.stringify(data) });
+export const deleteDocument = (id: string) => apiClient(`/app/documents/${id}`, { method: 'DELETE' });
 export const signContract = (documentId: string, signatureName: string) => apiClient('/app/documents/sign', { method: 'POST', body: JSON.stringify({ documentId, signatureName }) });
 export const fetchAuditPack = () => apiClient('/app/documents/audit-pack');
 

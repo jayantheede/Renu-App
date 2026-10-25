@@ -11,6 +11,7 @@ import {
   toggleMfa,
   fetchDocuments,
   uploadDocument,
+  deleteDocument,
   signContract,
   fetchAuditPack,
   fetchComplianceReport,
@@ -72,6 +73,13 @@ export const MoreScreen = () => {
   const [activeDocTab, setActiveDocTab] = useState<'STANDARD' | 'CONTRACTS' | 'UPLOADS'>('STANDARD');
   const [editingYieldBlockId, setEditingYieldBlockId] = useState<string | null>(null);
   const [editingYieldVal, setEditingYieldVal] = useState<string>('');
+
+  // Vault Upload Form State
+  const [vaultFile, setVaultFile] = useState<{ name: string; data: string; size: string; type?: string } | null>(null);
+  const [vaultTitle, setVaultTitle] = useState('');
+  const [vaultCategory, setVaultCategory] = useState('Soil & Leaf Tissue Assay');
+  const [vaultNotes, setVaultNotes] = useState('');
+  const [uploadingVaultDoc, setUploadingVaultDoc] = useState(false);
 
   // Notification Preferences State
   const [notificationsModalVisible, setNotificationsModalVisible] = useState(false);
@@ -198,6 +206,96 @@ export const MoreScreen = () => {
       loadDocs();
     } catch (e: any) {
       Alert.alert('Signing Error', e.message || 'Failed to sign document');
+    }
+  };
+
+  const pickVaultFile = (setter: (file: { name: string; data: string; size: string; type?: string } | null) => void) => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '*/*';
+      input.onchange = (e: any) => {
+        const file = e.target?.files?.[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (uploadEvent) => {
+            const dataUrl = uploadEvent.target?.result as string;
+            const sizeKb = file.size / 1024;
+            const sizeStr = sizeKb > 1024 ? `${(sizeKb / 1024).toFixed(1)} MB` : `${sizeKb.toFixed(0)} KB`;
+            setter({
+              name: file.name,
+              data: dataUrl,
+              size: sizeStr,
+              type: file.type || 'application/octet-stream',
+            });
+            if (!vaultTitle.trim()) {
+              setVaultTitle(file.name.replace(/\.[^/.]+$/, ''));
+            }
+          };
+          reader.readAsDataURL(file);
+        }
+      };
+      input.click();
+    } else {
+      Alert.alert('Mobile Attachment', 'Select a document from your device files or media library.');
+    }
+  };
+
+  const handleUploadVaultDoc = async () => {
+    if (!vaultFile) {
+      Alert.alert('Document Required', 'Please choose a document file first.');
+      return;
+    }
+    setUploadingVaultDoc(true);
+    try {
+      await uploadDocument({
+        title: vaultTitle.trim() || vaultFile.name,
+        category: 'CUSTOMER_UPLOAD',
+        docType: vaultCategory,
+        fileName: vaultFile.name,
+        fileData: vaultFile.data,
+        fileSize: vaultFile.size,
+        description: vaultNotes.trim() || 'Uploaded to regulatory & field vault.',
+      });
+      setVaultFile(null);
+      setVaultTitle('');
+      setVaultNotes('');
+      Alert.alert('Upload Successful', 'Your document has been securely stored in the ReNu-Biome vault.');
+      loadDocs();
+    } catch (e: any) {
+      Alert.alert('Upload Failed', e.message || 'Could not complete upload.');
+    } finally {
+      setUploadingVaultDoc(false);
+    }
+  };
+
+  const handleDeleteVaultDoc = async (id: string) => {
+    try {
+      await deleteDocument(id);
+      loadDocs();
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to remove document');
+    }
+  };
+
+  const handleOpenVaultDoc = (fileData?: string, fileName?: string) => {
+    if (!fileData) {
+      Alert.alert('No Preview', 'This document does not have inline viewable data.');
+      return;
+    }
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const win = window.open();
+      if (win) {
+        win.document.write(
+          `<html><head><title>${fileName || 'Vault Document'}</title></head><body style="margin:0;display:flex;align-items:center;justify-content:center;background:#0F172A;"><iframe src="${fileData}" frameborder="0" style="border:none;width:100vw;height:100vh;"></iframe></body></html>`
+        );
+        return;
+      }
+    }
+    if (fileData.startsWith('http')) {
+      Linking.openURL(fileData).catch(() => Alert.alert('Unable to open link'));
+    } else {
+      Alert.alert('Document', `File: ${fileName || 'Document'}\nData stored securely.`);
     }
   };
 
@@ -1258,24 +1356,209 @@ export const MoreScreen = () => {
                 )}
 
                 {activeDocTab === 'UPLOADS' && (
-                  <View style={{ gap: 12 }}>
+                  <View style={{ gap: 14 }}>
+                    {/* Upload Box / Form */}
                     <View style={styles.uploadPromptCard}>
-                      <MaterialCommunityIcons name="cloud-upload-outline" size={36} color="#0C6054" />
+                      <MaterialCommunityIcons name="cloud-upload-outline" size={38} color="#0C6054" />
                       <Text style={styles.uploadPromptTitle}>Upload Field Analyses or Maps</Text>
                       <Text style={styles.uploadPromptDesc}>
-                        Submit Dellavalle soil tests, leaf tissue analyses, or GPS farm boundary files directly to our agronomists.
+                        Submit Dellavalle soil tests, leaf tissue analyses, or GPS farm boundary files directly to our agronomists (PDF, Word, Excel, CSV, image, or text format).
                       </Text>
-                      <Button
-                        mode="contained"
-                        buttonColor="#0C6054"
-                        icon="upload"
-                        style={{ marginTop: 8, borderRadius: 8 }}
-                        onPress={() => {
-                          Alert.alert('Upload Document', 'Select a file to attach to your ranch profile.');
-                        }}
-                      >
-                        Choose File to Upload
-                      </Button>
+
+                      {!vaultFile ? (
+                        <Button
+                          mode="contained"
+                          buttonColor="#0C6054"
+                          icon="upload"
+                          style={{ marginTop: 12, borderRadius: 8 }}
+                          onPress={() => pickVaultFile(setVaultFile)}
+                        >
+                          Choose File to Upload
+                        </Button>
+                      ) : (
+                        <View style={{ width: '100%', marginTop: 14 }}>
+                          {/* Attached File Preview Card */}
+                          <View style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            backgroundColor: '#FFFFFF',
+                            borderWidth: 1,
+                            borderColor: '#99F6E4',
+                            borderRadius: 10,
+                            padding: 10,
+                            marginBottom: 12,
+                            gap: 10
+                          }}>
+                            <MaterialCommunityIcons
+                              name={
+                                vaultFile.name.endsWith('.pdf') ? 'file-pdf-box' :
+                                vaultFile.name.match(/\.(png|jpg|jpeg|webp)$/i) ? 'file-image' :
+                                vaultFile.name.match(/\.(xls|xlsx|csv)$/i) ? 'file-excel' :
+                                vaultFile.name.match(/\.(doc|docx)$/i) ? 'file-word' : 'file-document-outline'
+                              }
+                              size={28}
+                              color="#0C6054"
+                            />
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }} numberOfLines={1}>
+                                {vaultFile.name}
+                              </Text>
+                              <Text style={{ fontSize: 11, color: '#0F766E' }}>{vaultFile.size}</Text>
+                            </View>
+                            <TouchableOpacity
+                              onPress={() => pickVaultFile(setVaultFile)}
+                              style={{ paddingHorizontal: 8, paddingVertical: 4, backgroundColor: '#F0FDFA', borderRadius: 6, borderWidth: 1, borderColor: '#99F6E4' }}
+                            >
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#0C6054' }}>Change</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => setVaultFile(null)} style={{ padding: 4 }}>
+                              <MaterialCommunityIcons name="close-circle" size={20} color="#EF4444" />
+                            </TouchableOpacity>
+                          </View>
+
+                          {/* Document Title */}
+                          <TextInput
+                            label="Document Title *"
+                            value={vaultTitle}
+                            onChangeText={setVaultTitle}
+                            mode="outlined"
+                            style={{ backgroundColor: '#FFFFFF', marginBottom: 10, fontSize: 13 }}
+                            outlineColor="#CBD5E1"
+                            activeOutlineColor="#0C6054"
+                            placeholder="e.g. Dellavalle Leaf Tissue Assay 2026"
+                          />
+
+                          {/* Category Selector */}
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155', marginBottom: 6 }}>
+                            Document Category
+                          </Text>
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                            {[
+                              'Soil & Leaf Tissue Assay',
+                              'GPS Farm Map / Shapefile',
+                              'Irrigation Water Test',
+                              'Compliance / Organic Cert',
+                              'Other Field Report',
+                            ].map((cat) => (
+                              <TouchableOpacity
+                                key={cat}
+                                onPress={() => setVaultCategory(cat)}
+                                style={{
+                                  paddingHorizontal: 10,
+                                  paddingVertical: 5,
+                                  borderRadius: 14,
+                                  borderWidth: 1,
+                                  borderColor: vaultCategory === cat ? '#0C6054' : '#CBD5E1',
+                                  backgroundColor: vaultCategory === cat ? '#0C6054' : '#FFFFFF',
+                                }}
+                              >
+                                <Text
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: '600',
+                                    color: vaultCategory === cat ? '#FFFFFF' : '#475569',
+                                  }}
+                                >
+                                  {cat}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+
+                          {/* Notes */}
+                          <TextInput
+                            label="Notes / Agronomist Instructions"
+                            value={vaultNotes}
+                            onChangeText={setVaultNotes}
+                            mode="outlined"
+                            multiline
+                            numberOfLines={2}
+                            style={{ backgroundColor: '#FFFFFF', marginBottom: 12, fontSize: 13, height: 60 }}
+                            outlineColor="#CBD5E1"
+                            activeOutlineColor="#0C6054"
+                            placeholder="e.g. Block N-4 almond sampling. Please review potassium levels."
+                          />
+
+                          <Button
+                            mode="contained"
+                            buttonColor="#0C6054"
+                            loading={uploadingVaultDoc}
+                            onPress={handleUploadVaultDoc}
+                            style={{ borderRadius: 8 }}
+                          >
+                            Upload to Regulatory Vault
+                          </Button>
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Customer Vault Uploaded Files List */}
+                    <View style={{ marginTop: 6 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A', marginBottom: 8 }}>
+                        Stored Field Analyses & Documents ({documents.filter((d: any) => d.category === 'CUSTOMER_UPLOAD' || d.uploadedBy).length})
+                      </Text>
+
+                      {documents.filter((d: any) => d.category === 'CUSTOMER_UPLOAD' || d.uploadedBy).length === 0 ? (
+                        <View style={{ backgroundColor: '#F8FAFC', borderRadius: 10, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
+                          <MaterialCommunityIcons name="file-document-outline" size={28} color="#94A3B8" />
+                          <Text style={{ fontSize: 12, color: '#64748B', marginTop: 4, textAlign: 'center' }}>
+                            No custom field documents uploaded yet. Choose a file above to add to your vault.
+                          </Text>
+                        </View>
+                      ) : (
+                        documents
+                          .filter((d: any) => d.category === 'CUSTOMER_UPLOAD' || d.uploadedBy)
+                          .map((doc: any) => (
+                            <View key={doc.id} style={[styles.docItemCard, { marginBottom: 10 }]}>
+                              <View style={{ flexDirection: 'row', alignItems: 'flex-start', flex: 1, gap: 10 }}>
+                                <MaterialCommunityIcons
+                                  name={
+                                    (doc.fileName || doc.title)?.match(/\.(png|jpg|jpeg|webp)$/i) ? 'file-image' :
+                                    (doc.fileName || doc.title)?.match(/\.(xls|xlsx|csv)$/i) ? 'file-excel' :
+                                    (doc.fileName || doc.title)?.match(/\.(doc|docx)$/i) ? 'file-word' : 'file-pdf-box'
+                                  }
+                                  size={30}
+                                  color="#0C6054"
+                                />
+                                <View style={{ flex: 1 }}>
+                                  <Text style={styles.docItemTitle}>{doc.title}</Text>
+                                  <Text style={styles.docItemMeta}>
+                                    Category: <Text style={{ fontWeight: '700' }}>{doc.docType || doc.category}</Text> · {doc.fileSize || '1.1 MB'}
+                                  </Text>
+                                  <Text style={styles.docItemDate}>
+                                    Uploaded: {doc.issueDate || doc.uploadedAt?.split('T')[0] || '2026'} · By {doc.uploadedBy || 'Grower'}
+                                  </Text>
+                                  {doc.description ? (
+                                    <Text style={{ fontSize: 11, color: '#475569', fontStyle: 'italic', marginTop: 3 }}>
+                                      "{doc.description}"
+                                    </Text>
+                                  ) : null}
+                                </View>
+                              </View>
+                              <View style={{ flexDirection: 'row', gap: 6, marginTop: 8, justifyContent: 'flex-end' }}>
+                                <Button
+                                  mode="outlined"
+                                  textColor="#0C6054"
+                                  style={{ borderColor: '#0C6054', borderRadius: 6 }}
+                                  onPress={() => handleOpenVaultDoc(doc.fileData || doc.fileUrl, doc.fileName || doc.title)}
+                                  compact
+                                  icon="open-in-new"
+                                >
+                                  View Document
+                                </Button>
+                                <Button
+                                  mode="text"
+                                  textColor="#DC2626"
+                                  onPress={() => handleDeleteVaultDoc(doc.id)}
+                                  compact
+                                  icon="trash-can-outline"
+                                >
+                                  Delete
+                                </Button>
+                              </View>
+                            </View>
+                          ))
+                      )}
                     </View>
                   </View>
                 )}
