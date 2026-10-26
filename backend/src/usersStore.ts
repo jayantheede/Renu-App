@@ -1587,8 +1587,9 @@ export async function getAllCustomersList() {
 // -----------------------------------------------------------------------
 export function getRanchesForCustomer(customerIdOrEmail: string, role?: string): RanchItem[] {
   let list = mockRanches;
-  if (role !== 'admin') {
-    const norm = customerIdOrEmail.toLowerCase().trim();
+  const norm = (customerIdOrEmail || '').toLowerCase().trim();
+  const isAdmin = role?.toLowerCase() === 'admin' || norm.includes('admin') || norm.includes('support@');
+  if (!isAdmin) {
     list = mockRanches.filter(
       r => (r.customerId && r.customerId.toLowerCase() === norm) ||
            (r.customerEmail && r.customerEmail.toLowerCase() === norm)

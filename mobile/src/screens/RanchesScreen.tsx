@@ -642,7 +642,7 @@ const RanchesScreenContent = ({ route }: any) => {
           styles.scrollContent,
           {
             paddingTop: Math.max(16, insets.top + 8),
-            paddingBottom: 110 + insets.bottom,
+            paddingBottom: Math.max(140, 140 + insets.bottom),
           },
         ]}
         showsVerticalScrollIndicator={false}
@@ -656,15 +656,17 @@ const RanchesScreenContent = ({ route }: any) => {
       >
         {/* Top Header */}
         <View style={styles.header}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.title}>Ranches & Programs</Text>
-            <Text style={styles.subtitle}>
-              Planted field inventory, nutrition programs & Otodata tank telemetry
-            </Text>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <View style={styles.headerTopRow}>
+            <View style={{ flex: 1, paddingRight: 8 }}>
+              <Text style={styles.title}>Ranches & Programs</Text>
+              <Text style={styles.subtitle}>
+                Planted field inventory, nutrition programs & Otodata tank telemetry
+              </Text>
+            </View>
             <NotificationBellButton color={BRAND_COLORS.primaryTeal} badgeCount={2} />
+          </View>
 
+          <View style={styles.headerActionRow}>
             <TouchableOpacity
               style={styles.labSampleBtn}
               activeOpacity={0.8}
@@ -2662,15 +2664,22 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 110,
+    paddingBottom: 140,
   },
   header: {
+    marginBottom: 16,
+  },
+  headerTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  headerActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 16,
   },
   title: {
     fontSize: 22,

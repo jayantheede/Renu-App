@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, Alert, Modal, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, ScrollView, RefreshControl, Alert, Modal, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Text, Button, Chip, TextInput, Divider } from 'react-native-paper';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import {
@@ -11,8 +11,12 @@ import {
   fetchProducts,
   fetchRanches
 } from '../../api/client';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { NotificationBellButton } from '../../components/NotificationBellButton';
+import { ErrorBoundary } from '../../components/ErrorBoundary';
 
-export const AdminOrdersScreen = ({ route }: any) => {
+const AdminOrdersScreenInner = ({ route }: any) => {
+  const insets = useSafeAreaInsets();
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -281,7 +285,13 @@ export const AdminOrdersScreen = ({ route }: any) => {
   return (
     <View style={styles.container}>
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingTop: Math.max(16, insets.top + 8),
+            paddingBottom: Math.max(140, 140 + insets.bottom),
+          },
+        ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor="#2E5D36" />
@@ -289,14 +299,19 @@ export const AdminOrdersScreen = ({ route }: any) => {
       >
         {/* Header */}
         <View style={styles.header}>
-          <View>
-            <Text style={styles.title}>Deliveries Management</Text>
-            <Text style={styles.subtitle}>Scheduled, in transit, delivered & cancelled</Text>
+          <View style={styles.headerTopRow}>
+            <View style={styles.headerTitleContainer}>
+              <Text style={styles.title}>Deliveries Management</Text>
+              <Text style={styles.subtitle}>Scheduled, in transit, delivered & cancelled</Text>
+            </View>
+            <NotificationBellButton tintColor="#0F172A" />
           </View>
-          <TouchableOpacity onPress={() => setCreateModalVisible(true)} style={styles.createBtn}>
-            <Ionicons name="add" size={18} color="#FFF" />
-            <Text style={styles.createBtnText}>New Order</Text>
-          </TouchableOpacity>
+          <View style={styles.headerActionRow}>
+            <TouchableOpacity onPress={() => setCreateModalVisible(true)} style={styles.createBtn}>
+              <Ionicons name="add" size={18} color="#FFF" />
+              <Text style={styles.createBtnText}>New Delivery Order</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Filter Pills */}
@@ -330,10 +345,22 @@ export const AdminOrdersScreen = ({ route }: any) => {
           Showing {filteredDeliveries.length} {statusFilter === 'All' ? 'Total Deliveries' : `${statusFilter} Deliveries`}
         </Text>
 
-        {filteredDeliveries.length === 0 ? (
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#2E5D36" />
+            <Text style={styles.loadingText}>Loading delivery records...</Text>
+          </View>
+        ) : filteredDeliveries.length === 0 ? (
           <View style={styles.emptyCard}>
-            <MaterialCommunityIcons name="truck-outline" size={36} color="#94A3B8" />
+            <MaterialCommunityIcons name="truck-outline" size={48} color="#94A3B8" />
             <Text style={styles.emptyText}>No delivery records match the current filters.</Text>
+            <TouchableOpacity
+              onPress={() => setCreateModalVisible(true)}
+              style={[styles.createBtn, { marginTop: 14 }]}
+            >
+              <Ionicons name="add" size={18} color="#FFF" />
+              <Text style={styles.createBtnText}>Schedule New Delivery</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           filteredDeliveries.map(del => {
@@ -628,29 +655,59 @@ export const AdminOrdersScreen = ({ route }: any) => {
   );
 };
 
+export const AdminOrdersScreen = (props: any) => {
+  return (
+    <ErrorBoundary fallbackTitle="Admin Deliveries Screen Error">
+      <AdminOrdersScreenInner {...props} />
+    </ErrorBoundary>
+  );
+};
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
-  scrollContent: { paddingBottom: 120, paddingHorizontal: 16 },
+  scrollContent: { paddingHorizontal: 16 },
   header: {
+    paddingBottom: 16,
+  },
+  headerTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 54,
-    paddingBottom: 16,
+    marginBottom: 10,
+  },
+  headerTitleContainer: {
+    flex: 1,
+    paddingRight: 8,
+  },
+  headerActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   title: { fontSize: 22, fontWeight: '800', color: '#0F172A' },
   subtitle: { fontSize: 13, color: '#64748B', marginTop: 2 },
   createBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#2E5D36',
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 24,
-    gap: 4,
+    gap: 6,
     minHeight: 48,
   },
   createBtnText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#64748B',
+    fontWeight: '500',
+  },
   filterChip: {
     paddingHorizontal: 16,
     paddingVertical: 8,

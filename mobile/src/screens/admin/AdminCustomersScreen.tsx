@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert, Modal, Platform } from 'react-native';
+import { View, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert, Modal, Platform, ActivityIndicator } from 'react-native';
 import { Text, TextInput, Button, Chip, Divider, Checkbox } from 'react-native-paper';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { 
@@ -8,10 +8,17 @@ import {
   submitTankSetup, 
   submitDelivery, 
   fetchProducts, 
-  fetchRanches 
+  fetchRanches,
+  fetchAdminCustomers,
+  createAdminCustomer,
+  resetCustomerPassword,
 } from '../../api/client';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { NotificationBellButton } from '../../components/NotificationBellButton';
+import { ErrorBoundary } from '../../components/ErrorBoundary';
 
-export const AdminCustomersScreen = () => {
+const AdminCustomersScreenInner = () => {
+  const insets = useSafeAreaInsets();
   const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -80,16 +87,13 @@ export const AdminCustomersScreen = () => {
   const [orderNotes, setOrderNotes] = useState('');
   const [savingOrder, setSavingOrder] = useState(false);
 
-  const BACKEND_URL = (process.env.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
-
   const loadData = useCallback(async () => {
     try {
-      const [custRes, ranches, products] = await Promise.all([
-        fetch(`${BACKEND_URL}/api/admin/customers`),
+      const [custData, ranches, products] = await Promise.all([
+        fetchAdminCustomers().catch(() => []),
         fetchRanches().catch(() => []),
         fetchProducts().catch(() => [])
       ]);
-      const custData = await custRes.json();
       setCustomers(Array.isArray(custData) ? custData : []);
       setAllRanches(Array.isArray(ranches) ? ranches : []);
       setProductsList(Array.isArray(products) ? products : []);
@@ -99,7 +103,7 @@ export const AdminCustomersScreen = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [BACKEND_URL]);
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -117,34 +121,25 @@ export const AdminCustomersScreen = () => {
     }
     setCreating(true);
     try {
-      const res = await fetch(`${BACKEND_URL}/api/admin/customers`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: newName.trim() || newEmail.split('@')[0],
-          email: newEmail.trim(),
-          phone: newPhone.trim(),
-          password: newPassword.trim(),
-          role: 'client'
-        })
+      await createAdminCustomer({
+        name: newName.trim() || newEmail.split('@')[0],
+        email: newEmail.trim(),
+        phone: newPhone.trim(),
+        password: newPassword.trim(),
+        role: 'client'
       });
-      const data = await res.json();
-      if (res.ok) {
-        Alert.alert(
-          'Customer Account Created',
-          `Customer ${newName || newEmail} created. Password: "${newPassword}". Provide this password to the grower by phone.`
-        );
-        setNewName('');
-        setNewEmail('');
-        setNewPhone('');
-        setNewPassword('');
-        setCreateCustomerModalVisible(false);
-        loadData();
-      } else {
-        Alert.alert('Error', data?.error || 'Failed to create customer');
-      }
+      Alert.alert(
+        'Customer Account Created',
+        `Customer ${newName || newEmail} created. Password: "${newPassword}". Provide this password to the grower by phone.`
+      );
+      setNewName('');
+      setNewEmail('');
+      setNewPhone('');
+      setNewPassword('');
+      setCreateCustomerModalVisible(false);
+      loadData();
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Network request failed');
+      Alert.alert('Error', e.message || 'Failed to create customer');
     } finally {
       setCreating(false);
     }
@@ -158,22 +153,13 @@ export const AdminCustomersScreen = () => {
     }
     setResettingPassword(true);
     try {
-      const res = await fetch(`${BACKEND_URL}/api/admin/customers/${selectedCustomerForPassword.id}/reset-password`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: resetPasswordValue.trim() })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        Alert.alert(
-          'Password Reset',
-          `Password updated for ${selectedCustomerForPassword.name || selectedCustomerForPassword.email}. Provide new password to customer.`
-        );
-        setResetPasswordValue('');
-        setResetPasswordModalVisible(false);
-      } else {
-        Alert.alert('Error', data?.error || 'Failed to reset password');
-      }
+      await resetCustomerPassword(selectedCustomerForPassword.id, resetPasswordValue.trim());
+      Alert.alert(
+        'Password Reset',
+        `Password updated for ${selectedCustomerForPassword.name || selectedCustomerForPassword.email}. Provide new password to customer.`
+      );
+      setResetPasswordValue('');
+      setResetPasswordModalVisible(false);
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to reset password');
     } finally {
@@ -355,7 +341,13 @@ export const AdminCustomersScreen = () => {
   return (
     <View style={styles.container}>
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingTop: Math.max(16, insets.top + 8),
+            paddingBottom: Math.max(140, 140 + insets.bottom),
+          },
+        ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor="#0C6054" />
@@ -363,11 +355,14 @@ export const AdminCustomersScreen = () => {
       >
         {/* Header */}
         <View style={styles.header}>
-          <View>
-            <Text style={styles.title}>Customers & Accounts</Text>
-            <Text style={styles.subtitle}>Maintain growers, ranches, blocks & logins</Text>
+          <View style={styles.headerTopRow}>
+            <View style={styles.headerTitleContainer}>
+              <Text style={styles.title}>Customers & Accounts</Text>
+              <Text style={styles.subtitle}>Maintain growers, ranches, blocks & logins</Text>
+            </View>
+            <NotificationBellButton tintColor="#0F172A" />
           </View>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={styles.headerActionRow}>
             <TouchableOpacity 
               onPress={() => {
                 if (customers.length > 0 && !activeCustomer) {
@@ -393,81 +388,103 @@ export const AdminCustomersScreen = () => {
           </View>
         </View>
 
-        {/* Customer Cards List */}
-        {customers.map((c: any) => (
-          <View key={c.id} style={styles.customerCard}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.customerName}>{c.name || 'Unnamed Grower'}</Text>
-                <Text style={styles.customerContact}>{c.email} {c.phone ? `• ${c.phone}` : ''}</Text>
-              </View>
-              <Chip compact style={{ backgroundColor: '#F0FDF4' }} textStyle={{ color: '#166534', fontWeight: '700', fontSize: 11 }}>
-                Account Active
-              </Chip>
-            </View>
-
-            {/* Metrics Row */}
-            <View style={styles.customerMetricsRow}>
-              <View style={styles.metricItem}>
-                <Text style={styles.metricVal}>{c.ranchesCount || 0}</Text>
-                <Text style={styles.metricLbl}>Ranches</Text>
-              </View>
-              <View style={styles.metricItem}>
-                <Text style={styles.metricVal}>{Number(c.totalAcres || 0).toFixed(1)}</Text>
-                <Text style={styles.metricLbl}>Total Acres</Text>
-              </View>
-              <View style={styles.metricItem}>
-                <Text style={styles.metricVal}>{(c.ytdGallons || 0).toLocaleString()}</Text>
-                <Text style={styles.metricLbl}>YTD Gal</Text>
-              </View>
-              <View style={styles.metricItem}>
-                <Text style={[styles.metricVal, { color: (c.openBalance || 0) > 0 ? '#DC2626' : '#15803D' }]}>
-                  ${(c.openBalance || 0).toLocaleString()}
-                </Text>
-                <Text style={styles.metricLbl}>Open Bal</Text>
-              </View>
-            </View>
-
-            <Divider style={{ marginVertical: 12, backgroundColor: '#F1F5F9' }} />
-
-            {/* Customer Operations Buttons */}
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              <Button 
-                mode="contained" 
-                onPress={() => openDrilldown(c)}
-                buttonColor="#0C6054"
-                icon="tree-outline"
-                style={{ borderRadius: 10, flex: 1, minWidth: 150 }}
-                contentStyle={{ minHeight: 48 }}
-              >
-                Ranches & Blocks
-              </Button>
-
-              <Button 
-                mode="outlined" 
-                onPress={() => openCreateOrderModal(c)}
-                textColor="#0C6054"
-                style={{ borderColor: '#0C6054', borderRadius: 10, flex: 1, minWidth: 130 }}
-                contentStyle={{ minHeight: 48 }}
-              >
-                Create Order
-              </Button>
-
-              <Button 
-                mode="text" 
-                onPress={() => {
-                  setSelectedCustomerForPassword(c);
-                  setResetPasswordValue('');
-                  setResetPasswordModalVisible(true);
-                }}
-                textColor="#64748B"
-                style={{ minHeight: 48, justifyContent: 'center' }}
-              >
-                Reset Password
-              </Button>
-            </View>
+        {/* Loading State */}
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#0C6054" />
+            <Text style={styles.loadingText}>Loading grower accounts...</Text>
           </View>
-        ))}
+        ) : customers.length === 0 ? (
+          /* Empty State */
+          <View style={styles.emptyCard}>
+            <MaterialCommunityIcons name="account-group-outline" size={48} color="#94A3B8" />
+            <Text style={styles.emptyTitle}>No customer accounts found</Text>
+            <Text style={styles.emptySubtitle}>Add a new customer account or pull down to refresh.</Text>
+            <TouchableOpacity
+              onPress={() => setCreateCustomerModalVisible(true)}
+              style={[styles.addBtn, { marginTop: 16, maxWidth: 220, alignSelf: 'center' }]}
+            >
+              <Ionicons name="person-add-outline" size={18} color="#FFF" />
+              <Text style={styles.addBtnText}>Add First Customer</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          /* Customer Cards List */
+          customers.map((c: any) => (
+            <View key={c.id} style={styles.customerCard}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <View style={{ flex: 1, paddingRight: 8 }}>
+                  <Text style={styles.customerName}>{c.name || 'Unnamed Grower'}</Text>
+                  <Text style={styles.customerContact}>{c.email} {c.phone ? `• ${c.phone}` : ''}</Text>
+                </View>
+                <Chip compact style={{ backgroundColor: '#F0FDF4' }} textStyle={{ color: '#166534', fontWeight: '700', fontSize: 11 }}>
+                  Account Active
+                </Chip>
+              </View>
+
+              {/* Metrics Row */}
+              <View style={styles.customerMetricsRow}>
+                <View style={styles.metricItem}>
+                  <Text style={styles.metricVal}>{c.ranchesCount || 0}</Text>
+                  <Text style={styles.metricLbl}>Ranches</Text>
+                </View>
+                <View style={styles.metricItem}>
+                  <Text style={styles.metricVal}>{Number(c.totalAcres || 0).toFixed(1)}</Text>
+                  <Text style={styles.metricLbl}>Total Acres</Text>
+                </View>
+                <View style={styles.metricItem}>
+                  <Text style={styles.metricVal}>{(c.ytdGallons || 0).toLocaleString()}</Text>
+                  <Text style={styles.metricLbl}>YTD Gal</Text>
+                </View>
+                <View style={styles.metricItem}>
+                  <Text style={[styles.metricVal, { color: (c.openBalance || 0) > 0 ? '#DC2626' : '#15803D' }]}>
+                    ${(c.openBalance || 0).toLocaleString()}
+                  </Text>
+                  <Text style={styles.metricLbl}>Open Bal</Text>
+                </View>
+              </View>
+
+              <Divider style={{ marginVertical: 12, backgroundColor: '#F1F5F9' }} />
+
+              {/* Customer Operations Buttons */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                <Button 
+                  mode="contained" 
+                  onPress={() => openDrilldown(c)}
+                  buttonColor="#0C6054"
+                  icon="tree-outline"
+                  style={{ borderRadius: 10, flex: 1, minWidth: 140 }}
+                  contentStyle={{ minHeight: 48 }}
+                >
+                  Ranches & Blocks
+                </Button>
+
+                <Button 
+                  mode="outlined" 
+                  onPress={() => openCreateOrderModal(c)}
+                  textColor="#0C6054"
+                  style={{ borderColor: '#0C6054', borderRadius: 10, flex: 1, minWidth: 130 }}
+                  contentStyle={{ minHeight: 48 }}
+                >
+                  Create Order
+                </Button>
+
+                <Button 
+                  mode="text" 
+                  onPress={() => {
+                    setSelectedCustomerForPassword(c);
+                    setResetPasswordValue('');
+                    setResetPasswordModalVisible(true);
+                  }}
+                  textColor="#64748B"
+                  style={{ minHeight: 48, justifyContent: 'center' }}
+                >
+                  Reset Password
+                </Button>
+              </View>
+            </View>
+          ))
+        )}
       </ScrollView>
 
       {/* ================= CREATE CUSTOMER MODAL ================= */}
@@ -932,29 +949,83 @@ export const AdminCustomersScreen = () => {
   );
 };
 
+export const AdminCustomersScreen = () => {
+  return (
+    <ErrorBoundary fallbackTitle="Customers & Accounts Screen Error">
+      <AdminCustomersScreenInner />
+    </ErrorBoundary>
+  );
+};
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
-  scrollContent: { paddingBottom: 120, paddingHorizontal: 16 },
+  scrollContent: { paddingHorizontal: 16 },
   header: {
+    paddingBottom: 16,
+  },
+  headerTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 54,
-    paddingBottom: 16,
+    marginBottom: 12,
+  },
+  headerTitleContainer: {
+    flex: 1,
+    paddingRight: 8,
+  },
+  headerActionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   title: { fontSize: 22, fontWeight: '800', color: '#0F172A' },
   subtitle: { fontSize: 13, color: '#64748B', marginTop: 2 },
   addBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#0C6054',
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 24,
-    gap: 4,
+    gap: 6,
     minHeight: 48,
+    flex: 1,
+    minWidth: 140,
   },
   addBtnText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  emptyCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginTop: 16,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 12,
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 4,
+    textAlign: 'center',
+  },
   customerCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
