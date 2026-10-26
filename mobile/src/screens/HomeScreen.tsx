@@ -21,6 +21,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { fetchRanches, fetchDeliveries, fetchInvoices, fetchPrograms } from '../api/client';
 import { BRAND_COLORS } from '../theme/theme';
 import { InvoiceLogo } from '../components/InvoiceLogo';
+import { NotificationBellButton } from '../components/NotificationBellButton';
 import {
   requestNotificationPermission,
   sendTestNotification,
@@ -155,14 +156,17 @@ export const HomeScreen = () => {
                   style={styles.headerLogo}
                   resizeMode="contain"
                 />
-                <TouchableOpacity
-                  onPress={handleSignOut}
-                  style={styles.signOutBtn}
-                  accessibilityLabel="Sign out"
-                >
-                  <MaterialCommunityIcons name="logout" size={16} color="#FFFFFF" />
-                  <Text style={styles.signOutBtnText}>Sign Out</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <NotificationBellButton color="#FFFFFF" badgeCount={2} />
+                  <TouchableOpacity
+                    onPress={handleSignOut}
+                    style={styles.signOutBtn}
+                    accessibilityLabel="Sign out"
+                  >
+                    <MaterialCommunityIcons name="logout" size={16} color="#FFFFFF" />
+                    <Text style={styles.signOutBtnText}>Sign Out</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
               {/* Tagline */}

@@ -52,15 +52,27 @@ const TabBarIcon = ({ name, isFocused, label }: { name: string; isFocused: boole
   );
 };
 
+const ADMIN_PRIMARY_TABS = [
+  'AdminDashboard',
+  'AdminOrders',
+  'AdminCustomers',
+  'AdminRanches',
+  'AdminInvoices',
+  'ManageProducts',
+  'AdminFeatureFlags',
+];
+
 const CustomTabBar = ({ state, descriptors, navigation }: any) => {
   const insets = useSafeAreaInsets();
   return (
     <View style={[styles.tabBarWrapper, { bottom: Math.max(12, insets.bottom + 6) }]}>
       <View style={styles.glassTabBar}>
-        {state.routes.map((route: any, index: number) => {
+        {state.routes
+          .filter((route: any) => ADMIN_PRIMARY_TABS.includes(route.name))
+          .map((route: any, index: number) => {
           const { options } = descriptors[route.key];
           const label = options.title !== undefined ? options.title : route.name;
-          const isFocused = state.index === index;
+          const isFocused = state.routes[state.index]?.name === route.name;
 
           const onPress = () => {
             const event = navigation.emit({
@@ -106,7 +118,6 @@ export const AdminTabNavigator = () => {
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        unmountOnBlur: true,
         sceneStyle: { backgroundColor: '#F8FAFC' },
       } as any}
     >
@@ -114,7 +125,9 @@ export const AdminTabNavigator = () => {
       <Tab.Screen name="AdminOrders" component={AdminOrdersScreen} options={{ title: 'Deliveries' }} />
       <Tab.Screen name="AdminCustomers" component={AdminCustomersScreen} options={{ title: 'Customers' }} />
       <Tab.Screen name="AdminRanches" component={RanchesScreen} options={{ title: 'Ranches' }} />
+      <Tab.Screen name="Ranches" component={RanchesScreen} options={{ title: 'Ranches', tabBarItemStyle: { display: 'none' } }} />
       <Tab.Screen name="AdminInvoices" component={AdminInvoicesScreen} options={{ title: 'Invoices' }} />
+      <Tab.Screen name="Invoices" component={AdminInvoicesScreen} options={{ title: 'Invoices', tabBarItemStyle: { display: 'none' } }} />
       <Tab.Screen name="ManageProducts" component={ManageProductsScreen} options={{ title: 'Products' }} />
       <Tab.Screen name="AdminFeatureFlags" component={AdminFeatureFlagsScreen} options={{ title: 'Settings' }} />
     </Tab.Navigator>

@@ -95,7 +95,6 @@ export const MainTabNavigator = () => {
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        unmountOnBlur: true,
       } as any}
     >
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Home' }} />

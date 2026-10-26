@@ -22,6 +22,7 @@ import {
   confirmDeliveryDetails
 } from '../api/client';
 import { BRAND_COLORS } from '../theme/theme';
+import { NotificationBellButton } from '../components/NotificationBellButton';
 
 export const DeliveriesScreen = ({ route }: any) => {
   const insets = useSafeAreaInsets();
@@ -268,15 +269,18 @@ export const DeliveriesScreen = ({ route }: any) => {
             Scheduled tank refills, OptimoRoute driver tracking & nutrient accounting
           </Text>
         </View>
-        {orderingEnabled && (
-          <TouchableOpacity
-            style={styles.requestOrderBtn}
-            onPress={() => setOrderModalVisible(true)}
-          >
-            <MaterialCommunityIcons name="plus-circle" size={16} color="#FFFFFF" />
-            <Text style={styles.requestOrderBtnText}>Request Refill</Text>
-          </TouchableOpacity>
-        )}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <NotificationBellButton color={BRAND_COLORS.primaryTeal} badgeCount={2} />
+          {orderingEnabled && (
+            <TouchableOpacity
+              style={styles.requestOrderBtn}
+              onPress={() => setOrderModalVisible(true)}
+            >
+              <MaterialCommunityIcons name="plus-circle" size={16} color="#FFFFFF" />
+              <Text style={styles.requestOrderBtnText}>Request Refill</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {/* Ranch Filter Pills */}

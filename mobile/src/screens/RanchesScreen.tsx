@@ -43,8 +43,10 @@ import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '../store/useAuthStore';
 import { BRAND_COLORS } from '../theme/theme';
+import { ErrorBoundary } from '../components/ErrorBoundary';
+import { NotificationBellButton } from '../components/NotificationBellButton';
 
-export const RanchesScreen = ({ route }: any) => {
+const RanchesScreenContent = ({ route }: any) => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const user = useAuthStore((state) => state.user);
@@ -660,7 +662,9 @@ export const RanchesScreen = ({ route }: any) => {
               Planted field inventory, nutrition programs & Otodata tank telemetry
             </Text>
           </View>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <NotificationBellButton color={BRAND_COLORS.primaryTeal} badgeCount={2} />
+
             <TouchableOpacity
               style={styles.labSampleBtn}
               activeOpacity={0.8}
@@ -859,35 +863,38 @@ export const RanchesScreen = ({ route }: any) => {
           </Card>
         ) : (
           ranches.map((ranch: any) => {
+            if (!ranch) return null;
             const blocks = ranch.blocks || [];
             const tanks = ranch.tanks || ranch.tankSetups || [];
-            const computedAcres = blocks.reduce((s: number, b: any) => s + (Number(b.acreage) || 0), 0);
+            const computedAcres = blocks.reduce((s: number, b: any) => s + (Number(b?.acreage) || 0), 0);
             const ranchPrograms = programs.filter(
-              (p: any) => p.ranchId === ranch.id || (!p.ranchId && ranch.name.includes('Sierra'))
+              (p: any) => p && (p.ranchId === ranch.id || (!p.ranchId && ranch.name?.includes('Sierra')))
             );
 
             return (
-              <View key={ranch.id} style={styles.ranchSection}>
+              <View key={ranch.id || Math.random()} style={styles.ranchSection}>
                 {/* Ranch Card Banner */}
                 <View style={styles.ranchBanner}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.ranchTitle}>{ranch.name}</Text>
+                    <Text style={styles.ranchTitle}>{ranch.name || 'Sierra Ranch'}</Text>
                     <Text style={styles.ranchCountyText}>
                       <MaterialCommunityIcons name="map-marker-outline" size={14} color="#64748B" />{' '}
-                      {ranch.county} County, California
+                      {ranch.county || 'Fresno'} County, California
                     </Text>
                   </View>
                   <View style={styles.acreageBadge}>
-                    <Text style={styles.acreageNumber}>{computedAcres.toLocaleString()}</Text>
+                    <Text style={styles.acreageNumber}>{(computedAcres || 0).toLocaleString()}</Text>
                     <Text style={styles.acreageUnit}>Acres</Text>
                   </View>
                 </View>
 
                 {/* Nutrition Programs for this Ranch (Phase 2 - Section 4) */}
                 {ranchPrograms.map((prog: any) => {
-                  const delivered = prog.deliveredGallons || 4800;
-                  const planned = prog.plannedGallons || 28000;
-                  const pct = Math.min(100, Math.round((delivered / planned) * 100));
+                  if (!prog) return null;
+                  const delivered = Number(prog.deliveredGallons) || 4800;
+                  const planned = Number(prog.plannedGallons) || 28000;
+                  const pct = planned > 0 ? Math.min(100, Math.round((delivered / planned) * 100)) : 0;
+                  const progressValue = Math.max(0, Math.min(1, planned > 0 ? delivered / planned : 0));
 
                   return (
                     <View key={prog.id} style={styles.programBanner}>
@@ -913,7 +920,7 @@ export const RanchesScreen = ({ route }: any) => {
                           <Text style={styles.progProgressPct}>{pct}%</Text>
                         </View>
                         <ProgressBar
-                          progress={delivered / planned}
+                          progress={progressValue}
                           color={BRAND_COLORS.primaryTeal}
                           style={styles.progProgressBar}
                         />
@@ -1059,7 +1066,8 @@ export const RanchesScreen = ({ route }: any) => {
                 ) : (
                   <View style={styles.tanksContainer}>
                     {tanks.map((tank: any, tIdx: number) => {
-                      const level = tank.levelPercent || 68;
+                      if (!tank) return null;
+                      const level = Math.max(0, Math.min(100, Number(tank.levelPercent) || 68));
                       const isLow = level < 25;
                       const barColor = isLow ? '#DC2626' : level < 50 ? BRAND_COLORS.accentOrange : BRAND_COLORS.primaryTeal;
 
@@ -1085,7 +1093,7 @@ export const RanchesScreen = ({ route }: any) => {
                             <View style={{ alignItems: 'flex-end' }}>
                               <Text style={[styles.tankLevelPct, { color: barColor }]}>{level}%</Text>
                               <Text style={styles.tankCapacityMeta}>
-                                {(tank.currentGallons || 3400).toLocaleString()} / {(tank.capacityGallons || tank.capacity || 5000).toLocaleString()} Gal
+                                {(Number(tank.currentGallons) || 3400).toLocaleString()} / {(Number(tank.capacityGallons || tank.capacity) || 5000).toLocaleString()} Gal
                               </Text>
                             </View>
                           </View>
@@ -2639,6 +2647,12 @@ export const RanchesScreen = ({ route }: any) => {
     </View>
   );
 };
+
+export const RanchesScreen = (props: any) => (
+  <ErrorBoundary fallbackTitle="Ranches & Nutrition Programs">
+    <RanchesScreenContent {...props} />
+  </ErrorBoundary>
+);
 
 const styles = StyleSheet.create({
   container: {
