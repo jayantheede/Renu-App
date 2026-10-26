@@ -1,6 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { View, StyleSheet, TouchableOpacity, Animated, Dimensions, Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AdminDashboardScreen } from '../screens/admin/AdminDashboardScreen';
 import { AdminOrdersScreen } from '../screens/admin/AdminOrdersScreen';
 import { AdminCustomersScreen } from '../screens/admin/AdminCustomersScreen';
@@ -11,6 +12,7 @@ import { RanchesScreen } from '../screens/RanchesScreen';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from 'react-native-paper';
 import { useAuthStore } from '../store/useAuthStore';
+import { InvoiceLogo } from '../components/InvoiceLogo';
 
 const Tab = createBottomTabNavigator();
 const isWeb = Platform.OS === 'web';
@@ -40,15 +42,20 @@ const TabBarIcon = ({ name, isFocused, label }: { name: string; isFocused: boole
 
   return (
     <Animated.View style={[styles.iconContainer, { transform: [{ scale }, { translateY }], opacity }]}>
-      <Ionicons name={name as any} size={22} color={isFocused ? '#4ADE80' : '#E2E8F0'} />
+      {name === 'invoice-logo' ? (
+        <InvoiceLogo size={20} color={isFocused ? '#F07E42' : '#E2E8F0'} />
+      ) : (
+        <Ionicons name={name as any} size={21} color={isFocused ? '#4ADE80' : '#E2E8F0'} />
+      )}
       <Text style={[styles.iconLabel, isFocused && styles.iconLabelFocused]}>{label}</Text>
     </Animated.View>
   );
 };
 
 const CustomTabBar = ({ state, descriptors, navigation }: any) => {
+  const insets = useSafeAreaInsets();
   return (
-    <View style={styles.tabBarWrapper}>
+    <View style={[styles.tabBarWrapper, { bottom: Math.max(12, insets.bottom + 6) }]}>
       <View style={styles.glassTabBar}>
         {state.routes.map((route: any, index: number) => {
           const { options } = descriptors[route.key];
@@ -72,7 +79,7 @@ const CustomTabBar = ({ state, descriptors, navigation }: any) => {
           if (route.name === 'AdminOrders') iconName = isFocused ? 'bus' : 'bus-outline';
           if (route.name === 'AdminCustomers') iconName = isFocused ? 'people' : 'people-outline';
           if (route.name === 'AdminRanches') iconName = isFocused ? 'leaf' : 'leaf-outline';
-          if (route.name === 'AdminInvoices') iconName = isFocused ? 'receipt' : 'receipt-outline';
+          if (route.name === 'AdminInvoices') iconName = 'invoice-logo';
           if (route.name === 'ManageProducts') iconName = isFocused ? 'cube' : 'cube-outline';
           if (route.name === 'AdminFeatureFlags') iconName = isFocused ? 'settings' : 'settings-outline';
 

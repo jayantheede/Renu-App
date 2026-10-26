@@ -24,6 +24,7 @@ interface AuthState {
   token: string | null;
   role: UserRole;
   isLoggedIn: boolean;
+  isInitialized: boolean;
   setSession: (user: User, token: string) => Promise<void>;
   updateUser: (user: Partial<User>) => Promise<void>;
   logout: () => Promise<void>;
@@ -36,6 +37,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   token: null,
   role: 'client',
   isLoggedIn: false,
+  isInitialized: false,
 
   setSession: async (user, token) => {
     let finalName = user.name;
@@ -127,11 +129,14 @@ export const useAuthStore = create<AuthState>((set) => ({
           session: { user },
           token,
           isLoggedIn: true,
-          role: user.role
+          role: user.role,
+          isInitialized: true
         });
+        return;
       }
     } catch (error) {
       console.error('Failed to load auth state', error);
     }
+    set({ isInitialized: true });
   }
 }));

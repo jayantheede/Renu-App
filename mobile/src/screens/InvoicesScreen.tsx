@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import { Text, Card, Chip, Button, Divider, ActivityIndicator, TextInput } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { InvoiceLogo } from '../components/InvoiceLogo';
 import {
   fetchInvoices,
   fetchDeliveries,
@@ -24,6 +26,7 @@ import { BRAND_COLORS } from '../theme/theme';
 import { printInvoiceDocument } from '../utils/printInvoice';
 
 export const InvoicesScreen = () => {
+  const insets = useSafeAreaInsets();
   const [invoices, setInvoices] = useState<any[]>([]);
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -182,8 +185,8 @@ export const InvoicesScreen = () => {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <View style={{ flex: 1 }}>
+      <View style={[styles.header, { paddingTop: Math.max(16, insets.top + 8) }]}>
+        <View style={{ flex: 1, paddingRight: 8 }}>
           <Text style={styles.pageTitle}>Invoices</Text>
           <Text style={styles.subtitle}>QuickBooks billing records, linked deliveries & statements</Text>
         </View>
@@ -254,7 +257,7 @@ export const InvoicesScreen = () => {
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 110 + insets.bottom }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={BRAND_COLORS.primaryTeal} />
@@ -267,7 +270,7 @@ export const InvoicesScreen = () => {
           </View>
         ) : filteredInvoices.length === 0 ? (
           <View style={styles.emptyBox}>
-            <MaterialCommunityIcons name="receipt" size={36} color="#94A3B8" />
+            <InvoiceLogo size={48} color="#94A3B8" />
             <Text style={styles.emptyText}>No invoices matching selected filter.</Text>
           </View>
         ) : (
@@ -280,7 +283,7 @@ export const InvoicesScreen = () => {
                 <Card.Content>
                   <View style={styles.row}>
                     <View style={styles.headerInfo}>
-                      <MaterialCommunityIcons name="receipt-text" size={24} color={BRAND_COLORS.primaryTeal} style={{ marginRight: 8 }} />
+                      <InvoiceLogo size={26} color={BRAND_COLORS.primaryTeal} style={{ marginRight: 10 }} />
                       <View>
                         <Text variant="titleMedium" style={{ color: '#0F172A', fontWeight: '800' }}>
                           #{item.invoiceNumber}

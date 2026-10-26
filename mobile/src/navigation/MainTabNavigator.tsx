@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HomeScreen } from '../screens/HomeScreen';
 import { InvoicesScreen } from '../screens/InvoicesScreen';
 import { MoreScreen } from '../screens/MoreScreen';
@@ -8,6 +9,7 @@ import { RanchesScreen } from '../screens/RanchesScreen';
 import { DeliveriesScreen } from '../screens/DeliveriesScreen';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Text } from 'react-native-paper';
+import { InvoiceLogo } from '../components/InvoiceLogo';
 
 import { ShopScreen } from '../screens/ShopScreen';
 import { MessagesScreen } from '../screens/MessagesScreen';
@@ -18,11 +20,15 @@ const PRIMARY_TABS = ['Home', 'Ranches', 'Deliveries', 'Invoices', 'More'];
 const TabBarIcon = ({ name, isFocused, label }: { name: string; isFocused: boolean; label: string }) => {
   return (
     <View style={[styles.iconWrapper, isFocused && styles.activeIconWrapper]}>
-      <MaterialCommunityIcons 
-        name={name as any} 
-        size={22} 
-        color={isFocused ? '#0C6054' : '#64748B'} 
-      />
+      {name === 'invoice-logo' ? (
+        <InvoiceLogo size={22} color={isFocused ? '#0C6054' : '#64748B'} />
+      ) : (
+        <MaterialCommunityIcons 
+          name={name as any} 
+          size={22} 
+          color={isFocused ? '#0C6054' : '#64748B'} 
+        />
+      )}
       <Text style={[styles.iconLabel, isFocused && styles.activeIconLabel]}>
         {label}
       </Text>
@@ -31,11 +37,12 @@ const TabBarIcon = ({ name, isFocused, label }: { name: string; isFocused: boole
 };
 
 const CustomTabBar = ({ state, descriptors, navigation }: any) => {
+  const insets = useSafeAreaInsets();
   const activeRoute = state.routes[state.index]?.name;
   const isSecondaryScreen = !PRIMARY_TABS.includes(activeRoute);
 
   return (
-    <View style={styles.tabBarWrapper}>
+    <View style={[styles.tabBarWrapper, { bottom: Math.max(12, insets.bottom + 6) }]}>
       <View style={styles.tabBar}>
         {state.routes
           .filter((route: any) => PRIMARY_TABS.includes(route.name))
@@ -61,7 +68,7 @@ const CustomTabBar = ({ state, descriptors, navigation }: any) => {
             if (route.name === 'Home') iconName = 'home-outline';
             if (route.name === 'Ranches') iconName = 'sprout';
             if (route.name === 'Deliveries') iconName = 'truck-delivery-outline';
-            if (route.name === 'Invoices') iconName = 'receipt';
+            if (route.name === 'Invoices') iconName = 'invoice-logo';
             if (route.name === 'More') iconName = 'dots-horizontal';
 
             return (

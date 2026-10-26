@@ -14,13 +14,22 @@ import {
 } from 'react-native';
 import { Text, Card, Chip, Divider, Button, ProgressBar } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuthStore } from '../store/useAuthStore';
 import { fetchRanches, fetchDeliveries, fetchInvoices, fetchPrograms } from '../api/client';
 import { BRAND_COLORS } from '../theme/theme';
+import { InvoiceLogo } from '../components/InvoiceLogo';
+import {
+  requestNotificationPermission,
+  sendTestNotification,
+  getNotificationPermission,
+  areNotificationsSupported
+} from '../utils/notifications';
 
 export const HomeScreen = () => {
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
@@ -118,7 +127,7 @@ export const HomeScreen = () => {
   return (
     <View style={styles.container}>
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 110 + insets.bottom }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -137,7 +146,7 @@ export const HomeScreen = () => {
           >
             <LinearGradient
               colors={['rgba(8, 63, 56, 0.94)', 'rgba(12, 96, 84, 0.88)']}
-              style={styles.headerGradient}
+              style={[styles.headerGradient, { paddingTop: Math.max(36, insets.top + 16) }]}
             >
               {/* Top Navigation Row */}
               <View style={styles.headerTopRow}>
@@ -213,7 +222,7 @@ export const HomeScreen = () => {
             onPress={() => navigation.navigate('Invoices')}
           >
             <View style={[styles.actionIconBox, { backgroundColor: '#EFF6FF' }]}>
-              <MaterialCommunityIcons name="receipt-text-outline" size={22} color="#2563EB" />
+              <InvoiceLogo size={22} color="#2563EB" />
             </View>
             <Text style={styles.actionLabel}>View Invoices</Text>
             <Text style={styles.actionSubLabel}>Statements & PDF</Text>
@@ -431,7 +440,7 @@ export const HomeScreen = () => {
           onPress={() => navigation.navigate('Invoices')}
         >
           <View style={styles.bannerLeft}>
-            <MaterialCommunityIcons name="receipt-text" size={28} color={BRAND_COLORS.accentOrange} />
+            <InvoiceLogo size={28} color={BRAND_COLORS.accentOrange} />
             <View style={{ marginLeft: 12 }}>
               <Text style={styles.bannerTitle}>Account Invoices</Text>
               <Text style={styles.bannerSubtitle}>
@@ -1240,6 +1249,7 @@ const styles = StyleSheet.create({
   quickCapabilitiesRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginHorizontal: 16,
     marginBottom: 16,
     gap: 8,
   },

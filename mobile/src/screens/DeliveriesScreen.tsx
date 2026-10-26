@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Text, Chip, Divider, ActivityIndicator, Button, TextInput } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import {
   fetchDeliveries,
@@ -23,6 +24,7 @@ import {
 import { BRAND_COLORS } from '../theme/theme';
 
 export const DeliveriesScreen = ({ route }: any) => {
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
 
   const [deliveries, setDeliveries] = useState<any[]>([]);
@@ -259,8 +261,8 @@ export const DeliveriesScreen = ({ route }: any) => {
   return (
     <View style={styles.container}>
       {/* Top Header */}
-      <View style={styles.header}>
-        <View style={{ flex: 1 }}>
+      <View style={[styles.header, { paddingTop: Math.max(16, insets.top + 8) }]}>
+        <View style={{ flex: 1, paddingRight: 8 }}>
           <Text style={styles.headerTitle}>Deliveries</Text>
           <Text style={styles.headerSubtitle}>
             Scheduled tank refills, OptimoRoute driver tracking & nutrient accounting
@@ -303,7 +305,7 @@ export const DeliveriesScreen = ({ route }: any) => {
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 110 + insets.bottom }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={BRAND_COLORS.primaryTeal} />
@@ -1126,6 +1128,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 8,

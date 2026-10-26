@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import { PrismaClient } from '@prisma/client';
 import nodemailer from 'nodemailer';
 import bcrypt from 'bcrypt';
@@ -1377,6 +1378,38 @@ app.put(['/api/admin/products/:id', '/api/app/admin/products/:id'], async (req, 
 });
 
 
+
+// Serve built frontend assets and provide SPA fallback when running on Render
+const possibleDistPaths = [
+  path.resolve(__dirname, '..', '..', 'mobile', 'dist'),
+  path.resolve(__dirname, '..', 'mobile', 'dist'),
+  path.resolve(process.cwd(), 'mobile', 'dist'),
+  path.resolve(process.cwd(), 'dist'),
+];
+
+for (const distPath of possibleDistPaths) {
+  if (fs.existsSync(distPath)) {
+    console.log(`[Static Web] Serving frontend assets from: ${distPath}`);
+    app.use(express.static(distPath));
+    app.get('*', (req, res, next) => {
+      if (
+        req.path.startsWith('/api') ||
+        req.path.startsWith('/auth') ||
+        req.path.startsWith('/order-confirm') ||
+        req.path.startsWith('/dispatch-action') ||
+        req.path.startsWith('/health')
+      ) {
+        return next();
+      }
+      const indexHtml = path.join(distPath, 'index.html');
+      if (fs.existsSync(indexHtml)) {
+        return res.sendFile(indexHtml);
+      }
+      next();
+    });
+    break;
+  }
+}
 
 // Only listen if not running on Vercel Serverless
 if (process.env.VERCEL !== '1') {

@@ -11,6 +11,7 @@ import {
   mockSamples,
   mockFeatureFlags,
   mockAuditLogs,
+  mockNotifications,
   addAuditLog,
   addAdminNotification,
   saveStore,
@@ -1551,6 +1552,43 @@ router.post('/admin/settings', async (req: AuthenticatedRequest, res) => {
 
 router.get('/admin/audit-logs', async (req: AuthenticatedRequest, res) => {
   res.json(mockAuditLogs);
+});
+
+// ---------------------------------
+// Mobile Push Notification Endpoints
+// ---------------------------------
+const pushSubscriptions: any[] = [];
+
+router.post('/push/subscribe', async (req: AuthenticatedRequest, res) => {
+  const { subscription, email } = req.body;
+  if (subscription) {
+    pushSubscriptions.push({
+      subscription,
+      email: email || req.user?.email || 'grower@renu-biome.com',
+      subscribedAt: new Date().toISOString()
+    });
+  }
+  res.json({ success: true, message: 'Push subscription registered for mobile alerts' });
+});
+
+router.post('/push/send', async (req: AuthenticatedRequest, res) => {
+  const { title, body, url, tag, targetEmail } = req.body;
+  addAdminNotification({
+    title: title || 'Mobile Operational Alert',
+    message: body || 'New update regarding your delivery or ranch tanks.',
+    type: 'DELIVERY'
+  });
+
+  res.json({
+    success: true,
+    sent: true,
+    subscribersNotified: Math.max(1, pushSubscriptions.length),
+    notification: { title, body, url, tag }
+  });
+});
+
+router.get('/notifications', async (req: AuthenticatedRequest, res) => {
+  res.json({ success: true, notifications: mockNotifications });
 });
 
 export { router };

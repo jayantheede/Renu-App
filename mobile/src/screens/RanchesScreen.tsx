@@ -40,10 +40,12 @@ import {
   fetchFeatureFlags,
 } from '../api/client';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '../store/useAuthStore';
 import { BRAND_COLORS } from '../theme/theme';
 
 export const RanchesScreen = ({ route }: any) => {
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const user = useAuthStore((state) => state.user);
   const isAdmin = user?.role === 'admin';
@@ -634,7 +636,13 @@ export const RanchesScreen = ({ route }: any) => {
   return (
     <View style={styles.container}>
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingTop: Math.max(16, insets.top + 8),
+            paddingBottom: 110 + insets.bottom,
+          },
+        ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl

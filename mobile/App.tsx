@@ -44,6 +44,18 @@ export default function App() {
 
     // Register Web App Manifest, Service Worker & Font Fallbacks for Offline PWA
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      // 0. Resolve SPA 404 redirect param if redirected from 404.html
+      if (typeof window !== 'undefined' && window.location.search.includes('p=')) {
+        try {
+          const params = new URLSearchParams(window.location.search);
+          const redirectPath = params.get('p');
+          if (redirectPath) {
+            const query = params.get('q') ? '?' + params.get('q')!.replace(/~and~/g, '&') : '';
+            window.history.replaceState(null, '', redirectPath + query + window.location.hash);
+          }
+        } catch (e) {}
+      }
+
       // 1. Add manifest link if not present
       if (!document.querySelector('link[rel="manifest"]')) {
         const manifestLink = document.createElement('link');
@@ -69,9 +81,12 @@ export default function App() {
       }
       viewportMeta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover');
 
-      // 4. Register service worker for offline caching
+      // 4. Register service worker for offline caching & background push notifications
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch((err) => {
+        navigator.serviceWorker.register('/sw.js').then((reg) => {
+          // Check for service worker updates
+          reg.update().catch(() => {});
+        }).catch((err) => {
           console.warn('Service worker registration failed:', err);
         });
       }
@@ -85,12 +100,14 @@ export default function App() {
         style.appendChild(document.createTextNode(`
           html, body, #root {
             width: 100%;
+            min-height: 100%;
             height: 100%;
             margin: 0;
             padding: 0;
             overflow-x: hidden;
             -webkit-font-smoothing: antialiased;
             -webkit-overflow-scrolling: touch;
+            touch-action: manipulation;
           }
           * {
             box-sizing: border-box;

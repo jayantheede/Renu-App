@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, Alert, Modal, TouchableOpacity, Platform } from 'react-native';
-import { Text, Button, Chip, TextInput, Divider } from 'react-native-paper';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { InvoiceLogo } from '../../components/InvoiceLogo';
 import {
   fetchInvoices,
   submitInvoice,
@@ -14,6 +15,7 @@ import {
 import { printInvoiceDocument } from '../../utils/printInvoice';
 
 export const AdminInvoicesScreen = () => {
+  const insets = useSafeAreaInsets();
   const [invoices, setInvoices] = useState<any[]>([]);
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -220,14 +222,14 @@ export const AdminInvoicesScreen = () => {
   return (
     <View style={styles.container}>
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 110 + insets.bottom }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor="#0C6054" />
         }
       >
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: Math.max(16, insets.top + 8) }]}>
           <View>
             <Text style={styles.title}>Invoices (QuickBooks)</Text>
             <Text style={styles.subtitle}>Hand-entered by office from QuickBooks statements</Text>
@@ -269,7 +271,7 @@ export const AdminInvoicesScreen = () => {
 
         {filteredInvoices.length === 0 ? (
           <View style={styles.emptyCard}>
-            <MaterialCommunityIcons name="file-document-outline" size={36} color="#94A3B8" />
+            <InvoiceLogo size={42} color="#94A3B8" />
             <Text style={styles.emptyText}>No invoice records found.</Text>
           </View>
         ) : (

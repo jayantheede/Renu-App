@@ -1,0 +1,32 @@
+services:
+  # Frontend Static Web App (Render Static Site)
+  - type: web
+    name: renu-biome-frontend
+    env: static
+    buildCommand: cd mobile && npm install && npm run build
+    staticPublishPath: ./mobile/dist
+    routes:
+      # Rewrite all routes to /index.html for React Navigation / Expo Web SPA
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+      - path: /sw.js
+        name: Cache-Control
+        value: no-cache, no-store, must-revalidate
+      - path: /manifest.json
+        name: Cache-Control
+        value: no-cache, no-store, must-revalidate
+
+  # Backend API Web Service
+  - type: web
+    name: renu-biome-backend
+    env: node
+    buildCommand: cd backend && npm install && npx prisma generate && npm run build
+    startCommand: cd backend && node dist/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production

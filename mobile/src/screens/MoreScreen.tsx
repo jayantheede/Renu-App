@@ -2,9 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, Alert, Modal, Switch, Linking, Platform } from 'react-native';
 import { Text, List, useTheme, Avatar, TextInput, Button, Divider } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuthStore } from '../store/useAuthStore';
+import {
+  requestNotificationPermission,
+  sendTestNotification,
+  getNotificationPermission,
+  areNotificationsSupported
+} from '../utils/notifications';
 import {
   updateProfile,
   fetchYearEndSummary,
@@ -24,6 +31,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { BRAND_COLORS } from '../theme/theme';
 
 export const MoreScreen = () => {
+  const insets = useSafeAreaInsets();
   const theme = useTheme();
   const navigation = useNavigation<any>();
   const user = useAuthStore(state => state.user);
@@ -397,6 +405,51 @@ export const MoreScreen = () => {
     }
   };
 
+  const [testingNotification, setTestingNotification] = useState(false);
+
+  const handleTogglePush = async (val: boolean) => {
+    setPushEnabled(val);
+    if (val) {
+      const granted = await requestNotificationPermission();
+      if (!granted) {
+        Alert.alert(
+          'Notifications Notice',
+          'Please allow notifications in your mobile browser or device settings to receive alerts when the app is closed.'
+        );
+      } else {
+        Alert.alert(
+          'Mobile Notifications Enabled',
+          'You will now receive delivery status, low tank warnings, and order dispatch alerts on your mobile lock screen.'
+        );
+      }
+    }
+  };
+
+  const handleSendTestAlert = async () => {
+    setTestingNotification(true);
+    try {
+      const success = await sendTestNotification();
+      if (success) {
+        Alert.alert(
+          'Mobile Alert Sent!',
+          'A test notification has been dispatched to your device lock screen / status bar.\n\nTip: You can now lock your phone or switch apps to verify alerts pop up even when not in use.'
+        );
+      } else {
+        const granted = await requestNotificationPermission();
+        if (granted) {
+          await sendTestNotification();
+          Alert.alert('Mobile Alert Sent!', 'A test notification has been dispatched to your device.');
+        } else {
+          Alert.alert('Permission Needed', 'Please allow notifications in your browser or device prompt to receive alerts.');
+        }
+      }
+    } catch (e: any) {
+      Alert.alert('Notification Notice', e.message || 'Notification dispatched.');
+    } finally {
+      setTestingNotification(false);
+    }
+  };
+
   const handleSaveNotifications = async () => {
     try {
       if (user?.email) {
@@ -465,7 +518,7 @@ export const MoreScreen = () => {
   return (
     <ScrollView 
       style={[styles.container, { backgroundColor: theme.colors.background }]}
-      contentContainerStyle={{ paddingBottom: 120 }}
+      contentContainerStyle={{ paddingBottom: 120 + insets.bottom, paddingTop: Math.max(16, insets.top) }}
     >
       <Text variant="headlineMedium" style={styles.pageTitle}>Profile & Settings</Text>
       
@@ -630,19 +683,56 @@ export const MoreScreen = () => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 440 }}>
+              {/* Background Notification Status Banner */}
+              <View style={{ backgroundColor: '#F0FDFA', borderWidth: 1, borderColor: '#99F6E4', borderRadius: 10, padding: 12, marginBottom: 14 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <MaterialCommunityIcons name="cellphone-sound" size={18} color="#0C6054" />
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#0C6054' }}>
+                    Mobile Lock Screen & Background Alerts
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 11, color: '#475569', lineHeight: 16 }}>
+                  Notifications pop up on your mobile status bar and lock screen even when this app is closed or running in the background.
+                </Text>
+              </View>
+
               <View style={styles.settingRow}>
                 <View style={{ flex: 1, paddingRight: 12 }}>
                   <Text style={styles.settingName}>Push Notifications</Text>
-                  <Text style={styles.settingDesc}>Get instant status updates on delivery tracking and dispatch</Text>
+                  <Text style={styles.settingDesc}>Get instant status updates on delivery tracking, refills and dispatch</Text>
                 </View>
                 <Switch
                   value={pushEnabled}
-                  onValueChange={setPushEnabled}
+                  onValueChange={handleTogglePush}
                   trackColor={{ false: '#E2E8F0', true: '#0C6054' }}
                   thumbColor="#FFFFFF"
                 />
               </View>
+
+              {/* Immediate Test Trigger Button */}
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: '#0C6054',
+                  borderRadius: 10,
+                  paddingVertical: 12,
+                  paddingHorizontal: 16,
+                  marginTop: 6,
+                  marginBottom: 14,
+                  gap: 8,
+                }}
+                activeOpacity={0.8}
+                onPress={handleSendTestAlert}
+                disabled={testingNotification}
+              >
+                <MaterialCommunityIcons name="bell-ring" size={18} color="#FFFFFF" />
+                <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 13 }}>
+                  {testingNotification ? 'Dispatching...' : 'Test Mobile Notification Now'}
+                </Text>
+              </TouchableOpacity>
 
               <Divider style={styles.divider} />
 
@@ -664,7 +754,7 @@ export const MoreScreen = () => {
               <View style={styles.settingRow}>
                 <View style={{ flex: 1, paddingRight: 12 }}>
                   <Text style={styles.settingName}>Tank Refill Alerts</Text>
-                  <Text style={styles.settingDesc}>Receive automated warnings when tank capacity drops below 20%</Text>
+                  <Text style={styles.settingDesc}>Receive automated warnings when tank capacity drops below 25%</Text>
                 </View>
                 <Switch
                   value={tankLevelAlerts}
