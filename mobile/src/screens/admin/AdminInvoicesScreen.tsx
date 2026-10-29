@@ -231,9 +231,9 @@ export const AdminInvoicesScreen = () => {
       >
         {/* Header */}
         <View style={[styles.header, { paddingTop: Math.max(16, insets.top + 8) }]}>
-          <View>
-            <Text style={styles.title}>Invoices (QuickBooks)</Text>
-            <Text style={styles.subtitle}>Hand-entered by office from QuickBooks statements</Text>
+          <View style={{ flex: 1, paddingRight: 10 }}>
+            <Text style={styles.title} numberOfLines={1}>Invoices (QuickBooks)</Text>
+            <Text style={styles.subtitle} numberOfLines={1}>Hand-entered from QuickBooks statements</Text>
           </View>
           <TouchableOpacity onPress={handleOpenAddModal} style={styles.addBtn}>
             <Ionicons name="add" size={18} color="#FFF" />
@@ -242,7 +242,12 @@ export const AdminInvoicesScreen = () => {
         </View>
 
         {/* Filter Pills */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingRight: 20 }}
+          style={{ marginBottom: 12 }}
+        >
           {(['All', 'Open', 'Overdue', 'Paid', 'Void'] as const).map(st => (
             <TouchableOpacity
               key={st}
@@ -257,7 +262,7 @@ export const AdminInvoicesScreen = () => {
         </ScrollView>
 
         <TextInput
-          placeholder="Filter invoices by number, customer, or product..."
+          placeholder="Filter by invoice, customer, product..."
           value={searchQuery}
           onChangeText={setSearchQuery}
           mode="outlined"
@@ -577,6 +582,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 54,
     paddingBottom: 16,
+    width: '100%',
   },
   title: { fontSize: 22, fontWeight: '800', color: '#0F172A' },
   subtitle: { fontSize: 13, color: '#64748B', marginTop: 2 },
@@ -588,7 +594,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 24,
     gap: 4,
-    minHeight: 48,
+    minHeight: 46,
+    flexShrink: 0,
   },
   addBtnText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
   filterChip: {

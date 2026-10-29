@@ -346,12 +346,12 @@ export const DeliveriesScreen = ({ route }: any) => {
                     onPress={() => openDetail(item)}
                   >
                     <View style={styles.cardHeader}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 6 }}>
                         <Text style={styles.orderIdText}>#{item.orderId}</Text>
-                        <Text style={styles.dateText}>· {item.deliveryWindow || item.date}</Text>
+                        <Text style={styles.dateText} numberOfLines={1}> · {item.deliveryWindow || item.date}</Text>
                       </View>
                       <Chip
-                        style={{ backgroundColor: badge.bg, borderColor: badge.border, borderWidth: 1 }}
+                        style={{ backgroundColor: badge.bg, borderColor: badge.border, borderWidth: 1, flexShrink: 0 }}
                         textStyle={{ color: badge.color, fontWeight: '700', fontSize: 11 }}
                         compact
                       >
@@ -477,12 +477,12 @@ export const DeliveriesScreen = ({ route }: any) => {
                     onPress={() => openDetail(item)}
                   >
                     <View style={styles.cardHeader}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 6 }}>
                         <Text style={styles.orderIdText}>#{item.orderId}</Text>
-                        <Text style={styles.dateText}>· {item.deliveredDate || item.date}</Text>
+                        <Text style={styles.dateText} numberOfLines={1}> · {item.deliveredDate || item.date}</Text>
                       </View>
                       <Chip
-                        style={{ backgroundColor: badge.bg, borderColor: badge.border, borderWidth: 1 }}
+                        style={{ backgroundColor: badge.bg, borderColor: badge.border, borderWidth: 1, flexShrink: 0 }}
                         textStyle={{ color: badge.color, fontWeight: '700', fontSize: 11 }}
                         compact
                       >

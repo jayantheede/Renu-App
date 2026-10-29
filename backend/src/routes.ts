@@ -159,7 +159,7 @@ router.put('/profile', async (req: AuthenticatedRequest, res) => {
 // Dashboard Routes
 // ---------------------------------
 router.get('/grower/dashboard', async (req: AuthenticatedRequest, res) => {
-  await syncStoreFromDB();
+  syncStoreFromDB().catch(() => {});
   const user = req.user!;
   const ranches = getRanchesForCustomer(user.email, user.role);
   const totalAcres = ranches.reduce((s, r) => s + (r.ac || 0), 0);
@@ -184,7 +184,7 @@ router.get('/grower/dashboard', async (req: AuthenticatedRequest, res) => {
 });
 
 router.get('/admin/dashboard', async (req: AuthenticatedRequest, res) => {
-  await syncStoreFromDB();
+  syncStoreFromDB().catch(() => {});
   const today = new Date().toISOString().split('T')[0];
   const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
@@ -263,7 +263,7 @@ router.get('/admin/dashboard', async (req: AuthenticatedRequest, res) => {
 // Ranches, Blocks & Tanks Routes
 // ---------------------------------
 router.get('/ranches', async (req: AuthenticatedRequest, res) => {
-  await syncStoreFromDB();
+  syncStoreFromDB().catch(() => {});
   const user = req.user!;
   const ranches = getRanchesForCustomer(user.email, user.role);
   res.json(ranches);
@@ -429,7 +429,7 @@ router.delete('/tanks/:id/reports/:reportId', async (req: AuthenticatedRequest, 
 // Deliveries (Orders) Routes
 // ---------------------------------
 router.get(['/deliveries', '/orders'], async (req: AuthenticatedRequest, res) => {
-  await syncStoreFromDB();
+  syncStoreFromDB().catch(() => {});
   const user = req.user!;
   const isAdmin = user.role?.toLowerCase() === 'admin' || user.email?.toLowerCase().includes('admin') || user.email?.toLowerCase().includes('support@');
   if (isAdmin) {
@@ -819,7 +819,7 @@ router.post(['/public/orders/:id/dispatch-action', '/orders/:id/dispatch-action'
 // Invoices Routes (Hand-entered from QuickBooks)
 // ---------------------------------
 router.get('/invoices', async (req: AuthenticatedRequest, res) => {
-  await syncStoreFromDB();
+  syncStoreFromDB().catch(() => {});
   const user = req.user!;
   const invoices = getInvoicesList(user.email, user.role);
   res.json(invoices);
@@ -911,7 +911,7 @@ router.put('/invoices/:id', async (req: AuthenticatedRequest, res) => {
 // Year-End Purchase Summary & Reports
 // ---------------------------------
 router.get(['/reports/year-end-summary', '/reports/year-end'], async (req: AuthenticatedRequest, res) => {
-  await syncStoreFromDB();
+  syncStoreFromDB().catch(() => {});
   const year = parseInt(req.query.year as string, 10) || new Date().getFullYear();
   const customerId = (req.query.customerId as string) || (req.user?.role === 'admin' ? 'customer@renu.com' : (req.user?.email || 'customer@renu.com'));
 
@@ -925,7 +925,7 @@ router.get(['/reports/year-end-summary', '/reports/year-end'], async (req: Authe
 });
 
 router.get('/reports/csv', async (req: AuthenticatedRequest, res) => {
-  await syncStoreFromDB();
+  syncStoreFromDB().catch(() => {});
   const type = (req.query.type as string) || 'deliveries';
   const startDate = (req.query.startDate as string) || '2026-01-01';
   const endDate = (req.query.endDate as string) || '2026-12-31';
@@ -987,7 +987,7 @@ router.post('/feature-flags', async (req: AuthenticatedRequest, res) => {
 // Products Routes (NO PRICE FIELD ANYWHERE!)
 // ---------------------------------
 router.get('/products', async (req: AuthenticatedRequest, res) => {
-  await syncStoreFromDB();
+  syncStoreFromDB().catch(() => {});
   // Strip any price field from response
   const sanitized = mockProducts.map(p => ({
     id: p.id,
@@ -1065,7 +1065,7 @@ router.delete('/admin/products/:id', async (req: AuthenticatedRequest, res) => {
 // Nutrition Programs Routes (Phase 2 - Section 4)
 // ---------------------------------
 router.get('/programs', async (req: AuthenticatedRequest, res) => {
-  await syncStoreFromDB();
+  syncStoreFromDB().catch(() => {});
   const ranchId = req.query.ranchId as string | undefined;
   const programs = getProgramsForRanch(ranchId);
   res.json(programs);
@@ -1102,7 +1102,7 @@ router.delete('/programs/:id', async (req: AuthenticatedRequest, res) => {
 // Soil & Tissue Samples Routes (Phase 2 - Section 5)
 // ---------------------------------
 router.get('/samples', async (req: AuthenticatedRequest, res) => {
-  await syncStoreFromDB();
+  syncStoreFromDB().catch(() => {});
   const ranchId = req.query.ranchId as string | undefined;
   const blockId = req.query.blockId as string | undefined;
   const samples = getSamplesList(ranchId, blockId);
