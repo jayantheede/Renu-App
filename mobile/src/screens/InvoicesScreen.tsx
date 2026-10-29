@@ -387,16 +387,20 @@ export const InvoicesScreen = () => {
                   {/* Clean Printable Invoice Document */}
                   <View style={styles.paperInvoice}>
                     <View style={styles.invoiceHeaderRow}>
-                      <View>
-                        <Text style={styles.docBrand}>ReNu-Biome Inc.</Text>
-                        <Text style={styles.docAddress}>Agricultural Soil Nutrition & Biome Health</Text>
-                        <Text style={styles.docAddress}>Central Valley, California</Text>
-                        <Text style={styles.docAddress}>support@renu-biome.com · (559) 555-0199</Text>
-                      </View>
-                      <View style={{ alignItems: 'flex-end' }}>
+                      <Image
+                        source={require('../../assets/brand/renu-biome-logo-teal-orange-for-light-backgrounds.png')}
+                        style={{ width: 130, height: 38 }}
+                        resizeMode="contain"
+                      />
+                      <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
                         <Text style={styles.docInvoiceBadge}>INVOICE</Text>
                         <Text style={styles.docInvNum}>#{selectedInvoice.invoiceNumber}</Text>
                       </View>
+                    </View>
+
+                    <View style={{ marginTop: 6 }}>
+                      <Text style={styles.docBrand}>ReNu-Biome Inc.</Text>
+                      <Text style={styles.docAddress}>Agricultural Soil Nutrition & Biome Health · Central Valley, California</Text>
                     </View>
 
                     <Divider style={{ marginVertical: 12 }} />

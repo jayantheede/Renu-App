@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, Alert, Modal, TouchableOpacity, Platform } from 'react-native';
+import { View, StyleSheet, ScrollView, RefreshControl, Alert, Modal, TouchableOpacity, Platform, Image } from 'react-native';
 import { Text, TextInput, Button, Chip, Divider } from 'react-native-paper';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -285,9 +285,12 @@ export const AdminInvoicesScreen = () => {
             return (
               <View key={inv.id} style={styles.card}>
                 <View style={styles.cardHeader}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.invoiceNumber}>{inv.invoiceNumber}</Text>
-                    <Text style={styles.customerName}>{inv.customerName || 'Customer'}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                    <InvoiceLogo size={28} color="#0C6054" />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.invoiceNumber}>{inv.invoiceNumber}</Text>
+                      <Text style={styles.customerName}>{inv.customerName || 'Customer'}</Text>
+                    </View>
                   </View>
                   <View style={{ alignItems: 'flex-end' }}>
                     <Text style={[styles.amountText, isOverdue && { color: '#DC2626' }]}>
@@ -474,14 +477,21 @@ export const AdminInvoicesScreen = () => {
 
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={styles.statementBox}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 2, borderBottomColor: '#0C6054', paddingBottom: 10 }}>
-                  <View>
-                    <Text style={{ fontSize: 20, fontWeight: '900', color: '#0C6054' }}>ReNu-Biome Inc.</Text>
-                    <Text style={{ fontSize: 11, color: '#64748B' }}>Agricultural Biologicals & Nutrients</Text>
+                <View style={{ borderBottomWidth: 2, borderBottomColor: '#0C6054', paddingBottom: 10 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Image
+                      source={require('../../../assets/brand/renu-biome-logo-teal-orange-for-light-backgrounds.png')}
+                      style={{ width: 130, height: 38 }}
+                      resizeMode="contain"
+                    />
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={{ fontSize: 16, fontWeight: '900', color: '#0C6054' }}>INVOICE</Text>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748B' }}>#{selectedInvoiceForPdf?.invoiceNumber}</Text>
+                    </View>
                   </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>INVOICE</Text>
-                    <Text style={{ fontSize: 12, color: '#64748B' }}>#{selectedInvoiceForPdf?.invoiceNumber}</Text>
+                  <View style={{ marginTop: 6 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#0C6054' }}>ReNu-Biome Inc.</Text>
+                    <Text style={{ fontSize: 11, color: '#64748B' }}>Agricultural Biologicals & Nutrients · Central Valley, California</Text>
                   </View>
                 </View>
 

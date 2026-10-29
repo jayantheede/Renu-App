@@ -301,8 +301,13 @@ export const printInvoiceDocument = (inv: InvoicePrintData) => {
   <div class="invoice-wrapper">
     <div class="top-header">
       <div class="brand-section">
-        <div class="brand-title">ReNu-Biome Inc.</div>
-        <div class="brand-tagline">Farmer's Pride · Central Valley Operations</div>
+        <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 8px;">
+          <img src="/brand/renu-biome-logo-teal-orange-for-light-backgrounds.png" alt="ReNu-Biome Logo" style="height: 48px; max-width: 170px; object-fit: contain;" />
+          <div>
+            <div class="brand-title" style="font-size: 22px; line-height: 1.1;">ReNu-Biome Inc.</div>
+            <div class="brand-tagline">Farmer's Pride · Central Valley Operations</div>
+          </div>
+        </div>
         <div class="brand-meta">Agricultural Soil Nutrition & Biological Plant Formulations</div>
         <div class="brand-meta">Direct Inquiries: (559) 555-0199 · Email: accounting@renu-biome.com</div>
       </div>

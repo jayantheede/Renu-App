@@ -74,11 +74,22 @@ export function saveStore() {
   });
 }
 
-export async function syncStoreFromDB(): Promise<void> {
-  try {
-    const record = await prisma.appDataStore.findUnique({ where: { key: 'main_store' } });
-    if (record && record.payload) {
-      const data = JSON.parse(record.payload);
+let lastSyncTime = 0;
+let ongoingSync: Promise<void> | null = null;
+
+export async function syncStoreFromDB(force = false): Promise<void> {
+  const now = Date.now();
+  if (!force && now - lastSyncTime < 15000) {
+    return;
+  }
+  if (ongoingSync) {
+    return ongoingSync;
+  }
+  ongoingSync = (async () => {
+    try {
+      const record = await prisma.appDataStore.findUnique({ where: { key: 'main_store' } });
+      if (record && record.payload) {
+        const data = JSON.parse(record.payload);
       if (Array.isArray(data.users)) {
         for (const u of data.users) {
           if (u.role === 'admin' || u.email?.toLowerCase() === 'admin@renu.com') {
@@ -151,9 +162,14 @@ export async function syncStoreFromDB(): Promise<void> {
     } else {
       saveStore();
     }
+    lastSyncTime = Date.now();
   } catch (err: any) {
     // Non-fatal if offline
+  } finally {
+    ongoingSync = null;
   }
+})();
+  return ongoingSync;
 }
 
 // Load persisted data on startup

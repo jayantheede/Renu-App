@@ -69,13 +69,13 @@ export const SignInScreen = ({ navigation }: any) => {
       return;
     }
 
-    if (loginEmail === 'User' && loginPassword === 'User') {
-      setSession({ id: 'user', email: 'customer@renu.com', name: 'Grower User', role: 'Grower' }, 'mock_token');
+    if ((loginEmail === 'User' || loginEmail === 'customer@renu.com') && (loginPassword === 'User' || loginPassword === 'customer')) {
+      setSession({ id: 'user', email: 'customer@renu.com', name: 'Sierra Agri Group (Grower)', role: 'Grower' }, 'mock_token');
       setLoading(false);
       return;
     }
 
-    if (loginEmail === 'Employee' && loginPassword === 'Employee') {
+    if ((loginEmail === 'Employee' || loginEmail === 'employee@renu.com') && (loginPassword === 'Employee' || loginPassword === 'employee')) {
       setSession({ id: 'employee-1', email: 'employee@renu.com', name: 'Dave Miller (Staff)', role: 'Staff' }, 'mock_token');
       setLoading(false);
       return;
@@ -368,24 +368,30 @@ export const SignInScreen = ({ navigation }: any) => {
                         onPress={() => handleSignIn('support@renu-biome.com', 'admin')}
                         textColor={BRAND_COLORS.primaryTeal}
                         style={styles.demoButton}
+                        compact
+                        labelStyle={styles.demoButtonLabel}
                       >
-                        Admin Demo
+                        Admin
                       </Button>
                       <Button
                         mode="outlined"
                         onPress={() => handleSignIn('customer@renu.com', 'customer')}
                         textColor={BRAND_COLORS.primaryTeal}
                         style={styles.demoButton}
+                        compact
+                        labelStyle={styles.demoButtonLabel}
                       >
-                        Customer Demo
+                        Grower
                       </Button>
                       <Button
                         mode="outlined"
                         onPress={() => handleSignIn('employee@renu.com', 'employee')}
                         textColor={BRAND_COLORS.accentOrange}
-                        style={styles.demoButton}
+                        style={[styles.demoButton, { borderColor: BRAND_COLORS.accentOrange }]}
+                        compact
+                        labelStyle={styles.demoButtonLabel}
                       >
-                        Staff Demo
+                        Staff
                       </Button>
                     </View>
                   </View>
@@ -611,12 +617,20 @@ const styles = StyleSheet.create({
   demoButtonsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 12,
+    gap: 8,
   },
   demoButton: {
     borderColor: BRAND_COLORS.primaryTeal,
     borderRadius: 8,
     flex: 1,
+    minHeight: 38,
+    justifyContent: 'center',
+  },
+  demoButtonLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginHorizontal: 0,
+    letterSpacing: 0,
   },
   mfaBanner: {
     backgroundColor: '#F0FDFA',
