@@ -3929,6 +3929,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 15,
   },
+  sampleNotesText: {
+    fontSize: 12,
+    color: '#475569',
+    fontStyle: 'italic',
+    marginTop: 4,
+    marginBottom: 6,
+  },
   sampleDocStrip: {
     flexDirection: 'row',
     alignItems: 'center',

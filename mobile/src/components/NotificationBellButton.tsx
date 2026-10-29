@@ -7,13 +7,16 @@ import { useNavigation } from '@react-navigation/native';
 
 interface Props {
   color?: string;
+  tintColor?: string;
   badgeCount?: number;
 }
 
 export const NotificationBellButton: React.FC<Props> = ({
-  color = '#FFFFFF',
+  color,
+  tintColor,
   badgeCount = 2,
 }) => {
+  const iconColor = color || tintColor || '#FFFFFF';
   const [modalVisible, setModalVisible] = useState(false);
   const navigation = useNavigation<any>();
 
@@ -33,7 +36,7 @@ export const NotificationBellButton: React.FC<Props> = ({
         activeOpacity={0.8}
         accessibilityLabel="Notifications"
       >
-        <MaterialCommunityIcons name="bell-outline" size={20} color={color} />
+        <MaterialCommunityIcons name="bell-outline" size={20} color={iconColor} />
         {badgeCount > 0 && (
           <View style={styles.badgeContainer}>
             <Text style={styles.badgeText}>{badgeCount > 9 ? '9+' : badgeCount}</Text>

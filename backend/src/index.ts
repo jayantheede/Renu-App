@@ -1391,7 +1391,10 @@ for (const distPath of possibleDistPaths) {
   if (fs.existsSync(distPath)) {
     console.log(`[Static Web] Serving frontend assets from: ${distPath}`);
     app.use(express.static(distPath));
-    app.get('*', (req, res, next) => {
+    app.use((req, res, next) => {
+      if (req.method !== 'GET') {
+        return next();
+      }
       if (
         req.path.startsWith('/api') ||
         req.path.startsWith('/auth') ||
