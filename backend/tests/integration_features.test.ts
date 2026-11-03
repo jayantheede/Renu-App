@@ -199,11 +199,11 @@ describe('Comprehensive System Integration Tests (SMTP, OptimoRoute, Otodata, Cu
     });
   });
 
-  describe('4. Demo Customer Account (sravangaaismartsolutions@gmail.com)', () => {
-    it('should locate demo customer account by sravangaaismartsolutions@gmail.com', async () => {
-      const user = await findUserByEmail('sravangaaismartsolutions@gmail.com');
+  describe('4. Demo Customer Account (rgundavelli@gmail.com)', () => {
+    it('should locate demo customer account by rgundavelli@gmail.com', async () => {
+      const user = await findUserByEmail('rgundavelli@gmail.com');
       expect(user).toBeDefined();
-      expect(user?.email).toBe('sravangaaismartsolutions@gmail.com');
+      expect(user?.email).toBe('rgundavelli@gmail.com');
       expect(user?.role).toBe('Grower');
     });
 

@@ -75,7 +75,7 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
       ]);
 
       const custList = Array.isArray(cData) && cData.length > 0 ? cData : [
-        { id: 'mock-cust-1', name: 'Sierra Orchards LLC', email: 'sravangaaismartsolutions@gmail.com' },
+        { id: 'mock-cust-1', name: 'Sierra Orchards LLC', email: 'rgundavelli@gmail.com' },
         { id: 'c2', name: 'Kern Pistachio Partners', email: 'kern@farmops.com' },
         { id: 'c3', name: 'Madera Almond Partners', email: 'madera@farmops.com' }
       ];

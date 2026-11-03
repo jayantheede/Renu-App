@@ -26,7 +26,7 @@ jest.mock('react-native-safe-area-context', () => ({
 jest.mock('../../store/useAuthStore', () => ({
   useAuthStore: jest.fn(() => ({
     setSession: jest.fn(),
-    user: { role: 'Grower', email: 'sravangaaismartsolutions@gmail.com' }
+    user: { role: 'Grower', email: 'rgundavelli@gmail.com' }
   })),
 }));
 

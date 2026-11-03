@@ -366,9 +366,9 @@ app.post(['/api/auth/login', '/auth/login', '/app/login', '/api/app/login', '/ap
       // Send real OTP email to user/admin email via Office 365 SMTP
       let targetEmail = user.email;
       if (!targetEmail.includes('@')) {
-        targetEmail = targetEmail.includes('sravangaai')
-          ? 'sravangaaismartsolutions@gmail.com'
-          : 'support@renu-biome.com';
+        targetEmail = targetEmail.includes('admin')
+          ? 'support@renu-biome.com'
+          : 'rgundavelli@gmail.com';
       }
 
       if (process.env.SMTP_USER && process.env.SMTP_PASS) {

@@ -51,3 +51,4 @@ export function getEmailFooterHtml(): string {
     </div>
   `;
 }
+

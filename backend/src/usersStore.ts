@@ -101,8 +101,8 @@ export async function syncStoreFromDB(force = false): Promise<void> {
           if (u.role === 'admin' || u.email?.toLowerCase() === 'admin@renu.com') {
             u.email = 'support@renu-biome.com';
           }
-          if (u.id === 'mock-cust-1' || u.email?.toLowerCase() === 'customer@renu.com' || u.email?.toLowerCase() === 'sravangaaismartsolutions.com') {
-            u.email = 'sravangaaismartsolutions@gmail.com';
+          if (u.id === 'mock-cust-1' || u.email?.toLowerCase() === 'customer@renu.com' || u.email?.toLowerCase() === 'sravangaaismartsolutions.com' || u.email?.toLowerCase() === 'sravangaaismartsolutions@gmail.com') {
+            u.email = 'rgundavelli@gmail.com';
           }
           const idx = mockUsers.findIndex(m => m.id === u.id || (m.role === 'admin' && u.role === 'admin') || m.email.toLowerCase() === u.email.toLowerCase());
           if (idx >= 0) {
@@ -554,7 +554,7 @@ export const mockUsers: AppUser[] = (_persistedStore.users && _persistedStore.us
       },
       {
         id: 'mock-cust-1',
-        email: 'sravangaaismartsolutions@gmail.com',
+        email: 'rgundavelli@gmail.com',
         password: 'customer',
         name: 'Sierra Agri Group',
         role: 'Grower',
@@ -1099,7 +1099,7 @@ export const CANONICAL_INVOICES: InvoiceItem[] = [
     invoiceNumber: 'INV-2026-001',
     customerId: 'mock-cust-1',
     customerName: 'Sierra Orchards LLC',
-    customerEmail: 'sravangaaismartsolutions@gmail.com',
+    customerEmail: 'rgundavelli@gmail.com',
     deliveryId: 'DEL-103',
     invoiceDate: '2026-03-16',
     dueDate: '2026-04-15',
@@ -1133,7 +1133,7 @@ export const CANONICAL_INVOICES: InvoiceItem[] = [
     invoiceNumber: 'INV-2026-003',
     customerId: 'mock-cust-1',
     customerName: 'Sierra Orchards LLC',
-    customerEmail: 'sravangaaismartsolutions@gmail.com',
+    customerEmail: 'rgundavelli@gmail.com',
     deliveryId: 'DEL-102',
     invoiceDate: '2026-10-01',
     dueDate: '2026-11-01',
@@ -1415,14 +1415,14 @@ export function computeRanchAcreage(ranch: RanchItem): number {
 export async function findUserByEmail(email: string): Promise<AppUser | null> {
   const normalized = email.trim().toLowerCase();
   const isAdminQuery = normalized === 'support@renu-biome.com' || normalized === 'admin@renu.com' || normalized === 'admin';
-  const isCustQuery = normalized === 'sravangaaismartsolutions.com' || normalized === 'sravangaaismartsolutions@gmail.com' || normalized === 'customer@sravangaaismartsolutions.com' || normalized === 'customer@renu.com' || normalized === 'customer' || normalized === 'user';
+  const isCustQuery = normalized === 'rgundavelli@gmail.com' || normalized === 'sravangaaismartsolutions.com' || normalized === 'sravangaaismartsolutions@gmail.com' || normalized === 'customer@sravangaaismartsolutions.com' || normalized === 'customer@renu.com' || normalized === 'customer' || normalized === 'user';
   
   const mock = mockUsers.find(u => {
     const uEmail = u.email.toLowerCase();
     if (isAdminQuery && (uEmail === 'support@renu-biome.com' || uEmail === 'admin@renu.com' || u.role === 'admin')) {
       return true;
     }
-    if (isCustQuery && (uEmail === 'sravangaaismartsolutions.com' || uEmail === 'customer@renu.com' || u.id === 'mock-cust-1')) {
+    if (isCustQuery && (uEmail === 'rgundavelli@gmail.com' || uEmail === 'sravangaaismartsolutions@gmail.com' || uEmail === 'sravangaaismartsolutions.com' || uEmail === 'customer@renu.com' || u.id === 'mock-cust-1')) {
       return true;
     }
     return uEmail === normalized;
@@ -1433,7 +1433,7 @@ export async function findUserByEmail(email: string): Promise<AppUser | null> {
       mock.email = 'support@renu-biome.com';
     }
     if (mock.id === 'mock-cust-1') {
-      mock.email = 'sravangaaismartsolutions@gmail.com';
+      mock.email = 'rgundavelli@gmail.com';
     }
     return mock;
   }
@@ -1628,7 +1628,7 @@ export function getRanchesForCustomer(customerIdOrEmail: string, role?: string):
   let list = mockRanches;
   const norm = (customerIdOrEmail || '').toLowerCase().trim();
   const isAdmin = role?.toLowerCase() === 'admin' || norm.includes('admin') || norm.includes('support@');
-  const isCustQuery = norm === 'sravangaaismartsolutions.com' || norm === 'sravangaaismartsolutions@gmail.com' || norm === 'customer@sravangaaismartsolutions.com' || norm === 'customer@renu.com' || norm === 'mock-cust-1';
+  const isCustQuery = norm === 'rgundavelli@gmail.com' || norm === 'sravangaaismartsolutions.com' || norm === 'sravangaaismartsolutions@gmail.com' || norm === 'customer@sravangaaismartsolutions.com' || norm === 'customer@renu.com' || norm === 'mock-cust-1';
   if (!isAdmin) {
     list = mockRanches.filter(
       r => (isCustQuery && (r.customerId === 'mock-cust-1' || r.customerEmail?.toLowerCase() === 'customer@renu.com' || r.customerEmail?.toLowerCase() === 'sravangaaismartsolutions.com')) ||
@@ -2061,7 +2061,7 @@ export function getInvoicesList(customerIdOrEmail?: string, role?: string): Invo
   }
 
   const norm = customerIdOrEmail.toLowerCase().trim();
-  const isCustQuery = norm === 'sravangaaismartsolutions.com' || norm === 'sravangaaismartsolutions@gmail.com' || norm === 'customer@sravangaaismartsolutions.com' || norm === 'customer@renu.com' || norm === 'mock-cust-1';
+  const isCustQuery = norm === 'rgundavelli@gmail.com' || norm === 'sravangaaismartsolutions.com' || norm === 'sravangaaismartsolutions@gmail.com' || norm === 'customer@sravangaaismartsolutions.com' || norm === 'customer@renu.com' || norm === 'mock-cust-1';
   return mockInvoices.filter(
     i => (isCustQuery && (i.customerId === 'mock-cust-1' || i.customerEmail?.toLowerCase() === 'customer@renu.com' || i.customerEmail?.toLowerCase() === 'sravangaaismartsolutions.com')) ||
          (i.customerId && i.customerId.toLowerCase() === norm) ||

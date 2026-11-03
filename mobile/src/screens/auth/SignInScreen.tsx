@@ -346,7 +346,7 @@ export const SignInScreen = ({ navigation }: any) => {
                       </Button>
                       <Button
                         mode="outlined"
-                        onPress={() => handleSignIn('sravangaaismartsolutions@gmail.com', 'customer')}
+                        onPress={() => handleSignIn('rgundavelli@gmail.com', 'customer')}
                         textColor={BRAND_COLORS.primaryTeal}
                         style={styles.demoButton}
                         compact
