@@ -1,6 +1,6 @@
-import { transporter, OrderItem, mockRanches } from './usersStore';
+import { transporter, OrderItem, mockRanches, TankItem, RanchItem, LabSample } from './usersStore';
 
-export const DISPATCH_NOTIFICATION_EMAIL = 'eedevnsskjayanth.asa@gmail.com';
+export const DISPATCH_NOTIFICATION_EMAIL = process.env.DISPATCH_EMAIL || 'support@renu-biome.com';
 
 export function getBaseBackendUrl(req?: any): string {
   if (process.env.BACKEND_PUBLIC_URL && process.env.BACKEND_PUBLIC_URL.trim()) {
@@ -85,7 +85,7 @@ export async function sendOrderAcceptedEmailToCustomer(order: OrderItem, req?: a
           </p>
         </div>
         <div class="footer">
-          ReNu-Biome Inc. · Precision Agricultural Nutrition · Dispatch: (559) 555-0199
+          ReNu-Biome Inc. · Precision Agricultural Nutrition · Email: support@renu-biome.com
         </div>
       </div>
     </body>
@@ -307,8 +307,8 @@ export function renderCustomerConfirmHtmlPage(order: OrderItem, backendUrl: stri
                 <input type="text" id="gateCode" name="gateCode" value="${order.gateCode || ''}" placeholder="e.g. #4921">
               </div>
               <div style="flex: 1;">
-                <label for="contactPhone">Contact Phone *</label>
-                <input type="text" id="contactPhone" name="contactPhone" value="${order.contactPhone || '559-555-0199'}" required placeholder="559-555-0199">
+                <label for="contactPhone">Contact Phone</label>
+                <input type="text" id="contactPhone" name="contactPhone" value="${order.contactPhone || ''}" placeholder="Contact Phone">
               </div>
             </div>
 
@@ -444,4 +444,408 @@ export function renderDispatchActionHtmlPage(
     </body>
     </html>
   `;
+}
+
+/**
+ * Phase 1 & 2: Delivery status emails sent to customer on Scheduled, Out for Delivery, Delivered.
+ * Includes live arrival estimate (from OptimoRoute), delivery location, and QR code install banner.
+ */
+export async function sendDeliveryStatusEmailToCustomer(
+  order: OrderItem,
+  status: 'Scheduled' | 'Out for delivery' | 'Delivered' | 'Cancelled',
+  liveEta?: string,
+  req?: any
+): Promise<boolean> {
+  const customerEmail = order.customerEmail;
+  if (!customerEmail) return false;
+
+  const frontendUrl = getBaseFrontendUrl(req);
+  const installUrl = `${frontendUrl}/install`;
+  const viewOrderUrl = `${frontendUrl}/deliveries?orderId=${order.id || order.orderId}`;
+
+  const statusColors: Record<string, { bg: string; text: string; header: string }> = {
+    'Scheduled': { bg: '#EFF6FF', text: '#1E40AF', header: '#0C6054' },
+    'Out for delivery': { bg: '#FEF3C7', text: '#92400E', header: '#D97706' },
+    'Delivered': { bg: '#ECFDF5', text: '#065F46', header: '#059669' },
+    'Cancelled': { bg: '#FEF2F2', text: '#991B1B', header: '#DC2626' }
+  };
+
+  const currentTheme = statusColors[status] || statusColors['Scheduled'];
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Delivery Update • ${order.orderId}</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #F8FAFC; color: #1E293B; margin: 0; padding: 24px; }
+        .card { max-width: 600px; margin: 0 auto; background: #FFFFFF; border-radius: 14px; border: 1px solid #E2E8F0; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
+        .header { background: ${currentTheme.header}; padding: 24px; color: #FFFFFF; }
+        .badge { display: inline-block; background: ${currentTheme.bg}; color: ${currentTheme.text}; font-size: 12px; font-weight: 800; padding: 4px 10px; border-radius: 6px; text-transform: uppercase; margin-bottom: 8px; }
+        .header h1 { margin: 0; font-size: 22px; font-weight: 700; color: #FFFFFF; }
+        .header p { margin: 6px 0 0 0; font-size: 13px; color: #E2E8F0; }
+        .content { padding: 24px; }
+        .info-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+        .info-table td { padding: 10px 12px; border-bottom: 1px solid #E2E8F0; font-size: 14px; }
+        .info-table td.label { font-weight: 600; color: #64748B; width: 38%; }
+        .info-table td.value { font-weight: 600; color: #0F172A; }
+        .eta-banner { background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 8px; padding: 14px; margin: 16px 0; display: flex; align-items: center; justify-content: space-between; }
+        .eta-title { font-size: 12px; font-weight: 700; color: #166534; text-transform: uppercase; }
+        .eta-value { font-size: 18px; font-weight: 800; color: #14532D; }
+        .qr-section { background: #F8FAFC; border: 1px dashed #CBD5E1; border-radius: 10px; padding: 16px; margin-top: 24px; text-align: center; }
+        .qr-text { font-size: 13px; font-weight: 700; color: #0C6054; margin-bottom: 6px; }
+        .qr-sub { font-size: 12px; color: #64748B; }
+        .footer { padding: 16px 24px; background: #F8FAFC; border-top: 1px solid #E2E8F0; font-size: 12px; color: #64748B; text-align: center; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="header">
+          <div class="badge">${status}</div>
+          <h1>Delivery Update: Order #${order.orderId}</h1>
+          <p>ReNu-Biome Precision Agricultural Nutrition</p>
+        </div>
+        <div class="content">
+          <p>Dear Valued Grower,</p>
+          <p>Your delivery status has been updated to: <strong>${status}</strong>.</p>
+
+          ${liveEta || order.estimatedArrival ? `
+          <div class="eta-banner">
+            <div>
+              <div class="eta-title">🚚 OptimoRoute Estimated Arrival</div>
+              <div class="eta-value">${liveEta || order.estimatedArrival}</div>
+            </div>
+            ${order.driverName ? `<div style="font-size: 13px; color: #166534; text-align: right;">Driver: <strong>${order.driverName}</strong></div>` : ''}
+          </div>
+          ` : ''}
+
+          <table class="info-table">
+            <tr>
+              <td class="label">Product / Blend</td>
+              <td class="value">${order.product || order.productName}</td>
+            </tr>
+            <tr>
+              <td class="label">Quantity</td>
+              <td class="value"><strong>${(order.deliveredGallons || order.gallons || 0).toLocaleString()} Gallons</strong></td>
+            </tr>
+            <tr>
+              <td class="label">Destination Ranch</td>
+              <td class="value">${order.ranchName || 'Ranch'}</td>
+            </tr>
+            <tr>
+              <td class="label">Destination Tank</td>
+              <td class="value">${order.tankName || 'Primary Fertigation Tank'}</td>
+            </tr>
+            <tr>
+              <td class="label">Delivery Window / Date</td>
+              <td class="value">${order.deliveryWindow || order.date}</td>
+            </tr>
+            ${order.completedTime ? `
+            <tr>
+              <td class="label">Completion Timestamp</td>
+              <td class="value">${order.completedTime}</td>
+            </tr>
+            ` : ''}
+          </table>
+
+          <div style="text-align: center; margin: 24px 0;">
+            <a href="${viewOrderUrl}" style="display: inline-block; background: #0C6054; color: #FFFFFF; font-weight: 700; font-size: 14px; padding: 12px 24px; border-radius: 8px; text-decoration: none;">
+              View Delivery in Portal
+            </a>
+          </div>
+
+          <div class="qr-section">
+            <div class="qr-text">📲 Scan to install the ReNu-Biome app</div>
+            <div class="qr-sub">Instant 1-tap access to live tank levels, delivery schedules & nutrient reports</div>
+            <div style="margin-top: 8px;">
+              <a href="${installUrl}" style="font-weight: 700; color: #0C6054; font-size: 13px;">${installUrl.replace(/^https?:\/\//, '')}</a>
+            </div>
+          </div>
+        </div>
+        <div class="footer">
+          ReNu-Biome Inc. · Support: support@renu-biome.com
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+      await transporter.sendMail({
+        from: `"ReNu-Biome Operations" <${process.env.SMTP_USER}>`,
+        to: customerEmail,
+        subject: `Delivery Update: Order #${order.orderId} is ${status}`,
+        html
+      });
+      console.log(`[Email Success] Sent status "${status}" email to: ${customerEmail}`);
+      return true;
+    } catch (e: any) {
+      console.warn(`[Email Warning] Could not send delivery status email:`, e.message);
+      return false;
+    }
+  } else {
+    console.log(`[Email Simulation] Sent status "${status}" to ${customerEmail} for order #${order.orderId}`);
+    return true;
+  }
+}
+
+/**
+ * Section A6.8 / 1.6: Admin notification when delivery is marked Delivered.
+ */
+export async function sendDeliveryCompletedEmailToAdmin(order: OrderItem, req?: any): Promise<boolean> {
+  const adminEmail = DISPATCH_NOTIFICATION_EMAIL;
+
+  const html = `
+    <div style="font-family: sans-serif; padding: 20px; color: #0F172A;">
+      <h2 style="color: #059669;">✅ Delivery Completed • Order #${order.orderId}</h2>
+      <p>Delivery has been marked complete and injected into ranch tank.</p>
+      <ul>
+        <li><strong>Customer:</strong> ${order.customerName || order.customerEmail}</li>
+        <li><strong>Product:</strong> ${order.product}</li>
+        <li><strong>Delivered Gallons:</strong> ${(order.deliveredGallons || order.gallons || 0).toLocaleString()} Gal</li>
+        <li><strong>Destination:</strong> ${order.ranchName} (${order.tankName})</li>
+        <li><strong>Completed At:</strong> ${order.completedTime || new Date().toISOString()}</li>
+        ${order.driverName ? `<li><strong>Driver:</strong> ${order.driverName}</li>` : ''}
+      </ul>
+      <p>Please upload or link QuickBooks invoice in Admin Console.</p>
+    </div>
+  `;
+
+  if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+      await transporter.sendMail({
+        from: `"ReNu-Biome System" <${process.env.SMTP_USER}>`,
+        to: adminEmail,
+        subject: `[Admin Alert] Delivery Completed: Order #${order.orderId} (${order.customerName || order.customerEmail})`,
+        html
+      });
+      return true;
+    } catch (e: any) {
+      console.warn('[Email Warning] Could not notify admin of delivery completion:', e.message);
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Section 3.5: Low-tank level alert email sent to office and customer.
+ */
+export async function sendLowTankAlertEmail(
+  tank: TankItem,
+  ranch: RanchItem,
+  customerEmail: string
+): Promise<boolean> {
+  const officeEmail = DISPATCH_NOTIFICATION_EMAIL;
+  const currentLevel = tank.levelPercent ?? 20;
+  const cap = tank.capacity || tank.capacityGallons || 3000;
+  const gallonsNeeded = cap - (tank.currentGallons || 0);
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 24px; color: #1E293B; background: #F8FAFC;">
+      <div style="max-width: 580px; margin: 0 auto; background: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+        <div style="background: #D97706; padding: 20px 24px; color: #FFFFFF;">
+          <h2 style="margin: 0; font-size: 20px;">⚠️ Low Tank Alert: ${tank.name}</h2>
+          <p style="margin: 4px 0 0 0; font-size: 13px; color: #FEF3C7;">Otodata Telemetry Automated Notice</p>
+        </div>
+        <div style="padding: 24px;">
+          <p>The tank monitor for <strong>${tank.name}</strong> on ranch <strong>${ranch.name}</strong> has dropped below its reorder threshold.</p>
+          <div style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 8px; padding: 16px; margin: 16px 0;">
+            <div style="font-size: 14px; margin-bottom: 6px;"><strong>Current Level:</strong> <span style="color: #D97706; font-weight: 800; font-size: 18px;">${currentLevel}%</span> (${(tank.currentGallons || 0).toLocaleString()} Gal)</div>
+            <div style="font-size: 14px; margin-bottom: 6px;"><strong>Tank Capacity:</strong> ${cap.toLocaleString()} Gallons</div>
+            <div style="font-size: 14px; margin-bottom: 6px;"><strong>Suggested Refill:</strong> ~${gallonsNeeded.toLocaleString()} Gallons</div>
+            <div style="font-size: 14px;"><strong>Estimated Days to Empty:</strong> ~${tank.daysToEmpty || 14} days</div>
+          </div>
+          <p>ReNu-Biome dispatch has scheduled bulk staging. To request an expedited injection or verify field access, contact <a href="mailto:support@renu-biome.com" style="color: #0C6054; font-weight: 700;">support@renu-biome.com</a>.</p>
+        </div>
+        <div style="padding: 16px; background: #F8FAFC; border-top: 1px solid #E2E8F0; font-size: 12px; color: #64748B; text-align: center;">
+          ReNu-Biome Automated Tank Telemetry System
+        </div>
+      </div>
+    </div>
+  `;
+
+  if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+      const recipients = [officeEmail];
+      if (customerEmail && customerEmail !== officeEmail) {
+        recipients.push(customerEmail);
+      }
+      await transporter.sendMail({
+        from: `"ReNu-Biome Telemetry" <${process.env.SMTP_USER}>`,
+        to: recipients.join(', '),
+        subject: `⚠️ Low Tank Alert: ${tank.name} on ${ranch.name} (${currentLevel}%)`,
+        html
+      });
+      console.log(`[Email Success] Sent low-tank alert for ${tank.name} to: ${recipients.join(', ')}`);
+      return true;
+    } catch (e: any) {
+      console.warn('[Email Warning] Could not send low-tank alert email:', e.message);
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Section 5.1: Customer submits lab sample -> notification email to office.
+ */
+export async function sendLabSampleReceivedEmailToOffice(
+  sample: LabSample,
+  customerName?: string
+): Promise<boolean> {
+  const officeEmail = DISPATCH_NOTIFICATION_EMAIL;
+
+  const html = `
+    <div style="font-family: sans-serif; padding: 20px; color: #0F172A;">
+      <h2 style="color: #0C6054;">🔬 New Lab Sample Submitted</h2>
+      <p>A customer has uploaded lab results awaiting agronomist review.</p>
+      <ul>
+        <li><strong>Customer:</strong> ${customerName || sample.customerEmail}</li>
+        <li><strong>Ranch:</strong> ${sample.ranchName}</li>
+        <li><strong>Block:</strong> ${sample.blockId}</li>
+        <li><strong>Sample Type:</strong> ${sample.sampleType}</li>
+        <li><strong>Sample Date:</strong> ${sample.sampleDate}</li>
+        <li><strong>Lab Name:</strong> ${sample.labName}</li>
+        ${sample.customerNotes ? `<li><strong>Notes:</strong> ${sample.customerNotes}</li>` : ''}
+        ${sample.pdfFileName ? `<li><strong>Attached File:</strong> ${sample.pdfFileName}</li>` : ''}
+      </ul>
+      <p>Log into Admin Console &rarr; Samples to review and generate recommendation.</p>
+    </div>
+  `;
+
+  if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+      await transporter.sendMail({
+        from: `"ReNu-Biome Agronomy" <${process.env.SMTP_USER}>`,
+        to: officeEmail,
+        subject: `[Sample Received] ${sample.sampleType} analysis for ${sample.ranchName} (${customerName || sample.customerEmail})`,
+        html
+      });
+      return true;
+    } catch (e: any) {
+      console.warn('[Email Warning] Failed to notify office of lab sample:', e.message);
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Section 5.4: Agronomist recommendation ready email to customer.
+ */
+export async function sendRecommendationReadyEmailToCustomer(
+  sample: LabSample,
+  recommendation: any,
+  customerEmail: string
+): Promise<boolean> {
+  if (!customerEmail) return false;
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 24px; color: #1E293B; background: #F8FAFC;">
+      <div style="max-width: 580px; margin: 0 auto; background: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0; overflow: hidden;">
+        <div style="background: #0C6054; padding: 20px 24px; color: #FFFFFF;">
+          <h2 style="margin: 0; font-size: 20px;">🌿 Agronomic Nutrition Recommendation Ready</h2>
+          <p style="margin: 4px 0 0 0; font-size: 13px; color: #CCFBF1;">ReNu-Biome Custom Recommendation</p>
+        </div>
+        <div style="padding: 24px;">
+          <p>Our agronomy team has completed analysis for your <strong>${sample.sampleType}</strong> results on <strong>${sample.ranchName} (${sample.blockId})</strong>.</p>
+          <div style="background: #F0FDFA; border: 1px solid #99F6E4; border-radius: 8px; padding: 16px; margin: 16px 0;">
+            <div style="font-weight: 700; color: #0C6054; margin-bottom: 8px;">Agronomist Summary:</div>
+            <div style="font-size: 14px; line-height: 1.5; color: #134E4A;">${recommendation.summary}</div>
+          </div>
+          <p>Log into your ReNu-Biome Grower Portal to view full nutrient chart, stage window, and applied formulations.</p>
+        </div>
+      </div>
+    </div>
+  `;
+
+  if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+      await transporter.sendMail({
+        from: `"ReNu-Biome Agronomy" <${process.env.SMTP_USER}>`,
+        to: customerEmail,
+        subject: `Nutrition Recommendation Ready: ${sample.ranchName} (${sample.blockId})`,
+        html
+      });
+      return true;
+    } catch (e: any) {
+      console.warn('[Email Warning] Could not send recommendation email:', e.message);
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Section 4.6: Program window opening reminder email to office.
+ */
+export async function sendProgramWindowReminderEmailToOffice(programs: any[]): Promise<boolean> {
+  const officeEmail = DISPATCH_NOTIFICATION_EMAIL;
+
+  const html = `
+    <div style="font-family: sans-serif; padding: 20px; color: #0F172A;">
+      <h2 style="color: #0C6054;">📅 Program Window Opening Reminder (Next 2 Weeks)</h2>
+      <p>The following ranches have nutrition programs scheduled to open within 14 days and remain in Planned status:</p>
+      <ul>
+        ${programs.map(p => `<li><strong>${p.ranchName || p.ranchId}</strong>: ${p.name} (${p.crop}, ${p.stageWindow})</li>`).join('')}
+      </ul>
+      <p>Please review and schedule tank deliveries accordingly in Admin Console.</p>
+    </div>
+  `;
+
+  if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+      await transporter.sendMail({
+        from: `"ReNu-Biome Operations" <${process.env.SMTP_USER}>`,
+        to: officeEmail,
+        subject: `[Program Reminder] ${programs.length} planned programs opening within 2 weeks`,
+        html
+      });
+      return true;
+    } catch (e: any) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Section A5.2: Admin customer creation invitation email with password set link.
+ */
+export async function sendNewUserInvitationEmail(user: any, resetUrl: string): Promise<boolean> {
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 24px; color: #1E293B; background: #F8FAFC;">
+      <div style="max-width: 540px; margin: 0 auto; background: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0; padding: 28px;">
+        <h2 style="color: #0C6054; margin-top: 0;">Welcome to ReNu-Biome Grower Portal</h2>
+        <p>Hello ${user.name || 'Grower'},</p>
+        <p>An authorized account has been created for you by ReNu-Biome administration. Use the secure link below to set your password and access your delivery tracking, tank telemetry, and nutrition programs:</p>
+        <div style="text-align: center; margin: 24px 0;">
+          <a href="${resetUrl}" style="background: #0C6054; color: #FFFFFF; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 700; display: inline-block;">
+            Set Your Password
+          </a>
+        </div>
+        <p style="font-size: 12px; color: #64748B;">This secure activation link will expire in 7 days.</p>
+      </div>
+    </div>
+  `;
+
+  if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+      await transporter.sendMail({
+        from: `"ReNu-Biome Accounts" <${process.env.SMTP_USER}>`,
+        to: user.email,
+        subject: `Welcome to ReNu-Biome: Set Your Portal Password`,
+        html
+      });
+      return true;
+    } catch (e: any) {
+      console.warn('[Email Warning] Failed to send user invitation email:', e.message);
+      return false;
+    }
+  }
+  return true;
 }

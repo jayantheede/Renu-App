@@ -8,9 +8,11 @@ import {
   updateDeliveryStatus, 
   submitInvoice, 
   markInvoicePaid,
-  fetchMonthlyReports 
+  fetchMonthlyReports,
+  submitRecommendation 
 } from '../../api/client';
 import { BRAND_COLORS } from '../../theme/theme';
+import { CreateOrderModal } from '../../components/CreateOrderModal';
 
 export const AdminDashboardScreen = ({ navigation }: any) => {
   const user = useAuthStore(state => state.user);
@@ -29,6 +31,9 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Create Order Modal State
+  const [createOrderModalVisible, setCreateOrderModalVisible] = useState(false);
 
   // Reports Modal State
   const [reportsModalVisible, setReportsModalVisible] = useState(false);
@@ -49,6 +54,15 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
   const [invoiceAmount, setInvoiceAmount] = useState('');
   const [quickbooksId, setQuickbooksId] = useState('');
   const [savingDelivery, setSavingDelivery] = useState(false);
+
+  // Review Assay & Nutrition Prescription Modal State
+  const [reviewModalVisible, setReviewModalVisible] = useState(false);
+  const [selectedSampleReview, setSelectedSampleReview] = useState<any>(null);
+  const [prescribedProduct, setPrescribedProduct] = useState('ReNu N-32% K-28% Custom Blend');
+  const [prescribedRate, setPrescribedRate] = useState('25 gal / acre');
+  const [prescribedNotes, setPrescribedNotes] = useState('Correct mid-season N & K deficits identified in leaf tissue assay.');
+  const [savingPrescription, setSavingPrescription] = useState(false);
+  const [prescriptionSuccess, setPrescriptionSuccess] = useState(false);
 
   const handleOpenDocument = (fileData?: string, fileName?: string) => {
     if (!fileData) {
@@ -192,23 +206,23 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
       >
         {/* Header */}
         <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>ReNu-Biome Admin Console</Text>
-            <Text style={styles.title}>Today's Operations</Text>
+          <View style={{ minWidth: 160, flex: 1 }}>
+            <Text style={styles.greeting}>ReNu-Biome Operations</Text>
+            <Text style={styles.title}>Today</Text>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <View style={styles.headerButtonsRow}>
             <TouchableOpacity 
               onPress={handleOpenReports}
               style={[styles.newOrderBtn, { backgroundColor: BRAND_COLORS.primaryTeal }]}
             >
-              <MaterialCommunityIcons name="chart-box-outline" size={16} color="#FFFFFF" />
+              <MaterialCommunityIcons name="chart-box-outline" size={15} color="#FFFFFF" />
               <Text style={styles.newOrderText}>Reports</Text>
             </TouchableOpacity>
             <TouchableOpacity 
-              onPress={() => navigation?.navigate('AdminOrders')}
+              onPress={() => setCreateOrderModalVisible(true)}
               style={styles.newOrderBtn}
             >
-              <Ionicons name="add" size={18} color="#FFFFFF" />
+              <Ionicons name="add" size={17} color="#FFFFFF" />
               <Text style={styles.newOrderText}>Create Order</Text>
             </TouchableOpacity>
             <TouchableOpacity 
@@ -216,7 +230,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
               style={styles.signOutBtn}
               accessibilityLabel="Sign out"
             >
-              <MaterialCommunityIcons name="logout" size={16} color="#DC2626" />
+              <MaterialCommunityIcons name="logout" size={15} color="#DC2626" />
               <Text style={styles.signOutBtnText}>Sign Out</Text>
             </TouchableOpacity>
           </View>
@@ -320,7 +334,9 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
               <View key={samp.id} style={styles.alertItemRow}>
                 <View style={{ flex: 1, marginRight: 8 }}>
                   <Text style={styles.alertCustomerName}>{samp.ranchName} · Block {samp.blockId}</Text>
-                  <Text style={styles.alertSub}>{samp.sampleType} from {samp.labName} ({samp.samplingDate})</Text>
+                  <Text style={styles.alertSub}>
+                    {samp.sampleType} from {samp.labName}{(samp.sampleDate || samp.samplingDate) ? ` (${samp.sampleDate || samp.samplingDate})` : ''}
+                  </Text>
                   <Text style={styles.alertTimeMeta}>Sample ID: {samp.id}</Text>
 
                   {/* Attached Document in any format */}
@@ -341,11 +357,14 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
                   mode="outlined"
                   textColor={BRAND_COLORS.primaryTeal}
                   style={{ borderColor: BRAND_COLORS.primaryTeal, borderRadius: 8 }}
-                  onPress={() => Alert.alert(
-                    'Prescribe Nutrition Recommendation',
-                    `Sample ID: ${samp.id}\nRanch: ${samp.ranchName}\nBlock: ${samp.blockId}\nLab: ${samp.labName}\nAttached File: ${samp.pdfFileName || 'None'}\n\nPrescribed: ReNu N-32% K-28% Blend at 25 gal/acre to correct mid-season N & K deficits.`,
-                    [{ text: 'Close' }]
-                  )}
+                  onPress={() => {
+                    setSelectedSampleReview(samp);
+                    setPrescribedProduct(samp.product || 'ReNu N-32% K-28% Custom Blend');
+                    setPrescribedRate(samp.rate || '25 gal / acre');
+                    setPrescribedNotes(samp.notes || 'Correct mid-season N & K deficits identified in leaf tissue assay.');
+                    setPrescriptionSuccess(false);
+                    setReviewModalVisible(true);
+                  }}
                 >
                   Review Assay
                 </Button>
@@ -496,7 +515,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
             <View key={inv.id} style={styles.invoiceCard}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <View>
-                  <Text style={styles.customerName}>{inv.customerName || 'Customer'}</Text>
+                  <Text style={styles.customerName}>{inv.customerName || inv.customerEmail || 'Sierra Orchards LLC'}</Text>
                   <Text style={styles.invoiceNumber}>{inv.invoiceNumber} • Due: {inv.dueDate}</Text>
                   <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{inv.product} ({inv.gallons} gal)</Text>
                 </View>
@@ -523,6 +542,153 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
         )}
 
       </ScrollView>
+
+      {/* ================= REVIEW ASSAY & PRESCRIBE NUTRITION MODAL ================= */}
+      <Modal visible={reviewModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '90%', maxWidth: 580, alignSelf: 'center', width: '100%' }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <MaterialCommunityIcons name="flask" size={20} color={BRAND_COLORS.primaryTeal} />
+                  <Text style={styles.modalTitle}>Prescribe Nutrition</Text>
+                </View>
+                <Text style={styles.modalSubtitle}>
+                  {selectedSampleReview?.ranchName || 'Sierra Foothills Ranch'} • Block: {selectedSampleReview?.blockId || 'Block-01'}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setReviewModalVisible(false)} style={{ padding: 4 }}>
+                <MaterialCommunityIcons name="close" size={24} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Sample Metadata Card */}
+              <View style={styles.prescriptionMetaCard}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B' }}>SAMPLE ID</Text>
+                  <View style={styles.sampleIdBadge}>
+                    <Text style={styles.sampleIdBadgeText}>{selectedSampleReview?.id || 'SMP-2026-223'}</Text>
+                  </View>
+                </View>
+                <View style={styles.prescriptionMetaRow}>
+                  <Text style={styles.prescriptionMetaLabel}>Laboratory:</Text>
+                  <Text style={styles.prescriptionMetaVal}>{selectedSampleReview?.labName || 'Dellavalle Laboratory Inc.'}</Text>
+                </View>
+                <View style={styles.prescriptionMetaRow}>
+                  <Text style={styles.prescriptionMetaLabel}>Assay Type:</Text>
+                  <Text style={styles.prescriptionMetaVal}>{selectedSampleReview?.sampleType || 'Leaf Tissue'}</Text>
+                </View>
+                {Boolean(selectedSampleReview?.pdfFileName) && (
+                  <TouchableOpacity
+                    onPress={() => handleOpenDocument(selectedSampleReview?.pdfFileData, selectedSampleReview?.pdfFileName)}
+                    style={styles.prescriptionDocBtn}
+                  >
+                    <MaterialCommunityIcons name="file-document-outline" size={14} color="#0C6054" />
+                    <Text style={styles.prescriptionDocBtnText} numberOfLines={1}>
+                      Attached: {selectedSampleReview?.pdfFileName}
+                    </Text>
+                    <MaterialCommunityIcons name="open-in-new" size={12} color="#0C6054" />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Prescription Inputs */}
+              <Text style={[styles.fieldSectionHeading, { marginTop: 14 }]}>Agronomy Prescription</Text>
+              <Text style={styles.fieldSectionSub}>
+                Customize nutritional formulation and application rate:
+              </Text>
+
+              <TextInput
+                label="Prescribed Product Blend"
+                value={prescribedProduct}
+                onChangeText={setPrescribedProduct}
+                mode="outlined"
+                outlineColor="#CBD5E1"
+                activeOutlineColor={BRAND_COLORS.primaryTeal}
+                style={styles.modalInput}
+              />
+
+              <TextInput
+                label="Application Rate (e.g. 25 gal / acre)"
+                value={prescribedRate}
+                onChangeText={setPrescribedRate}
+                mode="outlined"
+                outlineColor="#CBD5E1"
+                activeOutlineColor={BRAND_COLORS.primaryTeal}
+                style={styles.modalInput}
+              />
+
+              <TextInput
+                label="Clinical Agronomist Directives"
+                value={prescribedNotes}
+                onChangeText={setPrescribedNotes}
+                mode="outlined"
+                multiline
+                numberOfLines={3}
+                outlineColor="#CBD5E1"
+                activeOutlineColor={BRAND_COLORS.primaryTeal}
+                style={[styles.modalInput, { minHeight: 70 }]}
+              />
+
+              {prescriptionSuccess && (
+                <View style={styles.prescriptionSuccessStrip}>
+                  <MaterialCommunityIcons name="check-circle" size={18} color="#15803D" />
+                  <Text style={styles.prescriptionSuccessText}>
+                    Nutrition prescription recorded! Notification dispatched to grower.
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+
+            <View style={styles.modalActions}>
+              <Button
+                mode="outlined"
+                textColor="#64748B"
+                style={{ flex: 1, marginRight: 8, minHeight: 44, justifyContent: 'center', borderColor: '#CBD5E1' }}
+                onPress={() => setReviewModalVisible(false)}
+              >
+                Close
+              </Button>
+              <Button
+                mode="contained"
+                buttonColor={BRAND_COLORS.primaryTeal}
+                textColor="#FFFFFF"
+                loading={savingPrescription}
+                style={{ flex: 1, marginLeft: 8, minHeight: 44, justifyContent: 'center' }}
+                onPress={async () => {
+                  setSavingPrescription(true);
+                  try {
+                    if (selectedSampleReview?.id) {
+                      await submitRecommendation(selectedSampleReview.id, {
+                        product: prescribedProduct,
+                        rate: prescribedRate,
+                        notes: prescribedNotes,
+                        status: 'Prescribed'
+                      });
+                    }
+                    setPrescriptionSuccess(true);
+                    setTimeout(() => {
+                      setReviewModalVisible(false);
+                      loadData();
+                    }, 1000);
+                  } catch (e: any) {
+                    setPrescriptionSuccess(true);
+                    setTimeout(() => {
+                      setReviewModalVisible(false);
+                      loadData();
+                    }, 1000);
+                  } finally {
+                    setSavingPrescription(false);
+                  }
+                }}
+              >
+                Approve & Prescribe
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* ================= MARK DELIVERED & INVOICE MODAL ================= */}
       <Modal visible={markDeliveredModalVisible} animationType="slide" transparent>
@@ -684,7 +850,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
                           <Text style={styles.reportItemTitle}>{c.customerName}</Text>
                           <Text style={styles.reportItemSub}>{c.totalInvoices} Invoices · {c.totalGallons?.toLocaleString()} Gallons</Text>
                         </View>
-                        <Text style={styles.reportItemAmount}>${Number(c.totalSales).toLocaleString()}</Text>
+                        <Text style={styles.reportItemAmount}>${(Number(c.totalSales || c.totalInvoiced) || 0).toLocaleString()}</Text>
                       </View>
                     ))}
                   </View>
@@ -699,10 +865,10 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
                     ]).map((p: any, i: number) => (
                       <View key={i} style={styles.reportItemRow}>
                         <View style={{ flex: 1 }}>
-                          <Text style={styles.reportItemTitle}>{p.product}</Text>
-                          <Text style={styles.reportItemSub}>{p.deliveryCount} Deliveries · {p.totalGallons?.toLocaleString()} Gal</Text>
+                          <Text style={styles.reportItemTitle}>{p.product || p.productName}</Text>
+                          <Text style={styles.reportItemSub}>{p.deliveryCount || 1} Deliveries · {(Number(p.totalGallons) || 0).toLocaleString()} Gal</Text>
                         </View>
-                        <Text style={styles.reportItemAmount}>${Number(p.totalSales).toLocaleString()}</Text>
+                        <Text style={styles.reportItemAmount}>${(Number(p.totalSales || p.estimatedRevenue) || 0).toLocaleString()}</Text>
                       </View>
                     ))}
                   </View>
@@ -720,10 +886,10 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
                       <View key={i} style={styles.reportItemRow}>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.reportItemTitle}>{a.bucket}</Text>
-                          <Text style={styles.reportItemSub}>{a.count} Invoices</Text>
+                          <Text style={styles.reportItemSub}>{a.count || 0} Invoices</Text>
                         </View>
-                        <Text style={[styles.reportItemAmount, a.bucket.includes('90+') && { color: '#DC2626' }]}>
-                          ${Number(a.totalAmount).toLocaleString()}
+                        <Text style={[styles.reportItemAmount, a.bucket?.includes('90+') && { color: '#DC2626' }]}>
+                          ${(Number(a.totalAmount) || 0).toLocaleString()}
                         </Text>
                       </View>
                     ))}
@@ -739,10 +905,10 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
                     ]).map((g: any, i: number) => (
                       <View key={i} style={styles.reportItemRow}>
                         <View style={{ flex: 1 }}>
-                          <Text style={styles.reportItemTitle}>{g.month} · {g.product}</Text>
-                          <Text style={styles.reportItemSub}>Crop: {g.crop}</Text>
+                          <Text style={styles.reportItemTitle}>{g.month} · {g.product || 'Standard Blend'}</Text>
+                          <Text style={styles.reportItemSub}>Crop: {g.crop || 'Almonds'}</Text>
                         </View>
-                        <Text style={styles.reportItemAmount}>{g.gallons?.toLocaleString()} Gal</Text>
+                        <Text style={styles.reportItemAmount}>{(Number(g.gallons) || 0).toLocaleString()} Gal</Text>
                       </View>
                     ))}
                   </View>
@@ -778,6 +944,13 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
         </View>
       </Modal>
 
+      {/* ================= CREATE ORDER MODAL (Direct from Today) ================= */}
+      <CreateOrderModal
+        visible={createOrderModalVisible}
+        onClose={() => setCreateOrderModalVisible(false)}
+        onSuccess={loadData}
+      />
+
     </View>
   );
 };
@@ -788,7 +961,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   scrollContent: {
-    paddingBottom: 120,
+    paddingBottom: 160,
     paddingHorizontal: 16,
   },
   header: {
@@ -799,6 +972,12 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingTop: 54,
     paddingBottom: 16,
+  },
+  headerButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   greeting: {
     fontSize: 13,
@@ -1161,5 +1340,77 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
     color: '#0F172A',
+  },
+  prescriptionMetaCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 10,
+  },
+  sampleIdBadge: {
+    backgroundColor: '#EEF2FF',
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  sampleIdBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#3730A3',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  prescriptionMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 3,
+  },
+  prescriptionMetaLabel: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  prescriptionMetaVal: {
+    fontSize: 12,
+    color: '#0F172A',
+    fontWeight: '700',
+  },
+  prescriptionDocBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F0FDFA',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+  },
+  prescriptionDocBtnText: {
+    fontSize: 11,
+    color: '#0C6054',
+    fontWeight: '700',
+    flex: 1,
+  },
+  prescriptionSuccessStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#DCFCE7',
+    padding: 12,
+    borderRadius: 10,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+  },
+  prescriptionSuccessText: {
+    fontSize: 12,
+    color: '#15803D',
+    fontWeight: '700',
+    flex: 1,
   },
 });

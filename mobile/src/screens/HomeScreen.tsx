@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -9,40 +9,37 @@ import {
   Platform,
   ImageBackground,
   Image,
-  Modal,
   Linking,
 } from 'react-native';
-import { Text, Card, Chip, Divider, Button, ProgressBar } from 'react-native-paper';
+import { Text, Divider } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../store/useAuthStore';
-import { fetchRanches, fetchDeliveries, fetchInvoices, fetchPrograms } from '../api/client';
+import { fetchRanches, fetchDeliveries, fetchInvoices, fetchGrowerDashboard } from '../api/client';
 import { BRAND_COLORS } from '../theme/theme';
-import { InvoiceLogo } from '../components/InvoiceLogo';
-import { NotificationBellButton } from '../components/NotificationBellButton';
-import {
-  requestNotificationPermission,
-  sendTestNotification,
-  getNotificationPermission,
-  areNotificationsSupported
-} from '../utils/notifications';
+
+const STAGES = ['Bloom', 'Soil blends', 'Potassium', 'Hull split', 'Post-harvest'];
+const CURRENT_STAGE_IDX = 4; // Post-harvest
 
 export const HomeScreen = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
-  const customerName = user?.name || 'Sierra Agri Group';
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [ranches, setRanches] = useState<any[]>([]);
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [invoices, setInvoices] = useState<any[]>([]);
-  const [programs, setPrograms] = useState<any[]>([]);
-  const [supportModalVisible, setSupportModalVisible] = useState(false);
+  const [dashboardData, setDashboardData] = useState<any>(null);
+
+  // Compute first name from user name (e.g. "Maria Lopez" -> "Maria")
+  const rawName = user?.name || 'Maria Lopez';
+  const firstName = rawName.trim().split(' ')[0] || 'Maria';
+  const customerEntityName = (user as any)?.companyName || 'Sierra Orchards LLC';
 
   const handleSignOut = () => {
     if (Platform.OS === 'web') {
@@ -55,80 +52,67 @@ export const HomeScreen = () => {
     }
   };
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
-      const [rData, dData, iData, pData] = await Promise.all([
+      const [rData, dData, iData, dash] = await Promise.all([
         fetchRanches().catch(() => []),
         fetchDeliveries().catch(() => []),
         fetchInvoices().catch(() => []),
-        fetchPrograms().catch(() => []),
+        fetchGrowerDashboard().catch(() => null),
       ]);
 
       if (Array.isArray(rData)) setRanches(rData);
       if (Array.isArray(dData)) setDeliveries(dData);
       if (Array.isArray(iData)) setInvoices(iData);
-      if (Array.isArray(pData)) setPrograms(pData);
+      if (dash) setDashboardData(dash);
     } catch (e) {
-      console.warn('Dashboard load error:', e);
+      console.warn('HomeScreen data load error:', e);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const onRefresh = () => {
     setRefreshing(true);
     loadData();
   };
 
-  // Compute total acreage strictly from ranches (each ranch acreage is sum of blocks)
-  const totalComputedAcres = ranches.reduce((sum, r) => sum + (Number(r.ac) || 0), 0);
-  const totalBlocksCount = ranches.reduce((sum, r) => sum + ((r.blocks && r.blocks.length) || 0), 0);
-
-  // Deliveries sorting: upcoming first
-  const upcomingDeliveries = deliveries.filter(
-    (d: any) => d.status === 'Scheduled' || d.status === 'Out for delivery'
-  );
-
-  const openInvoices = invoices.filter(
-    (i: any) => i.status === 'Open' || i.status === 'Overdue'
-  );
-  const totalBalanceDue = openInvoices.reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
-
-  // Check all tanks across ranches for Otodata telemetry & low tank alert (< 25%)
-  const allTanks: any[] = [];
-  ranches.forEach((r) => {
-    if (Array.isArray(r.tanks)) {
-      r.tanks.forEach((t: any) => {
-        allTanks.push({
-          ...t,
-          ranchName: r.name,
-          ranchId: r.id,
-        });
-      });
-    }
-  });
-
-  const lowTanks = allTanks.filter((t) => typeof t.levelPercent === 'number' && t.levelPercent < 25);
-
-  // Active nutrition program
-  const activeProgram = programs.find((p: any) => p.status === 'active') || programs[0];
-
   const getGreeting = () => {
     const hour = new Date().getHours();
-    if (hour >= 4 && hour < 12) return 'Good morning';
-    if (hour >= 12 && hour < 17) return 'Good afternoon';
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
     return 'Good evening';
   };
+
+  // Find next delivery
+  const upcomingDeliveries = deliveries
+    .filter((d: any) => d.status === 'Scheduled' || d.status === 'Out for delivery')
+    .sort((a: any, b: any) => (a.status === 'Out for delivery' ? -1 : 1));
+  const nextDelivery = upcomingDeliveries[0] || null;
+
+  // Compute open invoices and balance due
+  const openInvoices = invoices.filter(
+    (i: any) => i.status === 'Open' || i.status === 'Overdue' || i.status === 'open' || i.status === 'overdue'
+  );
+  const balanceDue = openInvoices.reduce((sum: number, i: any) => sum + (Number(i.amount) || 0), 0);
+  const hasOverdue = openInvoices.some(
+    (i: any) => i.status === 'Overdue' || i.status === 'overdue'
+  );
+
+  const formattedDate = new Date().toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  });
 
   return (
     <View style={styles.container}>
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 110 + insets.bottom }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 160 + insets.bottom }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -138,495 +122,228 @@ export const HomeScreen = () => {
           />
         }
       >
-        {/* Edge-to-Edge Photo Header with Brand Overlay */}
+        {/* ================= 1. EDGE-TO-EDGE PHOTO HEADER ================= */}
         <View style={styles.headerWrapper}>
           <ImageBackground
-            source={require('../../assets/brand/bloom-photo-STOCK-NOT-LICENSED-replace-before-launch.jpg')}
+            source={require('../assets/brand/bloom-photo-STOCK-NOT-LICENSED-replace-before-launch.jpg')}
             style={styles.headerBackground}
             resizeMode="cover"
           >
             <LinearGradient
-              colors={['rgba(8, 63, 56, 0.94)', 'rgba(12, 96, 84, 0.88)']}
-              style={[styles.headerGradient, { paddingTop: Math.max(36, insets.top + 16) }]}
+              colors={['rgba(8, 63, 56, 0.92)', 'rgba(12, 96, 84, 0.84)']}
+              style={[styles.headerGradient, { paddingTop: Math.max(40, insets.top + 16) }]}
             >
-              {/* Top Navigation Row */}
+              {/* Top Navigation Row: Logo + Sign Out */}
               <View style={styles.headerTopRow}>
                 <Image
-                  source={require('../../assets/brand/renu-biome-logo-white-orange-for-dark-backgrounds.png')}
+                  source={require('../assets/brand/renu-biome-logo-white-orange-for-dark-backgrounds.png')}
                   style={styles.headerLogo}
                   resizeMode="contain"
                 />
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <NotificationBellButton color="#FFFFFF" badgeCount={2} />
-                  <TouchableOpacity
-                    onPress={handleSignOut}
-                    style={styles.signOutBtn}
-                    accessibilityLabel="Sign out"
-                  >
-                    <MaterialCommunityIcons name="logout" size={16} color="#FFFFFF" />
-                    <Text style={styles.signOutBtnText}>Sign Out</Text>
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity
+                  onPress={handleSignOut}
+                  style={styles.signOutBtn}
+                  accessibilityLabel="Sign out"
+                >
+                  <MaterialCommunityIcons name="logout" size={16} color="#FFFFFF" />
+                  <Text style={styles.signOutBtnText}>Sign Out</Text>
+                </TouchableOpacity>
               </View>
 
-              {/* Tagline */}
-              <View style={styles.taglineRow}>
-                <Text style={styles.taglineText}>Farmer's Pride</Text>
-                <View style={styles.stagePill}>
-                  <View style={styles.orangeDot} />
-                  <Text style={styles.stagePillText}>Bloom Stage</Text>
-                </View>
-              </View>
-
-              {/* Customer Greeting */}
+              {/* Greeting & Entity Name */}
               <View style={styles.greetingContainer}>
-                <Text style={styles.greetingPrefix}>{getGreeting()},</Text>
-                <Text style={styles.greetingTitle}>{customerName} 👋</Text>
-                <Text style={styles.greetingSubtext}>Welcome to your ReNu-Biome Farm Operations Portal</Text>
-              </View>
+                <Text style={styles.greetingTitle}>
+                  {getGreeting()}, {firstName}
+                </Text>
+                <Text style={styles.customerEntityText}>{customerEntityName}</Text>
 
-              {/* Weather & Location Strip */}
-              <View style={styles.weatherStrip}>
-                <MaterialCommunityIcons name="white-balance-sunny" size={16} color="#FDE047" />
-                <Text style={styles.weatherText}>72°F Sunny · Central Valley, California</Text>
+                {/* Single Frosted Stage Chip with Orange Dot (No Weather Chip) */}
+                <View style={styles.stageChip}>
+                  <View style={styles.orangeDot} />
+                  <Text style={styles.stageChipText}>Post-harvest, almond</Text>
+                </View>
               </View>
             </LinearGradient>
           </ImageBackground>
         </View>
 
-        {/* 4 Quick Actions Responsive Grid (2x2 on Mobile View) */}
-        <View style={styles.quickActionsContainer}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            activeOpacity={0.8}
-            onPress={() => navigation.navigate('Ranches', { openSampleModal: true })}
-          >
-            <View style={[styles.actionIconBox, { backgroundColor: '#F0FDFA' }]}>
-              <MaterialCommunityIcons name="flask-outline" size={22} color={BRAND_COLORS.primaryTeal} />
-            </View>
-            <Text style={styles.actionLabel}>Send Lab Results</Text>
-            <Text style={styles.actionSubLabel}>Assays & Samples</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.actionButton}
-            activeOpacity={0.8}
-            onPress={() => navigation.navigate('Deliveries')}
-          >
-            <View style={[styles.actionIconBox, { backgroundColor: '#FFF7ED' }]}>
-              <MaterialCommunityIcons name="truck-delivery-outline" size={22} color={BRAND_COLORS.accentOrange} />
-            </View>
-            <Text style={styles.actionLabel}>View Deliveries</Text>
-            <Text style={styles.actionSubLabel}>OptimoRoute Live</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.actionButton}
-            activeOpacity={0.8}
-            onPress={() => navigation.navigate('Invoices')}
-          >
-            <View style={[styles.actionIconBox, { backgroundColor: '#EFF6FF' }]}>
-              <InvoiceLogo size={22} color="#2563EB" />
-            </View>
-            <Text style={styles.actionLabel}>View Invoices</Text>
-            <Text style={styles.actionSubLabel}>Statements & PDF</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.actionButton}
-            activeOpacity={0.8}
-            onPress={() => setSupportModalVisible(true)}
-          >
-            <View style={[styles.actionIconBox, { backgroundColor: '#ECFDF5' }]}>
-              <MaterialCommunityIcons name="headset" size={22} color="#059669" />
-            </View>
-            <Text style={styles.actionLabel}>Contact Support</Text>
-            <Text style={styles.actionSubLabel}>Agronomy Team</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Otodata Low Tank Alert (Threshold < 25%) */}
-        {lowTanks.length > 0 && (
-          <View style={styles.tankAlertCard}>
-            <View style={styles.tankAlertHeader}>
-              <MaterialCommunityIcons name="alert-circle" size={22} color="#DC2626" />
-              <Text style={styles.tankAlertTitle}>Low Tank Telemetry Alert</Text>
-            </View>
-            {lowTanks.map((tank) => (
-              <View key={tank.id} style={styles.tankAlertItem}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.tankAlertName}>
-                    {tank.name} · {tank.ranchName}
-                  </Text>
-                  <Text style={styles.tankAlertDetails}>
-                    Level: <Text style={{ fontWeight: '700', color: '#DC2626' }}>{tank.levelPercent}%</Text> ({tank.currentGallons} of {tank.capacityGallons} gal)
-                  </Text>
-                  <Text style={styles.tankAlertSub}>
-                    Est. {tank.daysToEmpty || 14} days to empty based on 14-day average usage ({tank.usageRate14d || 320} gal/wk)
-                  </Text>
-                </View>
-                <Button
-                  mode="contained"
-                  buttonColor={BRAND_COLORS.accentOrange}
-                  textColor="#FFFFFF"
-                  style={{ borderRadius: 8 }}
-                  onPress={() => {
-                    Alert.alert(
-                      'Request Tank Refill',
-                      `Would you like to schedule an in-app refill for ${tank.name} (${tank.ranchName || 'Ranch'}) or call dispatch directly?`,
-                      [
-                        { text: 'Cancel', style: 'cancel' },
-                        {
-                          text: 'Order Refill',
-                          onPress: () => navigation.navigate('Deliveries', {
-                            autoOpenOrder: true,
-                            prefillRanchId: tank.ranchId,
-                            prefillTankId: tank.id,
-                            prefillProduct: tank.currentProduct || 'ReNu N-CARE 32-0-0',
-                          }),
-                        },
-                        {
-                          text: 'Call Dispatch',
-                          onPress: () => Linking.openURL('tel:5595550199').catch(() => {}),
-                        },
-                      ]
-                    );
-                  }}
-                >
-                  Refill
-                </Button>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Active Nutrition Program Progress Card */}
-        {activeProgram && (
-          <TouchableOpacity
-            style={styles.programCard}
-            activeOpacity={0.9}
-            onPress={() => navigation.navigate('Ranches')}
-          >
-            <View style={styles.programHeaderRow}>
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                  <MaterialCommunityIcons name="leaf-circle-outline" size={18} color={BRAND_COLORS.primaryTeal} />
-                  <Text style={styles.programBadge}>ANNUAL NUTRITION PROGRAM</Text>
-                </View>
-                <Text style={styles.programTitle}>{activeProgram.name || '2027 Almond Nutrition Program'}</Text>
-                <Text style={styles.programCrop}>
-                  Crop: {activeProgram.crop || 'Almonds'} · {totalComputedAcres.toLocaleString()} Total Planted Acres
-                </Text>
-              </View>
-              <Chip style={styles.activeChip} textStyle={styles.activeChipText} compact>
-                Active
-              </Chip>
+        {/* Container for Overlapping Content */}
+        <View style={styles.bodyWrapper}>
+          {/* ================= 2. SEASON CARD (Overlapping Header) ================= */}
+          <View style={styles.seasonCard}>
+            <View style={styles.seasonTitleRow}>
+              <Text style={styles.seasonTitle}>Season 2026, almond</Text>
+              <Text style={styles.seasonDate}>{formattedDate}</Text>
             </View>
 
-            <Divider style={{ marginVertical: 12 }} />
-
-            <View style={styles.progressSection}>
-              <View style={styles.progressRow}>
-                <Text style={styles.progressLabel}>Season Deliveries Progress</Text>
-                <Text style={styles.progressPercent}>
-                  {Math.round(
-                    ((activeProgram.deliveredGallons || 4800) / (activeProgram.plannedGallons || 28000)) * 100
-                  )}%
-                </Text>
-              </View>
-              <ProgressBar
-                progress={
-                  (activeProgram.deliveredGallons || 4800) / (activeProgram.plannedGallons || 28000)
-                }
-                color={BRAND_COLORS.primaryTeal}
-                style={styles.progressBar}
-              />
-              <View style={styles.progressMetaRow}>
-                <Text style={styles.progressMeta}>
-                  {(activeProgram.deliveredGallons || 4800).toLocaleString()} / {(activeProgram.plannedGallons || 28000).toLocaleString()} Gallons
-                </Text>
-                <Text style={styles.progressMeta}>
-                  Units Applied: 12.4 lb N/ac · 8.6 lb K2O/ac
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.programFooterRow}>
-              <Text style={styles.programLink}>View Ranches & Stage Windows →</Text>
-            </View>
-          </TouchableOpacity>
-        )}
-
-        {/* Quick Stat Cards */}
-        <View style={styles.statsGrid}>
-          <TouchableOpacity
-            style={styles.statCard}
-            activeOpacity={0.8}
-            onPress={() => navigation.navigate('Ranches')}
-          >
-            <View style={[styles.statIconBox, { backgroundColor: '#F0FDFA' }]}>
-              <MaterialCommunityIcons name="sprout" size={24} color={BRAND_COLORS.primaryTeal} />
-            </View>
-            <Text style={styles.statValue}>
-              {totalComputedAcres > 0 ? `${totalComputedAcres.toLocaleString()} ac` : '1,400 ac'}
-            </Text>
-            <Text style={styles.statLabel}>Planted Acres</Text>
-            <Text style={styles.statSub}>
-              {ranches.length || 2} Ranches · {totalBlocksCount || 9} Blocks
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.statCard}
-            activeOpacity={0.8}
-            onPress={() => navigation.navigate('Deliveries')}
-          >
-            <View style={[styles.statIconBox, { backgroundColor: '#FFF7ED' }]}>
-              <MaterialCommunityIcons name="truck-delivery-outline" size={24} color={BRAND_COLORS.accentOrange} />
-            </View>
-            <Text style={styles.statValue}>{upcomingDeliveries.length || 2}</Text>
-            <Text style={styles.statLabel}>Active Deliveries</Text>
-            <Text style={styles.statSub}>
-              {upcomingDeliveries.some((d: any) => d.status === 'Out for delivery')
-                ? 'Driver en route with ETA'
-                : 'Scheduled on calendar'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Quick Launch Capabilities (Deferred Features) */}
-        <View style={styles.quickCapabilitiesRow}>
-          <TouchableOpacity
-            style={styles.capabilityPill}
-            onPress={() => navigation.navigate('Deliveries')}
-          >
-            <View style={[styles.capabilityIconCircle, { backgroundColor: '#F0FDFA' }]}>
-              <MaterialCommunityIcons name="cart-plus" size={18} color="#0C6054" />
-            </View>
-            <Text style={styles.capabilityPillTitle}>Order Refill</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.capabilityPill}
-            onPress={() => navigation.navigate('Messages')}
-          >
-            <View style={[styles.capabilityIconCircle, { backgroundColor: '#EFF6FF' }]}>
-              <MaterialCommunityIcons name="chat-processing" size={18} color="#2563EB" />
-            </View>
-            <Text style={styles.capabilityPillTitle}>Dispatch Chat</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.capabilityPill}
-            onPress={() => navigation.navigate('More')}
-          >
-            <View style={[styles.capabilityIconCircle, { backgroundColor: '#F0FDF4' }]}>
-              <MaterialCommunityIcons name="sprout" size={18} color="#15803D" />
-            </View>
-            <Text style={styles.capabilityPillTitle}>ILRP Nitrogen</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.capabilityPill}
-            onPress={() => navigation.navigate('More')}
-          >
-            <View style={[styles.capabilityIconCircle, { backgroundColor: '#FFF7ED' }]}>
-              <MaterialCommunityIcons name="file-document-outline" size={18} color="#EA580C" />
-            </View>
-            <Text style={styles.capabilityPillTitle}>Labels & SDS</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Invoices Balance Alert Card */}
-        <TouchableOpacity
-          style={styles.invoiceBanner}
-          activeOpacity={0.85}
-          onPress={() => navigation.navigate('Invoices')}
-        >
-          <View style={styles.bannerLeft}>
-            <InvoiceLogo size={28} color={BRAND_COLORS.accentOrange} />
-            <View style={{ marginLeft: 12 }}>
-              <Text style={styles.bannerTitle}>Account Invoices</Text>
-              <Text style={styles.bannerSubtitle}>
-                {openInvoices.length} outstanding invoice{openInvoices.length === 1 ? '' : 's'}
-              </Text>
-            </View>
-          </View>
-          <View style={styles.bannerRight}>
-            <Text style={styles.bannerAmount}>
-              ${totalBalanceDue > 0 ? totalBalanceDue.toLocaleString() : '28,400'}
-            </Text>
-            <Text style={styles.bannerStatus}>
-              {openInvoices.some((i: any) => i.status === 'Overdue') ? 'Payment Due' : 'Current'}
-            </Text>
-          </View>
-        </TouchableOpacity>
-
-        {/* Upcoming Deliveries Schedule Section */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Delivery Operations</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Deliveries')}>
-            <Text style={styles.sectionLink}>View All ({deliveries.length})</Text>
-          </TouchableOpacity>
-        </View>
-
-        {upcomingDeliveries.length === 0 ? (
-          <Card style={styles.emptyCard}>
-            <Card.Content style={styles.emptyContent}>
-              <MaterialCommunityIcons name="calendar-check" size={36} color="#94A3B8" />
-              <Text style={styles.emptyTitle}>No Deliveries Scheduled</Text>
-              <Text style={styles.emptyDesc}>
-                Contact ReNu-Biome office to schedule your next tank refill.
-              </Text>
-            </Card.Content>
-          </Card>
-        ) : (
-          upcomingDeliveries.slice(0, 3).map((item: any) => {
-            const isEnRoute = item.status === 'Out for delivery';
-
-            return (
-              <TouchableOpacity
-                key={item.id || item.orderId}
-                style={styles.deliveryCard}
-                activeOpacity={0.85}
-                onPress={() => navigation.navigate('Deliveries')}
-              >
-                <View style={styles.deliveryCardHeader}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <MaterialCommunityIcons
-                      name={isEnRoute ? 'truck-fast' : 'clock-outline'}
-                      size={20}
-                      color={isEnRoute ? BRAND_COLORS.accentOrange : BRAND_COLORS.primaryTeal}
-                      style={{ marginRight: 8 }}
+            {/* 5-Segment Stage Strip */}
+            <View style={styles.stageStripContainer}>
+              {STAGES.map((s, i) => {
+                const isPast = i < CURRENT_STAGE_IDX;
+                const isCurrent = i === CURRENT_STAGE_IDX;
+                return (
+                  <View key={s} style={styles.stageSegmentWrap}>
+                    <View
+                      style={[
+                        styles.stageBar,
+                        isPast && styles.stageBarPast,
+                        isCurrent && styles.stageBarCurrent,
+                      ]}
                     />
-                    <Text style={styles.deliveryOrderNumber}>#{item.orderId}</Text>
-                  </View>
-                  <Chip
-                    style={isEnRoute ? styles.enRouteChip : styles.scheduledChip}
-                    textStyle={isEnRoute ? styles.enRouteChipText : styles.scheduledChipText}
-                    compact
-                  >
-                    {item.status}
-                  </Chip>
-                </View>
-
-                <View style={styles.deliveryCardBody}>
-                  <Text style={styles.deliveryProduct}>{item.product}</Text>
-                  <Text style={styles.deliveryQuantity}>{item.gallons?.toLocaleString()} Gallons</Text>
-                </View>
-
-                {isEnRoute && item.optimoroute && (
-                  <View style={styles.optimoRouteBanner}>
-                    <MaterialCommunityIcons name="navigation-variant" size={16} color="#0369A1" />
-                    <Text style={styles.optimoRouteText}>
-                      Driver: <Text style={{ fontWeight: '700' }}>{item.optimoroute.driverName || 'Dave Miller'}</Text> · Live ETA: <Text style={{ fontWeight: '700' }}>{item.optimoroute.eta || '2:15 PM'}</Text>
+                    <Text
+                      numberOfLines={1}
+                      style={[
+                        styles.stageBarLabel,
+                        isCurrent && styles.stageBarLabelCurrent,
+                      ]}
+                    >
+                      {s}
                     </Text>
                   </View>
-                )}
+                );
+              })}
+            </View>
 
-                <View style={styles.deliveryFooter}>
-                  <Text style={styles.deliveryRanchText}>
-                    <MaterialCommunityIcons name="map-marker-outline" size={14} color="#64748B" />{' '}
-                    {item.ranchName || 'Sierra Foothills Ranch'} · {item.tankName || 'Tank T-101'}
-                  </Text>
-                  <Text style={styles.deliveryDateText}>
-                    {item.deliveryWindow || item.date}
+            {/* Status Line */}
+            <Text style={styles.seasonStatusText}>
+              Post-harvest stage, almond. Deliveries and invoices below.
+            </Text>
+          </View>
+
+          {/* ================= 3. THIS WEEK SECTION ================= */}
+          <Text style={styles.sectionHeader}>THIS WEEK</Text>
+          <View style={styles.cardList}>
+            {/* Next Delivery Row */}
+            {nextDelivery ? (
+              <TouchableOpacity
+                style={styles.deliveryRow}
+                onPress={() => navigation.navigate('Deliveries')}
+                activeOpacity={0.7}
+              >
+                <View style={styles.rowLead}>
+                  <View
+                    style={[
+                      styles.statusDot,
+                      {
+                        backgroundColor:
+                          nextDelivery.status === 'Out for delivery' ? '#F07E42' : '#0C6054',
+                      },
+                    ]}
+                  />
+                  <View style={styles.rowTextContainer}>
+                    <Text style={styles.rowMainTitle}>
+                      {nextDelivery.status === 'Out for delivery' ? 'Arriving today: ' : 'Next delivery, ' + (nextDelivery.date || 'Sep 14') + ': '}
+                      <Text style={{ fontWeight: '800' }}>
+                        {(nextDelivery.gallons || 3770).toLocaleString()} gal {nextDelivery.productName || nextDelivery.product || 'Almond Post-Harvest'}
+                      </Text>
+                    </Text>
+                    <Text style={styles.rowSubTitle}>
+                      {nextDelivery.ranchName || 'Sierra Foothills Ranch'}, {nextDelivery.tankName || nextDelivery.tank || 'Tank 1'}
+                      {nextDelivery.deliveryWindow ? ` · ${nextDelivery.deliveryWindow}` : ''}
+                    </Text>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.deliveryRowEmpty}>
+                <View style={styles.rowTextContainer}>
+                  <Text style={styles.emptyTitle}>No deliveries scheduled</Text>
+                  <Text style={styles.emptySub}>Contact ReNu-Biome office to arrange one</Text>
+                </View>
+              </View>
+            )}
+
+            <Divider style={styles.rowDivider} />
+
+            {/* Balance Due Row */}
+            <TouchableOpacity
+              style={styles.balanceRow}
+              onPress={() => navigation.navigate('Invoices')}
+              activeOpacity={0.7}
+            >
+              <View style={styles.rowLead}>
+                <View style={styles.balanceIconWrap}>
+                  <MaterialCommunityIcons name="receipt-outline" size={20} color="#0C6054" />
+                </View>
+                <View style={styles.rowTextContainer}>
+                  <Text style={styles.rowMainTitle}>Balance due</Text>
+                  <Text style={styles.rowSubTitle}>
+                    {openInvoices.length} open {openInvoices.length === 1 ? 'invoice' : 'invoices'}
+                    {hasOverdue ? ', 1 overdue' : ''}
                   </Text>
                 </View>
-              </TouchableOpacity>
-            );
-          })
-        )}
-
-        {/* Planted Ranches Section */}
-        <View style={[styles.sectionHeader, { marginTop: 24 }]}>
-          <Text style={styles.sectionTitle}>Planted Ranches</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Ranches')}>
-            <Text style={styles.sectionLink}>View All Ranches</Text>
-          </TouchableOpacity>
-        </View>
-
-        {ranches.map((r: any) => (
-          <TouchableOpacity
-            key={r.id}
-            style={styles.ranchCard}
-            activeOpacity={0.85}
-            onPress={() => navigation.navigate('Ranches')}
-          >
-            <View style={styles.ranchHeader}>
-              <View>
-                <Text style={styles.ranchName}>{r.name}</Text>
-                <Text style={styles.ranchCounty}>{r.county} County, CA</Text>
               </View>
-              <View style={styles.ranchAcreageBadge}>
-                <Text style={styles.ranchAcreageNum}>{r.ac || 0}</Text>
-                <Text style={styles.ranchAcreageLabel}>Acres</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={styles.balanceAmountText}>
+                  ${balanceDue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                </Text>
+                <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
               </View>
-            </View>
-            <Divider style={{ marginVertical: 10 }} />
-            <View style={styles.ranchMetaRow}>
-              <Text style={styles.ranchMetaItem}>
-                {(r.blocks && r.blocks.length) || 0} Planted Blocks
-              </Text>
-              <Text style={styles.ranchMetaDot}>·</Text>
-              <Text style={styles.ranchMetaItem}>
-                {(r.tanks && r.tanks.length) || 0} Otodata Monitored Tanks
-              </Text>
-            </View>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+            </TouchableOpacity>
+          </View>
 
-      {/* Contact Support Modal */}
-      <Modal
-        visible={supportModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSupportModalVisible(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <MaterialCommunityIcons name="headset" size={24} color={BRAND_COLORS.primaryTeal} />
-              <Text style={styles.modalTitle}>ReNu-Biome Support</Text>
-            </View>
-            <Text style={styles.modalSubtitle}>
-              Our agronomy and operations teams are ready to assist with orders, tank refills, lab assays, and custom recommendations.
-            </Text>
+          {/* ================= 4. PLANTED RANCHES ================= */}
+          <Text style={styles.sectionHeader}>PLANTED RANCHES</Text>
+          <View style={styles.cardList}>
+            {ranches.map((r, idx) => {
+              const blockCount = (r.blocks && r.blocks.length) || 0;
+              const tankCount = (r.tanks && r.tanks.length) || (r.tankSetups && r.tankSetups.length) || 1;
+              const acres = r.ac || (r.blocks && r.blocks.reduce((s: number, b: any) => s + (Number(b.acreage) || 0), 0)) || 0;
 
+              return (
+                <React.Fragment key={r.id || idx}>
+                  <TouchableOpacity
+                    style={styles.ranchItemRow}
+                    onPress={() => navigation.navigate('Ranches')}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.rowLead}>
+                      <View style={styles.ranchIconWrap}>
+                        <MaterialCommunityIcons name="sprout" size={20} color="#0C6054" />
+                      </View>
+                      <View style={styles.rowTextContainer}>
+                        <Text style={styles.rowMainTitle}>{r.name}</Text>
+                        <Text style={styles.rowSubTitle}>
+                          {r.county || 'Central Valley'} · {acres.toLocaleString()} ac · {blockCount} blocks, {tankCount} {tankCount === 1 ? 'tank' : 'tanks'}
+                        </Text>
+                      </View>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                  </TouchableOpacity>
+                  {idx < ranches.length - 1 && <Divider style={styles.rowDivider} />}
+                </React.Fragment>
+              );
+            })}
+          </View>
+
+          {/* ================= 5. QUICK ACTIONS ================= */}
+          <Text style={styles.sectionHeader}>QUICK ACTIONS</Text>
+          <View style={styles.quickActionsGrid}>
             <TouchableOpacity
-              style={styles.contactItem}
-              onPress={() => Linking.openURL('tel:5595550199').catch(() => {})}
+              style={styles.actionPillBtn}
+              onPress={() =>
+                Linking.openURL(
+                  'mailto:support@renu-biome.com?subject=ReNu-Biome%20Support%20Request'
+                ).catch(() => {})
+              }
+              activeOpacity={0.8}
             >
-              <MaterialCommunityIcons name="phone" size={20} color={BRAND_COLORS.primaryTeal} />
-              <View style={{ marginLeft: 12 }}>
-                <Text style={styles.contactLabel}>Operations & Dispatch Phone</Text>
-                <Text style={styles.contactValue}>(559) 555-0199</Text>
-              </View>
+              <MaterialCommunityIcons name="email-outline" size={18} color="#0C6054" />
+              <Text style={styles.actionPillText}>Email ReNu-Biome</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.contactItem}
-              onPress={() => Linking.openURL('mailto:support@renu-biome.com').catch(() => {})}
+              style={styles.actionPillBtn}
+              onPress={() => navigation.navigate('Deliveries')}
+              activeOpacity={0.8}
             >
-              <MaterialCommunityIcons name="email-outline" size={20} color={BRAND_COLORS.primaryTeal} />
-              <View style={{ marginLeft: 12 }}>
-                <Text style={styles.contactLabel}>Grower Support Email</Text>
-                <Text style={styles.contactValue}>support@renu-biome.com</Text>
-              </View>
+              <MaterialCommunityIcons name="truck-delivery-outline" size={18} color="#0C6054" />
+              <Text style={styles.actionPillText}>Deliveries</Text>
             </TouchableOpacity>
-
-            <Button
-              mode="contained"
-              buttonColor={BRAND_COLORS.primaryTeal}
-              onPress={() => setSupportModalVisible(false)}
-              style={{ marginTop: 20, borderRadius: 8 }}
-            >
-              Close
-            </Button>
           </View>
         </View>
-      </Modal>
+      </ScrollView>
     </View>
   );
 };
@@ -637,653 +354,281 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   scrollContent: {
-    paddingBottom: 110,
+    paddingBottom: 160,
   },
   headerWrapper: {
     width: '100%',
     overflow: 'hidden',
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
   },
   headerBackground: {
     width: '100%',
+    minHeight: 210,
   },
   headerGradient: {
-    paddingHorizontal: 20,
-    paddingTop: 36,
-    paddingBottom: 24,
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingBottom: 42,
   },
   headerTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   headerLogo: {
-    width: 170,
-    height: 48,
+    width: 140,
+    height: 38,
   },
   signOutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
   },
   signOutBtnText: {
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '600',
   },
-  taglineRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  taglineText: {
-    color: '#E0EDE9',
-    fontStyle: 'italic',
-    fontSize: 14,
-  },
-  stagePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 12,
-  },
-  orangeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: BRAND_COLORS.accentOrange,
-  },
-  stagePillText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
   greetingContainer: {
-    marginBottom: 10,
-  },
-  greetingPrefix: {
-    color: '#A7F3D0',
-    fontSize: 14,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-  },
-  greetingTitle: {
-    color: '#FFFFFF',
-    fontSize: 24,
-    fontWeight: '800',
-    marginTop: 2,
-    marginBottom: 2,
-  },
-  greetingSubtext: {
-    color: 'rgba(255, 255, 255, 0.85)',
-    fontSize: 12,
-    fontWeight: '400',
-  },
-  weatherStrip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  weatherText: {
-    color: 'rgba(255, 255, 255, 0.85)',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  quickActionsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    marginBottom: 16,
-    rowGap: 10,
-  },
-  actionButton: {
-    width: '48.5%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  actionIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  actionLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#1E293B',
-    textAlign: 'center',
-  },
-  actionSubLabel: {
-    fontSize: 10,
-    fontWeight: '500',
-    color: '#64748B',
-    textAlign: 'center',
-    marginTop: 2,
-  },
-  tankAlertCard: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-    backgroundColor: '#FEF2F2',
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#FCA5A5',
-  },
-  tankAlertHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 10,
-  },
-  tankAlertTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#B91C1C',
-  },
-  tankAlertItem: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginBottom: 6,
-  },
-  tankAlertName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  tankAlertDetails: {
-    fontSize: 13,
-    color: '#475569',
-    marginTop: 2,
-  },
-  tankAlertSub: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  programCard: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 3,
-  },
-  programHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  programBadge: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: BRAND_COLORS.primaryTeal,
-    letterSpacing: 1,
-  },
-  programTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  programCrop: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  activeChip: {
-    backgroundColor: '#F0FDFA',
-    borderColor: '#99F6E4',
-    borderWidth: 1,
-  },
-  activeChipText: {
-    color: BRAND_COLORS.primaryTeal,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  progressSection: {
-    marginTop: 2,
-  },
-  progressRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  progressLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#334155',
-  },
-  progressPercent: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: BRAND_COLORS.primaryTeal,
-  },
-  progressBar: {
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#E2E8F0',
-    marginBottom: 6,
-  },
-  progressMetaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  progressMeta: {
-    fontSize: 11,
-    color: '#64748B',
-  },
-  programFooterRow: {
-    marginTop: 12,
-    alignItems: 'flex-end',
-  },
-  programLink: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: BRAND_COLORS.primaryTeal,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    gap: 12,
-    marginBottom: 16,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  statIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 2,
-  },
-  statLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  statSub: {
-    fontSize: 11,
-    color: '#94A3B8',
     marginTop: 4,
   },
-  invoiceBanner: {
-    marginHorizontal: 16,
-    marginBottom: 16,
+  greetingTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.02,
+  },
+  customerEntityText: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.88)',
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  stageChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 255, 255, 0.20)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+  },
+  orangeDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#F07E42',
+  },
+  stageChipText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  bodyWrapper: {
+    paddingHorizontal: 16,
+    marginTop: -28,
+  },
+  seasonCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+    marginBottom: 20,
+  },
+  seasonTitleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    marginBottom: 12,
   },
-  bannerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  bannerTitle: {
+  seasonTitle: {
     fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  bannerSubtitle: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  bannerRight: {
-    alignItems: 'flex-end',
-  },
-  bannerAmount: {
-    fontSize: 18,
     fontWeight: '800',
     color: '#0F172A',
   },
-  bannerStatus: {
-    fontSize: 11,
+  seasonDate: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  stageStripContainer: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 12,
+  },
+  stageSegmentWrap: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  stageBar: {
+    height: 5,
+    width: '100%',
+    borderRadius: 3,
+    backgroundColor: '#E2E8F0',
+    marginBottom: 5,
+  },
+  stageBarPast: {
+    backgroundColor: '#99D5C9',
+  },
+  stageBarCurrent: {
+    backgroundColor: '#0C6054',
+  },
+  stageBarLabel: {
+    fontSize: 9.5,
+    color: '#94A3B8',
     fontWeight: '600',
-    color: BRAND_COLORS.accentOrange,
-    marginTop: 2,
+    textAlign: 'center',
+  },
+  stageBarLabelCurrent: {
+    color: '#0C6054',
+    fontWeight: '800',
+  },
+  seasonStatusText: {
+    fontSize: 12.5,
+    color: '#475569',
+    lineHeight: 18,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
   },
   sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    marginBottom: 10,
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748B',
+    letterSpacing: 0.8,
+    marginBottom: 8,
+    marginTop: 4,
   },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  sectionLink: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: BRAND_COLORS.primaryTeal,
-  },
-  deliveryCard: {
-    marginHorizontal: 16,
-    marginBottom: 12,
+  cardList: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 16,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    overflow: 'hidden',
     shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
     elevation: 2,
+    marginBottom: 20,
   },
-  deliveryCardHeader: {
+  deliveryRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    justifyContent: 'space-between',
+    padding: 14,
   },
-  deliveryOrderNumber: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
+  deliveryRowEmpty: {
+    padding: 14,
   },
-  scheduledChip: {
-    backgroundColor: '#F0FDFA',
-    borderColor: '#99F6E4',
-    borderWidth: 1,
-  },
-  scheduledChipText: {
-    color: BRAND_COLORS.primaryTeal,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  enRouteChip: {
-    backgroundColor: '#FFF7ED',
-    borderColor: '#FED7AA',
-    borderWidth: 1,
-  },
-  enRouteChipText: {
-    color: BRAND_COLORS.accentOrange,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  deliveryCardBody: {
+  rowLead: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
-  },
-  deliveryProduct: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1E293B',
     flex: 1,
     marginRight: 8,
   },
-  deliveryQuantity: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: BRAND_COLORS.primaryTeal,
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 10,
   },
-  optimoRouteBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#F0F9FF',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
+  rowTextContainer: {
+    flex: 1,
   },
-  optimoRouteText: {
-    fontSize: 12,
-    color: '#0369A1',
+  rowMainTitle: {
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: '#1E293B',
   },
-  deliveryFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    paddingTop: 8,
-  },
-  deliveryRanchText: {
+  rowSubTitle: {
     fontSize: 12,
     color: '#64748B',
-  },
-  deliveryDateText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  emptyCard: {
-    marginHorizontal: 16,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-  },
-  emptyContent: {
-    alignItems: 'center',
-    paddingVertical: 24,
+    marginTop: 2,
   },
   emptyTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#334155',
-    marginTop: 8,
-  },
-  emptyDesc: {
-    fontSize: 12,
-    color: '#64748B',
-    textAlign: 'center',
-    marginTop: 4,
-    maxWidth: 260,
-  },
-  ranchCard: {
-    marginHorizontal: 16,
-    marginBottom: 10,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  ranchHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  ranchName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  ranchCounty: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  ranchAcreageBadge: {
-    alignItems: 'flex-end',
-  },
-  ranchAcreageNum: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: BRAND_COLORS.primaryTeal,
-  },
-  ranchAcreageLabel: {
-    fontSize: 10,
+    fontSize: 13.5,
     fontWeight: '600',
     color: '#64748B',
   },
-  ranchMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  ranchMetaItem: {
+  emptySub: {
     fontSize: 12,
-    color: '#64748B',
-  },
-  ranchMetaDot: {
-    marginHorizontal: 8,
     color: '#94A3B8',
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modalCard: {
-    width: '100%',
-    maxWidth: 400,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    elevation: 10,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 8,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  modalSubtitle: {
-    fontSize: 13,
-    color: '#64748B',
-    marginBottom: 16,
-    lineHeight: 18,
-  },
-  contactItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  contactLabel: {
-    fontSize: 11,
-    color: '#64748B',
-  },
-  contactValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
     marginTop: 2,
   },
-  quickCapabilitiesRow: {
+  balanceRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    marginHorizontal: 16,
-    marginBottom: 16,
-    gap: 8,
+    padding: 14,
   },
-  capabilityPill: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 6,
+  balanceIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#F0FDFA',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
-  },
-  capabilityIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
     justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 6,
+    marginRight: 10,
   },
-  capabilityPillTitle: {
-    fontSize: 11,
+  balanceAmountText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  ranchItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+  },
+  ranchIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#F0FDFA',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  rowDivider: {
+    backgroundColor: '#F1F5F9',
+  },
+  quickActionsGrid: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+  },
+  actionPillBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: 'rgba(12, 96, 84, 0.20)',
+    borderRadius: 999,
+    paddingVertical: 12,
+    minHeight: 48,
+  },
+  actionPillText: {
+    fontSize: 13,
     fontWeight: '700',
-    color: '#334155',
-    textAlign: 'center',
+    color: '#0C6054',
   },
 });

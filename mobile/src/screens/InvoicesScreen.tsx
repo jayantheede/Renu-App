@@ -23,7 +23,7 @@ import {
   fetchQuickBooksStatus
 } from '../api/client';
 import { BRAND_COLORS } from '../theme/theme';
-import { printInvoiceDocument } from '../utils/printInvoice';
+import { printInvoiceDocument, printYearEndSummaryDocument } from '../utils/printInvoice';
 
 export const InvoicesScreen = () => {
   const insets = useSafeAreaInsets();
@@ -33,9 +33,9 @@ export const InvoicesScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'OPEN' | 'PAID'>('ALL');
 
-  // Deferred Launch Capabilities Flags
-  const [paymentsEnabled, setPaymentsEnabled] = useState(true);
-  const [quickbooksEnabled, setQuickbooksEnabled] = useState(true);
+  // Deferred Launch Capabilities Flags (hidden unless explicitly enabled)
+  const [paymentsEnabled, setPaymentsEnabled] = useState(false);
+  const [quickbooksEnabled, setQuickbooksEnabled] = useState(false);
 
   // Online Payment Modal State (Deferred Capability: payments)
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
@@ -74,8 +74,8 @@ export const InvoicesScreen = () => {
       if (Array.isArray(iData)) setInvoices(iData);
       if (Array.isArray(dData)) setDeliveries(dData);
       if (flagData) {
-        setPaymentsEnabled(Boolean(flagData.global?.payments ?? flagData.payments ?? true));
-        setQuickbooksEnabled(Boolean(flagData.global?.quickbooks ?? flagData.quickbooks ?? true));
+        setPaymentsEnabled(Boolean(flagData.global?.payments ?? flagData.payments));
+        setQuickbooksEnabled(Boolean(flagData.global?.quickbooks ?? flagData.quickbooks));
       }
     } catch (e) {
       console.warn('Invoices fetch error:', e);
@@ -182,6 +182,71 @@ export const InvoicesScreen = () => {
   const totalYearSpend = yearInvoices.reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0);
   const totalYearGallons = yearInvoices.reduce((sum, inv) => sum + (Number(inv.gallons) || 0), 0);
 
+  // Group delivered products for Year-End Summary (Screen 13)
+  const yearDeliveries = deliveries.filter((d: any) => {
+    const dDate = d.deliveredDate || d.date || '';
+    return dDate.startsWith(summaryYear) && (d.status === 'Delivered' || !d.status);
+  });
+  const productsMap: { [key: string]: { deliveries: number; gallons: number } } = {};
+  yearDeliveries.forEach((d: any) => {
+    const pName = (d.product || 'ReNu Formulation').replace('ReNu ', '');
+    const g = Number(d.deliveredGallons || d.gallons) || 0;
+    if (!productsMap[pName]) {
+      productsMap[pName] = { deliveries: 0, gallons: 0 };
+    }
+    productsMap[pName].deliveries += 1;
+    productsMap[pName].gallons += g;
+  });
+  const summaryProducts = Object.entries(productsMap).map(([name, stat]) => ({
+    name,
+    deliveries: stat.deliveries,
+    gallons: stat.gallons,
+  }));
+
+  const handleDownloadYearEndCSV = () => {
+    let csv = `Year-End Purchase Summary ${summaryYear} — Sierra Orchards LLC\n\n`;
+    csv += `PRODUCTS DELIVERED\nProduct,Deliveries,Total Gallons\n`;
+    summaryProducts.forEach((p) => {
+      csv += `"${p.name}",${p.deliveries},${p.gallons}\n`;
+    });
+    csv += `"Total",${yearDeliveries.length},${totalYearGallons}\n\n`;
+    csv += `INVOICES\nInvoice #,Date,Status,Paid Date,Amount\n`;
+    yearInvoices.forEach((i) => {
+      csv += `"${i.invoiceNumber}","${i.invoiceDate || i.date}","${i.status}","${i.paidDate || ''}",${i.amount}\n`;
+    });
+    csv += `"Total",,,,${totalYearSpend}\n`;
+
+    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ReNu-Biome_Year_End_Summary_${summaryYear}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  const handleDownloadYearEndPDF = () => {
+    printYearEndSummaryDocument({
+      year: summaryYear,
+      customerName: 'Sierra Orchards LLC',
+      products: summaryProducts.length > 0 ? summaryProducts : [
+        { name: 'N-32% K-28% Custom Blend', deliveries: 2, gallons: 1350 },
+        { name: '0-0-29 Potassium Acetate', deliveries: 1, gallons: 800 }
+      ],
+      invoices: yearInvoices.map((i) => ({
+        invoiceNumber: i.invoiceNumber,
+        date: i.invoiceDate || i.date,
+        status: i.status,
+        paidDate: i.paidDate,
+        amount: Number(i.amount) || 0,
+      })),
+      totalGallons: totalYearGallons || 2150,
+      totalAmount: totalYearSpend || 11350,
+    });
+  };
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -257,7 +322,7 @@ export const InvoicesScreen = () => {
       </View>
 
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 110 + insets.bottom }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 160 + insets.bottom }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={BRAND_COLORS.primaryTeal} />
@@ -759,10 +824,10 @@ export const InvoicesScreen = () => {
         </View>
       </Modal>
 
-      {/* Year-End Purchase Summary Modal (Section A3) */}
+      {/* Year-End Purchase Summary Modal (Screen 13 & Prototype scrYearEnd) */}
       <Modal visible={summaryModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { maxWidth: 540 }]}>
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalSub}>Annual Account Statement</Text>
@@ -776,62 +841,116 @@ export const InvoicesScreen = () => {
               </TouchableOpacity>
             </View>
 
+            {/* Year Selector Chips */}
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+              <TouchableOpacity
+                style={[styles.yearChip, summaryYear === '2026' && styles.yearChipActive]}
+                onPress={() => setSummaryYear('2026')}
+              >
+                <Text style={[styles.yearChipText, summaryYear === '2026' && styles.yearChipTextActive]}>2026</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.yearChip, summaryYear === '2025' && styles.yearChipActive]}
+                onPress={() => {
+                  Alert.alert('Notice', '2025 is before the portal; contact office at support@renu-biome.com');
+                }}
+              >
+                <Text style={[styles.yearChipText, summaryYear === '2025' && styles.yearChipTextActive]}>2025</Text>
+              </TouchableOpacity>
+            </View>
+
             <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
-              <View style={styles.summaryStatsRow}>
-                <View style={styles.summaryStatBox}>
-                  <Text style={styles.summaryStatLabel}>Total Season Spend</Text>
-                  <Text style={styles.summaryStatValue}>${totalYearSpend.toLocaleString()}</Text>
+              {/* Products Delivered Table */}
+              <Text style={styles.summarySectionTitle}>Products Delivered ({summaryYear})</Text>
+              <View style={styles.summaryTableCard}>
+                <View style={styles.summaryTableHeader}>
+                  <Text style={[styles.summaryTableCol, { flex: 2 }]}>Product</Text>
+                  <Text style={[styles.summaryTableCol, { flex: 1, textAlign: 'right' }]}>Deliveries</Text>
+                  <Text style={[styles.summaryTableCol, { flex: 1.2, textAlign: 'right' }]}>Gallons</Text>
                 </View>
-                <View style={styles.summaryStatBox}>
-                  <Text style={styles.summaryStatLabel}>Total Volume Delivered</Text>
-                  <Text style={styles.summaryStatValue}>{totalYearGallons.toLocaleString()} Gal</Text>
+                {summaryProducts.length === 0 ? (
+                  <View style={{ padding: 12 }}>
+                    <Text style={{ fontSize: 12, color: '#64748B', fontStyle: 'italic' }}>No products recorded for {summaryYear}.</Text>
+                  </View>
+                ) : (
+                  summaryProducts.map((p, pIdx) => (
+                    <View key={pIdx} style={styles.summaryTableRow}>
+                      <Text style={[styles.summaryTableCell, { flex: 2, fontWeight: '600' }]}>{p.name}</Text>
+                      <Text style={[styles.summaryTableCell, { flex: 1, textAlign: 'right', color: '#64748B' }]}>{p.deliveries}</Text>
+                      <Text style={[styles.summaryTableCell, { flex: 1.2, textAlign: 'right', fontWeight: '700', color: BRAND_COLORS.primaryTeal }]}>
+                        {p.gallons.toLocaleString()} gal
+                      </Text>
+                    </View>
+                  ))
+                )}
+                <View style={[styles.summaryTableRow, { backgroundColor: '#F8FAFC', borderTopWidth: 2, borderTopColor: '#0C6054' }]}>
+                  <Text style={[styles.summaryTableCell, { flex: 2, fontWeight: '800' }]}>Total</Text>
+                  <Text style={[styles.summaryTableCell, { flex: 1, textAlign: 'right', fontWeight: '800' }]}>{yearDeliveries.length}</Text>
+                  <Text style={[styles.summaryTableCell, { flex: 1.2, textAlign: 'right', fontWeight: '800', color: BRAND_COLORS.primaryTeal }]}>
+                    {totalYearGallons.toLocaleString()} gal
+                  </Text>
                 </View>
               </View>
 
-              <Text style={styles.summarySectionTitle}>Delivered Invoices Breakdown</Text>
-              {yearInvoices.map((inv: any) => (
-                <View key={inv.id || inv.invoiceNumber} style={styles.summaryItemRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.summaryItemNumber}>Invoice #{inv.invoiceNumber}</Text>
-                    <Text style={styles.summaryItemProduct}>{inv.product} ({inv.gallons?.toLocaleString()} Gal)</Text>
-                    <Text style={styles.summaryItemDate}>Date: {inv.invoiceDate || inv.date}</Text>
-                  </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={styles.summaryItemAmount}>${Number(inv.amount).toLocaleString()}</Text>
-                    <Chip
-                      style={{ backgroundColor: getStatusBadge(inv.status).bg }}
-                      textStyle={{ color: getStatusBadge(inv.status).color, fontSize: 10, fontWeight: '700' }}
-                      compact
-                    >
-                      {inv.status}
-                    </Chip>
-                  </View>
+              {/* Invoices Summary Table */}
+              <Text style={[styles.summarySectionTitle, { marginTop: 16 }]}>Invoices ({summaryYear})</Text>
+              <View style={styles.summaryTableCard}>
+                <View style={styles.summaryTableHeader}>
+                  <Text style={[styles.summaryTableCol, { flex: 1.5 }]}>Invoice</Text>
+                  <Text style={[styles.summaryTableCol, { flex: 1.2 }]}>Date</Text>
+                  <Text style={[styles.summaryTableCol, { flex: 1.2 }]}>Status</Text>
+                  <Text style={[styles.summaryTableCol, { flex: 1.3, textAlign: 'right' }]}>Amount</Text>
                 </View>
-              ))}
+                {yearInvoices.length === 0 ? (
+                  <View style={{ padding: 12 }}>
+                    <Text style={{ fontSize: 12, color: '#64748B', fontStyle: 'italic' }}>No invoices found for {summaryYear}.</Text>
+                  </View>
+                ) : (
+                  yearInvoices.map((inv: any) => (
+                    <View key={inv.id || inv.invoiceNumber} style={styles.summaryTableRow}>
+                      <Text style={[styles.summaryTableCell, { flex: 1.5, fontWeight: '700' }]}>{inv.invoiceNumber}</Text>
+                      <Text style={[styles.summaryTableCell, { flex: 1.2, color: '#64748B' }]}>{inv.invoiceDate || inv.date}</Text>
+                      <Text style={[styles.summaryTableCell, { flex: 1.2, color: inv.status === 'Paid' ? '#15803D' : '#D97706', fontWeight: '600' }]}>
+                        {inv.status === 'Paid' ? `Paid ${inv.paidDate || ''}` : inv.status}
+                      </Text>
+                      <Text style={[styles.summaryTableCell, { flex: 1.3, textAlign: 'right', fontWeight: '700' }]}>
+                        ${Number(inv.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </Text>
+                    </View>
+                  ))
+                )}
+                <View style={[styles.summaryTableRow, { backgroundColor: '#F8FAFC', borderTopWidth: 2, borderTopColor: '#0C6054' }]}>
+                  <Text style={[styles.summaryTableCell, { flex: 2.7, fontWeight: '800' }]}>Total</Text>
+                  <Text style={[styles.summaryTableCell, { flex: 1.2 }]}> </Text>
+                  <Text style={[styles.summaryTableCell, { flex: 1.3, textAlign: 'right', fontWeight: '800', color: BRAND_COLORS.primaryTeal }]}>
+                    ${totalYearSpend.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic', marginTop: 12, textAlign: 'center' }}>
+                Every delivery and invoice for the year, for your accountant. No unit prices are shown; amounts are the invoice totals.
+              </Text>
             </ScrollView>
 
-            <View style={styles.modalActionRow}>
+            <View style={[styles.modalActionRow, { marginTop: 16 }]}>
               <Button
                 mode="outlined"
                 icon="file-download-outline"
-                onPress={() => {
-                  Alert.alert(
-                    'Export Complete',
-                    `${summaryYear} Year-End Purchase Summary exported to CSV format with itemized invoice and delivery breakdown.`
-                  );
-                }}
-                style={styles.printBtn}
+                onPress={handleDownloadYearEndCSV}
+                style={[styles.printBtn, { borderColor: '#CBD5E1' }]}
                 textColor="#1E293B"
               >
-                Export CSV
+                Download CSV
               </Button>
               <Button
                 mode="contained"
                 buttonColor={BRAND_COLORS.primaryTeal}
-                onPress={() => setSummaryModalVisible(false)}
-                style={styles.closeBtn}
+                icon="printer"
+                onPress={handleDownloadYearEndPDF}
+                style={[styles.closeBtn, { flex: 1 }]}
               >
-                Done
+                Download PDF
               </Button>
             </View>
           </View>
@@ -1235,6 +1354,61 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#0F172A',
     marginBottom: 4,
+  },
+  yearChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  yearChipActive: {
+    backgroundColor: BRAND_COLORS.primaryTeal,
+    borderColor: BRAND_COLORS.primaryTeal,
+  },
+  yearChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  yearChipTextActive: {
+    color: '#FFFFFF',
+  },
+  summaryTableCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  summaryTableHeader: {
+    flexDirection: 'row',
+    backgroundColor: '#F0FDFA',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#CCFBF1',
+  },
+  summaryTableCol: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0C6054',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  summaryTableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  summaryTableCell: {
+    fontSize: 12,
+    color: '#1E293B',
   },
   // QuickBooks Sync Banner Styles
   qbBanner: {

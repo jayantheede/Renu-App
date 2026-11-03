@@ -503,15 +503,9 @@ export const MoreScreen = () => {
     }
   };
 
-  const handleCallSupport = () => {
-    Linking.openURL('tel:18005557368').catch(() => {
-      Alert.alert('Contact Support', 'Phone: (800) 555-RENU (7368)');
-    });
-  };
-
   const handleEmailSupport = () => {
-    Linking.openURL('mailto:support@renubiome.com?subject=Support%20Request').catch(() => {
-      Alert.alert('Contact Support', 'Email: support@renubiome.com');
+    Linking.openURL('mailto:support@renu-biome.com?subject=ReNu-Biome%20Portal%20Help%20Request').catch(() => {
+      Alert.alert('Contact Support', 'Email: support@renu-biome.com');
     });
   };
 
@@ -904,32 +898,44 @@ export const MoreScreen = () => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
-              {/* Direct Action: Call Support */}
-              <TouchableOpacity 
-                style={styles.helpActionCard}
-                onPress={handleCallSupport}
-              >
-                <MaterialCommunityIcons name="phone-outline" size={26} color="#15803D" />
-                <View style={{ marginLeft: 12, flex: 1 }}>
-                  <Text style={styles.helpActionTitle}>Call ReNu-Biome Office</Text>
-                  <Text style={styles.helpActionDesc}>Toll-Free: (800) 555-RENU (Mon-Fri 7am - 6pm)</Text>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 440 }}>
+              <View style={styles.helpGuideCard}>
+                <View style={styles.helpRow}>
+                  <Text style={styles.helpKey}>Email</Text>
+                  <Text style={styles.helpVal}>support@renu-biome.com</Text>
                 </View>
-                <MaterialCommunityIcons name="chevron-right" size={22} color="#15803D" />
-              </TouchableOpacity>
+                <Divider style={{ marginVertical: 8 }} />
+                <View style={styles.helpRow}>
+                  <Text style={styles.helpKey}>Orders</Text>
+                  <Text style={styles.helpVal}>Email the office with product, gallons, ranch and tank</Text>
+                </View>
+                <Divider style={{ marginVertical: 8 }} />
+                <View style={styles.helpRow}>
+                  <Text style={styles.helpKey}>Tank or delivery</Text>
+                  <Text style={styles.helpVal}>Email with ranch and tank; add a photo if needed</Text>
+                </View>
+                <Divider style={{ marginVertical: 8 }} />
+                <View style={styles.helpRow}>
+                  <Text style={styles.helpKey}>Invoices</Text>
+                  <Text style={styles.helpVal}>Email with the invoice number</Text>
+                </View>
+              </View>
 
-              {/* Direct Action: Email Support */}
               <TouchableOpacity 
-                style={styles.helpActionCard}
+                style={[styles.helpActionCard, { backgroundColor: '#0C6054', marginTop: 12 }]}
                 onPress={handleEmailSupport}
               >
-                <MaterialCommunityIcons name="email-outline" size={26} color="#0369A1" />
+                <MaterialCommunityIcons name="email-outline" size={22} color="#FFFFFF" />
                 <View style={{ marginLeft: 12, flex: 1 }}>
-                  <Text style={styles.helpActionTitle}>Email Support Desk</Text>
-                  <Text style={styles.helpActionDesc}>support@renubiome.com</Text>
+                  <Text style={[styles.helpActionTitle, { color: '#FFFFFF' }]}>Email ReNu-Biome Office</Text>
+                  <Text style={[styles.helpActionDesc, { color: 'rgba(255,255,255,0.85)' }]}>support@renu-biome.com</Text>
                 </View>
-                <MaterialCommunityIcons name="chevron-right" size={22} color="#0369A1" />
+                <MaterialCommunityIcons name="chevron-right" size={22} color="#FFFFFF" />
               </TouchableOpacity>
+
+              <Text style={{ fontSize: 12, color: '#64748B', marginTop: 10, textAlign: 'center' }}>
+                Everything goes to the office by email; there is no in-app chat.
+              </Text>
 
               <Text style={[styles.sectionSubtitle, { marginTop: 16, marginBottom: 8 }]}>Frequently Asked Questions</Text>
               
@@ -2131,5 +2137,29 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 4,
     lineHeight: 17,
+  },
+  helpGuideCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+  },
+  helpRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  helpKey: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    width: 100,
+  },
+  helpVal: {
+    fontSize: 12.5,
+    color: '#475569',
+    flex: 1,
+    textAlign: 'right',
   },
 });

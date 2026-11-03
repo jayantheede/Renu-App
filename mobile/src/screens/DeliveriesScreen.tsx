@@ -35,9 +35,9 @@ export const DeliveriesScreen = ({ route }: any) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Deferred Launch Flags
-  const [orderingEnabled, setOrderingEnabled] = useState(true);
-  const [optimorouteEnabled, setOptimorouteEnabled] = useState(true);
+  // Deferred Launch Flags (hidden unless explicitly enabled)
+  const [orderingEnabled, setOrderingEnabled] = useState(false);
+  const [optimorouteEnabled, setOptimorouteEnabled] = useState(false);
 
   // Order Placement Modal (Deferred: ordering)
   const [orderModalVisible, setOrderModalVisible] = useState(false);
@@ -76,7 +76,7 @@ export const DeliveriesScreen = ({ route }: any) => {
     setConfirmAddress(defaultAddr);
     setConfirmGateCode(delivery.gateCode || '');
     setConfirmContact(delivery.contactOnArrival || 'Ranch Foreman');
-    setConfirmPhone(delivery.contactPhone || '559-555-0199');
+    setConfirmPhone(delivery.contactPhone || '');
     setConfirmWindow(delivery.deliveryWindow || 'Tomorrow 8:00 AM - 12:00 PM');
     setConfirmNotes(delivery.notes || '');
     setConfirmModalVisible(true);
@@ -101,7 +101,7 @@ export const DeliveriesScreen = ({ route }: any) => {
       });
 
       setConfirmModalVisible(false);
-      const confirmAlert = `Delivery details confirmed! Dispatch team notified at eedevnsskjayanth.asa@gmail.com with your address and scheduling options.`;
+      const confirmAlert = `Delivery details confirmed! Dispatch team notified at support@renu-biome.com with your address and scheduling options.`;
       if (typeof window !== 'undefined' && window.alert) {
         window.alert(confirmAlert);
       } else {
@@ -142,8 +142,8 @@ export const DeliveriesScreen = ({ route }: any) => {
         setProducts(pData);
       }
       if (flagData) {
-        setOrderingEnabled(Boolean(flagData.global?.ordering ?? flagData.ordering ?? true));
-        setOptimorouteEnabled(Boolean(flagData.global?.optimoroute ?? flagData.optimoroute ?? true));
+        setOrderingEnabled(Boolean(flagData.global?.ordering ?? flagData.ordering));
+        setOptimorouteEnabled(Boolean(flagData.global?.optimoroute ?? flagData.optimoroute));
       }
     } catch (e) {
       console.warn('Deliveries fetch error:', e);
@@ -309,7 +309,7 @@ export const DeliveriesScreen = ({ route }: any) => {
       </View>
 
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 110 + insets.bottom }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 160 + insets.bottom }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={BRAND_COLORS.primaryTeal} />
@@ -579,15 +579,6 @@ export const DeliveriesScreen = ({ route }: any) => {
                       <Text style={styles.modalOptimoEta}>
                         Estimated Arrival: <Text style={{ fontWeight: '700', color: BRAND_COLORS.accentOrange }}>{selectedDelivery.optimoroute.eta || '2:15 PM'}</Text>
                       </Text>
-                      {selectedDelivery.optimoroute.driverPhone && (
-                        <TouchableOpacity
-                          style={styles.driverCallBtn}
-                          onPress={() => Linking.openURL(`tel:${selectedDelivery.optimoroute.driverPhone}`).catch(() => {})}
-                        >
-                          <MaterialCommunityIcons name="phone" size={14} color="#0369A1" />
-                          <Text style={styles.driverCallText}>Call Driver ({selectedDelivery.optimoroute.driverPhone})</Text>
-                        </TouchableOpacity>
-                      )}
                     </View>
                   )}
 
@@ -940,13 +931,13 @@ export const DeliveriesScreen = ({ route }: any) => {
                         style={{ flex: 1, backgroundColor: '#FFFFFF' }}
                       />
                       <TextInput
-                        label="Contact Phone *"
+                        label="Contact Phone"
                         value={confirmPhone}
                         onChangeText={setConfirmPhone}
                         mode="outlined"
                         outlineColor="#CBD5E1"
                         activeOutlineColor="#0C6054"
-                        placeholder="559-555-0199"
+                        placeholder="Contact Phone (optional)"
                         style={{ flex: 1, backgroundColor: '#FFFFFF' }}
                       />
                     </View>

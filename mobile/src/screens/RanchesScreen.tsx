@@ -59,12 +59,12 @@ const RanchesScreenContent = ({ route }: any) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Deferred Launch Flags
+  // Deferred Launch Flags (hidden unless explicitly enabled)
   const [flags, setFlags] = useState<any>({
-    map: true,
-    telemetry: true,
-    recommendations: true,
-    labResults: true,
+    map: false,
+    telemetry: false,
+    recommendations: false,
+    labResults: false,
   });
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [activeMapRanchId, setActiveMapRanchId] = useState<string>('');
@@ -182,10 +182,10 @@ const RanchesScreenContent = ({ route }: any) => {
       if (Array.isArray(sData)) setSamples(sData);
       if (fData) {
         setFlags({
-          map: Boolean(fData.global?.map ?? fData.map ?? true),
-          telemetry: Boolean(fData.global?.telemetry ?? fData.telemetry ?? true),
-          recommendations: Boolean(fData.global?.recommendations ?? fData.recommendations ?? true),
-          labResults: Boolean(fData.global?.labResults ?? fData.labResults ?? true),
+          map: Boolean(fData.global?.map ?? fData.map),
+          telemetry: Boolean(fData.global?.telemetry ?? fData.telemetry),
+          recommendations: Boolean(fData.global?.recommendations ?? fData.recommendations),
+          labResults: Boolean(fData.global?.labResults ?? fData.labResults),
         });
       }
 
@@ -629,9 +629,31 @@ const RanchesScreenContent = ({ route }: any) => {
   };
 
   const getDeliveriesForBlock = (blockId: string) => {
-    return deliveries.filter((d) => {
-      if (!d.blockIds || !Array.isArray(d.blockIds)) return false;
-      return d.blockIds.includes(blockId);
+    const norm = String(blockId).toLowerCase().trim();
+    return deliveries.filter((d: any) => {
+      // 1. Direct block ID check in array
+      if (Array.isArray(d.blockIds) && d.blockIds.length > 0) {
+        if (d.blockIds.some((b: string) => {
+          const bNorm = String(b).toLowerCase().trim();
+          return bNorm === norm || bNorm === 'all' || norm.includes(bNorm) || bNorm.includes(norm);
+        })) {
+          return true;
+        }
+      }
+      // 2. Comma-separated blocks string check
+      if (typeof d.blocks === 'string') {
+        const parts = d.blocks.split(',').map((p: string) => p.trim().toLowerCase());
+        if (parts.includes(norm) || parts.includes('all') || d.blocks.toLowerCase().includes(norm)) {
+          return true;
+        }
+      }
+      // 3. Fallback: if delivery is for this ranch and covers all blocks
+      if (selectedBlockRanch?.id && (d.ranchId === selectedBlockRanch.id || d.ranch === selectedBlockRanch.id)) {
+        if (!d.blockIds || d.blockIds.length === 0 || d.blocks === 'All' || d.blocks === 'all') {
+          return true;
+        }
+      }
+      return false;
     });
   };
 
@@ -642,7 +664,7 @@ const RanchesScreenContent = ({ route }: any) => {
           styles.scrollContent,
           {
             paddingTop: Math.max(16, insets.top + 8),
-            paddingBottom: Math.max(140, 140 + insets.bottom),
+            paddingBottom: Math.max(180, 180 + insets.bottom),
           },
         ]}
         showsVerticalScrollIndicator={false}
@@ -1069,106 +1091,53 @@ const RanchesScreenContent = ({ route }: any) => {
                   <View style={styles.tanksContainer}>
                     {tanks.map((tank: any, tIdx: number) => {
                       if (!tank) return null;
+                      const cap = Number(tank.capacityGallons || tank.capacity) || 2500;
+                      const loc = tank.location || 'at wellhead';
                       const level = Math.max(0, Math.min(100, Number(tank.levelPercent) || 68));
-                      const isLow = level < 25;
+                      const isLow = level <= (Number(tank.threshold) || 25);
                       const barColor = isLow ? '#DC2626' : level < 50 ? BRAND_COLORS.accentOrange : BRAND_COLORS.primaryTeal;
+                      const on = Boolean(flags?.telemetry);
 
                       return (
-                        <View key={tank.id || tIdx} style={[styles.tankCard, isLow && styles.tankCardLow]}>
+                        <View key={tank.id || tIdx} style={[styles.tankCard, isLow && on && styles.tankCardLow]}>
                           <View style={styles.tankCardHeader}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
-                              <View style={[styles.tankIconBox, { backgroundColor: isLow ? '#FEF2F2' : '#F0FDFA' }]}>
-                                <MaterialCommunityIcons
-                                  name="water-pump"
-                                  size={22}
-                                  color={isLow ? '#DC2626' : BRAND_COLORS.primaryTeal}
-                                />
+                            <View style={{ flex: 1, marginRight: 8 }}>
+                              <Text style={styles.tankName} numberOfLines={1}>{tank.name || `Tank #${tIdx + 1}`}</Text>
+                              <Text style={styles.tankLocation} numberOfLines={1}>
+                                {cap.toLocaleString()} gal, {loc}
+                              </Text>
+                            </View>
+                            {on && (
+                              <View style={{ alignItems: 'flex-end' }}>
+                                <Text style={[styles.tankLevelPct, { color: barColor }]}>{level}%</Text>
                               </View>
-                              <View style={{ marginLeft: 12, flex: 1 }}>
-                                <Text style={styles.tankName} numberOfLines={1}>{tank.name || `Tank #${tIdx + 1}`}</Text>
-                                <Text style={styles.tankLocation} numberOfLines={1}>
-                                  {tank.location || 'Injection Station'} · Cellular: <Text style={{ fontWeight: '600' }}>{tank.serial || 'OTO-99214'}</Text>
+                            )}
+                          </View>
+
+                          {on ? (
+                            <>
+                              <ProgressBar progress={level / 100} color={barColor} style={styles.tankProgressBar} />
+                              <View style={styles.telemetryMetricsRow}>
+                                <Text style={styles.telemetryMetricItem}>
+                                  {(Number(tank.currentGallons) || Math.round(cap * (level / 100))).toLocaleString()} gal as of {tank.readingTime || 'today'}
+                                </Text>
+                                <Text style={styles.telemetryMetricItem}>
+                                  {tank.usageRate14d || 480} gal/week, ~{tank.daysToEmpty || 18} days left
                                 </Text>
                               </View>
-                            </View>
-
-                            <View style={{ alignItems: 'flex-end' }}>
-                              <Text style={[styles.tankLevelPct, { color: barColor }]}>{level}%</Text>
-                              <Text style={styles.tankCapacityMeta}>
-                                {(Number(tank.currentGallons) || 3400).toLocaleString()} / {(Number(tank.capacityGallons || tank.capacity) || 5000).toLocaleString()} Gal
-                              </Text>
-                            </View>
-                          </View>
-
-                          {/* Level Progress Bar */}
-                          <ProgressBar progress={level / 100} color={barColor} style={styles.tankProgressBar} />
-
-                          {/* Telemetry Metrics Row */}
-                          <View style={styles.telemetryMetricsRow}>
-                            <Text style={styles.telemetryMetricItem}>
-                              Pressure: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{tank.pressurePsi || 42} PSI</Text>
+                              {isLow && (
+                                <View style={styles.tankLowAlertStrip}>
+                                  <MaterialCommunityIcons name="alert-circle" size={15} color="#DC2626" />
+                                  <Text style={styles.tankLowAlertText}>
+                                    Below the {tank.threshold || 25}% reorder level. ReNu-Biome has been told.
+                                  </Text>
+                                </View>
+                              )}
+                            </>
+                          ) : (
+                            <Text style={{ fontSize: 12, color: '#64748B', marginTop: 4, fontStyle: 'italic' }}>
+                              Level shown once the Otodata monitor is linked (Phase 2).
                             </Text>
-                            <Text style={styles.telemetryMetricItem}>
-                              14-Day Usage: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{tank.usageRate14d || 480} Gal/Wk</Text>
-                            </Text>
-                            <Text style={styles.telemetryMetricItem}>
-                              Days to Empty: <Text style={{ fontWeight: '700', color: isLow ? '#DC2626' : '#0F172A' }}>~{tank.daysToEmpty || 50} Days</Text>
-                            </Text>
-                          </View>
-
-                          {/* Tank Pills Summary (Medicines, Trackers, Reports) */}
-                          <View style={styles.tankSummaryPillsRow}>
-                            <View style={styles.tankPill}>
-                              <MaterialCommunityIcons name="pill" size={13} color="#0D9488" />
-                              <Text style={styles.tankPillText}>
-                                {tank.medicines?.length || 0} Medicines
-                              </Text>
-                            </View>
-                            <View style={styles.tankPill}>
-                              <MaterialCommunityIcons name="satellite-variant" size={13} color="#2563EB" />
-                              <Text style={styles.tankPillText}>
-                                {tank.trackers?.length || 1} Tracker
-                              </Text>
-                            </View>
-                            <View style={styles.tankPill}>
-                              <MaterialCommunityIcons name="file-document-outline" size={13} color="#7C3AED" />
-                              <Text style={styles.tankPillText}>
-                                {tank.reports?.length || 0} Reports
-                              </Text>
-                            </View>
-                          </View>
-
-                          {/* Tank Actions: Hub & Live Feed */}
-                          <View style={styles.tankActionsRow}>
-                            <TouchableOpacity
-                              style={styles.tankHubBtn}
-                              onPress={() => handleOpenTankHub(ranch, tank)}
-                            >
-                              <MaterialCommunityIcons name="layers-outline" size={14} color="#FFFFFF" />
-                              <Text style={styles.tankHubBtnText}>Tank Hub (Medicines, Trackers, Reports)</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                              style={styles.openTelemetryBtn}
-                              onPress={() => {
-                                setSelectedTelemetryTank(tank);
-                                setSelectedTelemetryRanch(ranch);
-                                setTelemetryModalVisible(true);
-                              }}
-                            >
-                              <MaterialCommunityIcons name="remote" size={14} color="#0C6054" />
-                              <Text style={styles.openTelemetryBtnText}>Live Feed</Text>
-                            </TouchableOpacity>
-                          </View>
-
-                          {/* Low-Tank Alert Action */}
-                          {isLow && (
-                            <View style={styles.tankLowAlertStrip}>
-                              <MaterialCommunityIcons name="alert-circle" size={16} color="#DC2626" />
-                              <Text style={styles.tankLowAlertText}>
-                                Tank level is below 25% threshold. Refill recommended.
-                              </Text>
-                            </View>
                           )}
                         </View>
                       );
@@ -1179,6 +1148,8 @@ const RanchesScreenContent = ({ route }: any) => {
             );
           })
         )}
+        {/* Generous bottom clearance spacer so bottom-most cards & action buttons are never covered by the floating tab bar */}
+        <View style={{ height: 180, width: '100%' }} />
       </ScrollView>
 
       {/* Block Detail & Lab Recommendations Modal */}
@@ -2664,7 +2635,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 140,
+    paddingBottom: 180,
   },
   header: {
     marginBottom: 16,
@@ -2996,6 +2967,7 @@ const styles = StyleSheet.create({
     padding: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    marginBottom: 12,
   },
   tankCardLow: {
     backgroundColor: '#FFF1F2',

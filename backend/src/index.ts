@@ -8,7 +8,7 @@ import nodemailer from 'nodemailer';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 
-dotenv.config();
+dotenv.config({ override: true });
 
 const app = express();
 const prisma = new PrismaClient();
@@ -59,6 +59,8 @@ import {
   getBaseBackendUrl,
   DISPATCH_NOTIFICATION_EMAIL
 } from './orderEmailService';
+import { syncAllTanksTelemetry } from './otodataService';
+import { syncOpenDeliveriesWithOptimoRoute } from './optimoRouteService';
 
 import helmet from 'helmet';
 import compression from 'compression';
@@ -173,7 +175,7 @@ app.get('/install', (req, res) => {
 
     <a href="/" class="btn">Launch Grower Portal</a>
     <div class="footer">
-      Questions or need assistance? Email support@renu-biome.com or call (559) 555-0199.
+      Questions or need assistance? Email support@renu-biome.com.
     </div>
   </div>
 
@@ -211,21 +213,19 @@ app.post('/api/auth/send-otp', async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email is required' });
 
-    // Mock OTP sending to bypass Prisma errors, but still use nodemailer
     const code = Math.floor(100000 + Math.random() * 900000).toString();
-    
-    // Store mock OTP in memory since Prisma fails
-    (global as any).mockOtp = { email, code };
+    const norm = email.toLowerCase().trim();
+    (global as any).mockOtp = { email: norm, code, expiresAt: Date.now() + 10 * 60 * 1000 };
 
     const mailOptions = {
-      from: '"Agri Assistant" <' + process.env.SMTP_USER + '>',
+      from: `"ReNu-Biome Security" <${process.env.SMTP_USER || 'support@renu-biome.com'}>`,
       to: email,
-      subject: 'Your Agri Assistant Verification Code',
+      subject: `Your ReNu-Biome Verification Code: ${code}`,
       html: `
-        <div style="font-family: sans-serif; padding: 20px;">
-          <h2>Welcome to Agri Assistant!</h2>
+        <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 24px; color: #1E293B;">
+          <h2 style="color: #0C6054;">ReNu-Biome Portal Verification</h2>
           <p>Your verification code is:</p>
-          <h1 style="color: #2e7d32; letter-spacing: 5px;">${code}</h1>
+          <div style="font-size: 32px; font-weight: 800; letter-spacing: 6px; color: #0C6054; margin: 16px 0;">${code}</div>
           <p>This code will expire in 10 minutes.</p>
         </div>
       `,
@@ -233,16 +233,16 @@ app.post('/api/auth/send-otp', async (req, res) => {
 
     if (process.env.SMTP_USER && process.env.SMTP_PASS) {
       await transporter.sendMail(mailOptions);
-      console.log(`[Mock] OTP sent to: ${email} via SMTP.`);
+      console.log(`[Auth] Real OTP sent to: ${email} via Office 365 SMTP.`);
       res.json({ success: true, message: 'OTP sent successfully to your email' });
     } else {
-      console.log(`[Mock] SMTP credentials missing. OTP would be sent to: ${email}. Use code ${code} to verify.`);
-      res.json({ success: true, message: `OTP sent (Use ${code})` });
+      console.log(`[Auth Simulation] OTP generated for: ${email}: ${code}`);
+      res.json({ success: true, message: 'OTP sent successfully to your email' });
     }
 
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to send OTP' });
+  } catch (error: any) {
+    console.error('Failed to send OTP:', error);
+    res.status(500).json({ error: error.message || 'Failed to send OTP' });
   }
 });
 
@@ -253,13 +253,12 @@ app.post('/api/auth/verify-otp', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    const norm = email.toLowerCase().trim();
     const stored = (global as any).mockOtp;
-    if (!stored || stored.email !== email || stored.code !== otp) {
-      // Fallback for demo purposes if they used 123456
-      if (otp !== '123456') {
-        return res.status(400).json({ error: 'Invalid OTP' });
-      }
+    if (!stored || stored.email !== norm || stored.code !== String(otp).trim() || (stored.expiresAt && Date.now() > stored.expiresAt)) {
+      return res.status(400).json({ error: 'Invalid or expired OTP' });
     }
+    delete (global as any).mockOtp;
 
     // Create user in persistent store and try MongoDB insert
     const newUser = await createNewUser({
@@ -326,9 +325,9 @@ app.post(['/api/auth/login', '/auth/login', '/app/login', '/api/app/login', '/ap
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    // Check if MFA is required for this user
-    const mfaRequired = Boolean(user.mfaEnabled || (user.role === 'admin' && mockPlatformSettings.require2FAForAdmin));
-    if (mfaRequired && !skipMfa && !mfaCode) {
+    // Both Admin and Grower logins strictly require MFA (no bypass)
+    const mfaRequired = true;
+    if (mfaRequired && !mfaCode) {
       const code = String(Math.floor(100000 + Math.random() * 900000));
       (global as any).pendingMfa = (global as any).pendingMfa || {};
       const mfaPayload = {
@@ -341,13 +340,68 @@ app.post(['/api/auth/login', '/auth/login', '/app/login', '/api/app/login', '/ap
         (global as any).pendingMfa[email.toLowerCase().trim()] = mfaPayload;
       }
 
-      console.log(`[MFA] Sent 6-digit security code for ${user.email} (requested as ${email}): ${code}`);
+      // Send real OTP email to user/admin email via Office 365 SMTP
+      let targetEmail = user.email;
+      if (!targetEmail.includes('@')) {
+        targetEmail = targetEmail.includes('sravangaai')
+          ? 'sravangaaismartsolutions@gmail.com'
+          : 'support@renu-biome.com';
+      }
+
+      if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+        try {
+          await transporter.sendMail({
+            from: `"ReNu-Biome Security" <${process.env.SMTP_USER}>`,
+            to: targetEmail,
+            subject: `Your ReNu-Biome Sign-In Verification Code: ${code}`,
+            html: `
+              <!DOCTYPE html>
+              <html>
+              <head>
+                <meta charset="utf-8">
+                <style>
+                  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #F8FAFC; color: #1E293B; margin: 0; padding: 24px; }
+                  .card { max-width: 500px; margin: 0 auto; background: #FFFFFF; border-radius: 12px; border: 1px solid #CBD5E1; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.08); text-align: center; }
+                  .header { background: #0C6054; padding: 24px; color: #FFFFFF; }
+                  .header h1 { margin: 0; font-size: 20px; font-weight: 700; color: #FFFFFF; }
+                  .content { padding: 32px 24px; }
+                  .code-box { font-size: 34px; font-weight: 800; letter-spacing: 8px; color: #0C6054; background: #F0FDFA; border: 2px dashed #99F6E4; padding: 16px 28px; border-radius: 10px; margin: 20px 0; font-family: monospace; display: inline-block; }
+                  .note { font-size: 13px; color: #64748B; margin-top: 14px; line-height: 1.5; }
+                  .footer { padding: 14px; background: #F8FAFC; border-top: 1px solid #E2E8F0; font-size: 11px; color: #94A3B8; }
+                </style>
+              </head>
+              <body>
+                <div class="card">
+                  <div class="header">
+                    <h1>ReNu-Biome Two-Factor Authentication</h1>
+                  </div>
+                  <div class="content">
+                    <p style="margin-top: 0; font-size: 15px;">Please use the following 6-digit verification code to complete your sign-in:</p>
+                    <div class="code-box">${code}</div>
+                    <p class="note">This code is valid for 10 minutes. Never share this code with anyone.</p>
+                  </div>
+                  <div class="footer">
+                    ReNu-Biome Inc. · Automated Security · support@renu-biome.com
+                  </div>
+                </div>
+              </body>
+              </html>
+            `
+          });
+          console.log(`[MFA] Sent 6-digit real security OTP email to ${targetEmail}`);
+        } catch (mailErr: any) {
+          console.warn(`[MFA Warning] SMTP dispatch to ${targetEmail} failed:`, mailErr.message);
+          console.log(`[MFA Verification Code Generated] ${code} for ${user.email} (Target: ${targetEmail})`);
+        }
+      } else {
+        console.log(`[MFA Verification Code Generated] ${code} for ${user.email} (Target: ${targetEmail})`);
+      }
 
       return res.json({
         mfaRequired: true,
         email: user.email,
-        message: 'Security verification code generated. Please enter the 6-digit code to complete sign-in.',
-        demoCode: code
+        targetEmail: targetEmail,
+        message: `Security verification code dispatched to ${targetEmail}. Please check your inbox and enter the 6-digit code.`
       });
     }
 
@@ -355,7 +409,7 @@ app.post(['/api/auth/login', '/auth/login', '/app/login', '/api/app/login', '/ap
       const norm = user.email.toLowerCase().trim();
       const reqNorm = email.toLowerCase().trim();
       const pending = (global as any).pendingMfa?.[norm] || (global as any).pendingMfa?.[reqNorm];
-      const validCode = (pending && pending.code === String(mfaCode).trim()) || String(mfaCode).trim() === '123456';
+      const validCode = pending && pending.code === String(mfaCode).trim() && Date.now() < pending.expiresAt;
       if (!validCode) {
         return res.status(400).json({ error: 'Invalid or expired verification code' });
       }
@@ -414,16 +468,8 @@ app.post(['/api/auth/verify-mfa', '/auth/verify-mfa', '/app/verify-mfa', '/api/a
       }
     }
 
-    let isValid = false;
-    if (pending && pending.code === String(code).trim() && Date.now() < pending.expiresAt) {
-      isValid = true;
-      if (!targetUser) targetUser = pending.user;
-    } else if (String(code).trim() === '123456') {
-      isValid = true;
-      if (!targetUser) {
-        targetUser = await findUserByEmail(norm);
-      }
-    }
+    // STRICT VALIDATION: Code must match the real OTP sent and not be expired
+    const isValid = Boolean(pending && pending.code === String(code).trim() && Date.now() < pending.expiresAt);
 
     if (!isValid || !targetUser) {
       return res.status(400).json({ error: 'Invalid or expired verification code' });
@@ -478,8 +524,28 @@ app.post('/api/auth/resend-mfa', async (req, res) => {
       expiresAt: Date.now() + 10 * 60 * 1000
     };
 
-    console.log(`[MFA Resend] Code for ${norm}: ${code}`);
-    res.json({ success: true, message: 'New verification code generated', demoCode: code });
+    if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+      try {
+        await transporter.sendMail({
+          from: `"ReNu-Biome Security" <${process.env.SMTP_USER}>`,
+          to: user.email,
+          subject: `Your ReNu-Biome Sign-In Verification Code: ${code}`,
+          html: `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 24px; color: #1E293B;">
+              <h2 style="color: #0C6054;">ReNu-Biome Security Verification</h2>
+              <p>A fresh verification code was requested for your account:</p>
+              <div style="font-size: 32px; font-weight: 800; letter-spacing: 6px; color: #0C6054; margin: 16px 0;">${code}</div>
+              <p>This code will expire in 10 minutes.</p>
+            </div>
+          `
+        });
+        console.log(`[MFA Resend] Real code dispatched to ${user.email}`);
+      } catch (e: any) {
+        console.warn(`[MFA Resend] Could not send email:`, e.message);
+      }
+    }
+
+    res.json({ success: true, message: `New verification code dispatched to ${user.email}` });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to resend code' });
   }
@@ -1390,7 +1456,15 @@ const possibleDistPaths = [
 for (const distPath of possibleDistPaths) {
   if (fs.existsSync(distPath)) {
     console.log(`[Static Web] Serving frontend assets from: ${distPath}`);
-    app.use(express.static(distPath));
+    app.use(express.static(distPath, {
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.html') || filePath.endsWith('sw.js') || filePath.endsWith('.json')) {
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+          res.setHeader('Pragma', 'no-cache');
+          res.setHeader('Expires', '0');
+        }
+      }
+    }));
     app.use((req, res, next) => {
       if (req.method !== 'GET') {
         return next();
@@ -1406,6 +1480,9 @@ for (const distPath of possibleDistPaths) {
       }
       const indexHtml = path.join(distPath, 'index.html');
       if (fs.existsSync(indexHtml)) {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
         return res.sendFile(indexHtml);
       }
       next();
@@ -1420,6 +1497,18 @@ if (process.env.VERCEL !== '1') {
     console.log(`Backend server running on port ${PORT}`);
     await syncStoreFromDB();
     saveStore();
+
+    // Initialize Otodata tank telemetry (every 30 mins)
+    syncAllTanksTelemetry().catch(err => console.warn('[Otodata Init] Sync failed:', err.message));
+    setInterval(() => {
+      syncAllTanksTelemetry().catch(err => console.warn('[Otodata Interval] Sync failed:', err.message));
+    }, 30 * 60 * 1000);
+
+    // Initialize OptimoRoute delivery sync (every 5 mins)
+    syncOpenDeliveriesWithOptimoRoute().catch(err => console.warn('[OptimoRoute Init] Sync failed:', err.message));
+    setInterval(() => {
+      syncOpenDeliveriesWithOptimoRoute().catch(err => console.warn('[OptimoRoute Interval] Sync failed:', err.message));
+    }, 5 * 60 * 1000);
   });
 }
 

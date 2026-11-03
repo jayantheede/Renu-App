@@ -8,6 +8,7 @@ import { AdminCustomersScreen } from '../screens/admin/AdminCustomersScreen';
 import { AdminInvoicesScreen } from '../screens/admin/AdminInvoicesScreen';
 import { ManageProductsScreen } from '../screens/admin/ManageProductsScreen';
 import { AdminFeatureFlagsScreen } from '../screens/admin/AdminFeatureFlagsScreen';
+import { AdminMoreScreen } from '../screens/admin/AdminMoreScreen';
 import { RanchesScreen } from '../screens/RanchesScreen';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from 'react-native-paper';
@@ -57,9 +58,7 @@ const ADMIN_PRIMARY_TABS = [
   'AdminOrders',
   'AdminCustomers',
   'AdminRanches',
-  'AdminInvoices',
-  'ManageProducts',
-  'AdminFeatureFlags',
+  'AdminMore',
 ];
 
 const CustomTabBar = ({ state, descriptors, navigation }: any) => {
@@ -91,9 +90,7 @@ const CustomTabBar = ({ state, descriptors, navigation }: any) => {
           if (route.name === 'AdminOrders') iconName = isFocused ? 'bus' : 'bus-outline';
           if (route.name === 'AdminCustomers') iconName = isFocused ? 'people' : 'people-outline';
           if (route.name === 'AdminRanches') iconName = isFocused ? 'leaf' : 'leaf-outline';
-          if (route.name === 'AdminInvoices') iconName = 'invoice-logo';
-          if (route.name === 'ManageProducts') iconName = isFocused ? 'cube' : 'cube-outline';
-          if (route.name === 'AdminFeatureFlags') iconName = isFocused ? 'settings' : 'settings-outline';
+          if (route.name === 'AdminMore') iconName = isFocused ? 'ellipsis-horizontal' : 'ellipsis-horizontal-outline';
 
           return (
             <TouchableOpacity
@@ -118,6 +115,7 @@ export const AdminTabNavigator = () => {
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
         headerShown: false,
+        unmountOnBlur: true,
         sceneStyle: { backgroundColor: '#F8FAFC' },
       } as any}
     >
@@ -125,11 +123,12 @@ export const AdminTabNavigator = () => {
       <Tab.Screen name="AdminOrders" component={AdminOrdersScreen} options={{ title: 'Deliveries' }} />
       <Tab.Screen name="AdminCustomers" component={AdminCustomersScreen} options={{ title: 'Customers' }} />
       <Tab.Screen name="AdminRanches" component={RanchesScreen} options={{ title: 'Ranches' }} />
+      <Tab.Screen name="AdminMore" component={AdminMoreScreen} options={{ title: 'More' }} />
       <Tab.Screen name="Ranches" component={RanchesScreen} options={{ title: 'Ranches', tabBarItemStyle: { display: 'none' } }} />
-      <Tab.Screen name="AdminInvoices" component={AdminInvoicesScreen} options={{ title: 'Invoices' }} />
+      <Tab.Screen name="AdminInvoices" component={AdminInvoicesScreen} options={{ title: 'Invoices', tabBarItemStyle: { display: 'none' } }} />
       <Tab.Screen name="Invoices" component={AdminInvoicesScreen} options={{ title: 'Invoices', tabBarItemStyle: { display: 'none' } }} />
-      <Tab.Screen name="ManageProducts" component={ManageProductsScreen} options={{ title: 'Products' }} />
-      <Tab.Screen name="AdminFeatureFlags" component={AdminFeatureFlagsScreen} options={{ title: 'Settings' }} />
+      <Tab.Screen name="ManageProducts" component={ManageProductsScreen} options={{ title: 'Products', tabBarItemStyle: { display: 'none' } }} />
+      <Tab.Screen name="AdminFeatureFlags" component={AdminFeatureFlagsScreen} options={{ title: 'Settings', tabBarItemStyle: { display: 'none' } }} />
     </Tab.Navigator>
   );
 };
@@ -138,8 +137,11 @@ const styles = StyleSheet.create({
   tabBarWrapper: {
     position: 'absolute',
     bottom: 12,
-    left: 8,
-    right: 8,
+    left: Platform.OS === 'web' ? 0 : 12,
+    right: Platform.OS === 'web' ? 0 : 12,
+    maxWidth: 480,
+    alignSelf: 'center',
+    marginHorizontal: 'auto',
     borderRadius: 24,
     overflow: 'hidden',
     zIndex: 999,

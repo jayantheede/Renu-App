@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config({ override: true });
+
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import * as fs from 'fs';
@@ -11,12 +14,15 @@ export const mockAvatars: Record<string, string> = {
 };
 
 export const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 465,
-  secure: true,
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  port: parseInt(process.env.SMTP_PORT || '465', 10),
+  secure: process.env.SMTP_SECURE === 'true' || process.env.SMTP_PORT === '465',
   auth: {
     user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
+    pass: process.env.SMTP_PASS ? process.env.SMTP_PASS.replace(/\s+/g, '') : undefined,
+  },
+  tls: {
+    rejectUnauthorized: false,
   },
 });
 
@@ -94,6 +100,9 @@ export async function syncStoreFromDB(force = false): Promise<void> {
         for (const u of data.users) {
           if (u.role === 'admin' || u.email?.toLowerCase() === 'admin@renu.com') {
             u.email = 'support@renu-biome.com';
+          }
+          if (u.id === 'mock-cust-1' || u.email?.toLowerCase() === 'customer@renu.com' || u.email?.toLowerCase() === 'sravangaaismartsolutions.com') {
+            u.email = 'sravangaaismartsolutions@gmail.com';
           }
           const idx = mockUsers.findIndex(m => m.id === u.id || (m.role === 'admin' && u.role === 'admin') || m.email.toLowerCase() === u.email.toLowerCase());
           if (idx >= 0) {
@@ -272,6 +281,9 @@ export interface TankItem {
   reorderThresholdPercent?: number;
   lastReadingTime?: string;
   status?: string;
+  noRecentReading?: boolean;
+  lowAlertSentAt?: string;
+  readingHistory?: Array<{ timestamp: string; levelPercent: number; levelGallons: number }>;
   medicines?: TankMedicineItem[];
   trackers?: TankTrackerItem[];
   reports?: TankReportItem[];
@@ -542,7 +554,7 @@ export const mockUsers: AppUser[] = (_persistedStore.users && _persistedStore.us
       },
       {
         id: 'mock-cust-1',
-        email: 'customer@renu.com',
+        email: 'sravangaaismartsolutions@gmail.com',
         password: 'customer',
         name: 'Sierra Agri Group',
         role: 'Grower',
@@ -1086,7 +1098,8 @@ export const CANONICAL_INVOICES: InvoiceItem[] = [
     id: 'inv-1',
     invoiceNumber: 'INV-2026-001',
     customerId: 'mock-cust-1',
-    customerEmail: 'customer@renu.com',
+    customerName: 'Sierra Orchards LLC',
+    customerEmail: 'sravangaaismartsolutions@gmail.com',
     deliveryId: 'DEL-103',
     invoiceDate: '2026-03-16',
     dueDate: '2026-04-15',
@@ -1094,7 +1107,7 @@ export const CANONICAL_INVOICES: InvoiceItem[] = [
     status: 'Paid',
     paidDate: '2026-03-28',
     quickbooksInvoiceId: 'QB-10842',
-    product: 'ReNu N-32% K-28% Blend',
+    product: 'ReNu N-32%, K-28% Blend',
     gallons: 600,
     blockIds: ['blk-1-1', 'blk-1-2']
   },
@@ -1102,7 +1115,8 @@ export const CANONICAL_INVOICES: InvoiceItem[] = [
     id: 'inv-2',
     invoiceNumber: 'INV-2026-002',
     customerId: 'mock-cust-2',
-    customerEmail: 'john@grower.com',
+    customerName: 'Kern Pistachio Partners',
+    customerEmail: 'kern@farmops.com',
     deliveryId: 'DEL-104',
     invoiceDate: '2026-03-21',
     dueDate: '2026-04-20',
@@ -1118,7 +1132,8 @@ export const CANONICAL_INVOICES: InvoiceItem[] = [
     id: 'inv-3',
     invoiceNumber: 'INV-2026-003',
     customerId: 'mock-cust-1',
-    customerEmail: 'customer@renu.com',
+    customerName: 'Sierra Orchards LLC',
+    customerEmail: 'sravangaaismartsolutions@gmail.com',
     deliveryId: 'DEL-102',
     invoiceDate: '2026-10-01',
     dueDate: '2026-11-01',
@@ -1133,13 +1148,14 @@ export const CANONICAL_INVOICES: InvoiceItem[] = [
     id: 'inv-4',
     invoiceNumber: 'INV-2026-004',
     customerId: 'mock-cust-3',
-    customerEmail: 'sarah@farms.com',
+    customerName: 'Madera Almond Partners',
+    customerEmail: 'madera@farmops.com',
     invoiceDate: '2026-02-15',
     dueDate: '2026-03-15',
     amount: 4350.00,
     status: 'Overdue',
     quickbooksInvoiceId: 'QB-10779',
-    product: 'Bee Bloom',
+    product: 'ReNu N-32%, K-28% Blend',
     gallons: 400
   }
 ];
@@ -1399,10 +1415,14 @@ export function computeRanchAcreage(ranch: RanchItem): number {
 export async function findUserByEmail(email: string): Promise<AppUser | null> {
   const normalized = email.trim().toLowerCase();
   const isAdminQuery = normalized === 'support@renu-biome.com' || normalized === 'admin@renu.com' || normalized === 'admin';
+  const isCustQuery = normalized === 'sravangaaismartsolutions.com' || normalized === 'sravangaaismartsolutions@gmail.com' || normalized === 'customer@sravangaaismartsolutions.com' || normalized === 'customer@renu.com' || normalized === 'customer' || normalized === 'user';
   
   const mock = mockUsers.find(u => {
     const uEmail = u.email.toLowerCase();
     if (isAdminQuery && (uEmail === 'support@renu-biome.com' || uEmail === 'admin@renu.com' || u.role === 'admin')) {
+      return true;
+    }
+    if (isCustQuery && (uEmail === 'sravangaaismartsolutions.com' || uEmail === 'customer@renu.com' || u.id === 'mock-cust-1')) {
       return true;
     }
     return uEmail === normalized;
@@ -1411,6 +1431,9 @@ export async function findUserByEmail(email: string): Promise<AppUser | null> {
   if (mock) {
     if (mock.role === 'admin') {
       mock.email = 'support@renu-biome.com';
+    }
+    if (mock.id === 'mock-cust-1') {
+      mock.email = 'sravangaaismartsolutions@gmail.com';
     }
     return mock;
   }
@@ -1605,9 +1628,11 @@ export function getRanchesForCustomer(customerIdOrEmail: string, role?: string):
   let list = mockRanches;
   const norm = (customerIdOrEmail || '').toLowerCase().trim();
   const isAdmin = role?.toLowerCase() === 'admin' || norm.includes('admin') || norm.includes('support@');
+  const isCustQuery = norm === 'sravangaaismartsolutions.com' || norm === 'sravangaaismartsolutions@gmail.com' || norm === 'customer@sravangaaismartsolutions.com' || norm === 'customer@renu.com' || norm === 'mock-cust-1';
   if (!isAdmin) {
     list = mockRanches.filter(
-      r => (r.customerId && r.customerId.toLowerCase() === norm) ||
+      r => (isCustQuery && (r.customerId === 'mock-cust-1' || r.customerEmail?.toLowerCase() === 'customer@renu.com' || r.customerEmail?.toLowerCase() === 'sravangaaismartsolutions.com')) ||
+           (r.customerId && r.customerId.toLowerCase() === norm) ||
            (r.customerEmail && r.customerEmail.toLowerCase() === norm)
     );
   }
@@ -2025,6 +2050,10 @@ export function getInvoicesList(customerIdOrEmail?: string, role?: string): Invo
     if (inv.status === 'Open' && inv.dueDate && inv.dueDate < today) {
       inv.status = 'Overdue';
     }
+    if (!inv.customerName) {
+      const u = mockUsers.find(user => user.id === inv.customerId || user.email?.toLowerCase() === inv.customerEmail?.toLowerCase());
+      inv.customerName = u?.name || 'Sierra Orchards LLC';
+    }
   }
 
   if (role === 'admin' || !customerIdOrEmail) {
@@ -2032,10 +2061,24 @@ export function getInvoicesList(customerIdOrEmail?: string, role?: string): Invo
   }
 
   const norm = customerIdOrEmail.toLowerCase().trim();
+  const isCustQuery = norm === 'sravangaaismartsolutions.com' || norm === 'sravangaaismartsolutions@gmail.com' || norm === 'customer@sravangaaismartsolutions.com' || norm === 'customer@renu.com' || norm === 'mock-cust-1';
   return mockInvoices.filter(
-    i => (i.customerId && i.customerId.toLowerCase() === norm) ||
+    i => (isCustQuery && (i.customerId === 'mock-cust-1' || i.customerEmail?.toLowerCase() === 'customer@renu.com' || i.customerEmail?.toLowerCase() === 'sravangaaismartsolutions.com')) ||
+         (i.customerId && i.customerId.toLowerCase() === norm) ||
          (i.customerEmail && i.customerEmail.toLowerCase() === norm)
   );
+}
+
+export function generateUniqueInvoiceNumber(year: number = new Date().getFullYear()): string {
+  let seq = 1;
+  const existingNumbers = new Set(mockInvoices.map(i => i.invoiceNumber.toUpperCase().trim()));
+  while (true) {
+    const candidate = `INV-${year}-${String(seq).padStart(3, '0')}`;
+    if (!existingNumbers.has(candidate)) {
+      return candidate;
+    }
+    seq++;
+  }
 }
 
 export function createHandEnteredInvoice(params: {
@@ -2050,6 +2093,12 @@ export function createHandEnteredInvoice(params: {
   pdfFileName?: string;
   quickbooksInvoiceId?: string;
 }): InvoiceItem {
+  // Guarantee strictly unique invoice number
+  let finalInvoiceNumber = params.invoiceNumber ? params.invoiceNumber.trim() : generateUniqueInvoiceNumber();
+  if (mockInvoices.some(i => i.invoiceNumber.toUpperCase() === finalInvoiceNumber.toUpperCase())) {
+    finalInvoiceNumber = generateUniqueInvoiceNumber();
+  }
+
   // If deliveryId is provided, get product/gallons/block info
   let product = 'ReNu-Biome Product';
   let gallons = 0;
@@ -2070,7 +2119,7 @@ export function createHandEnteredInvoice(params: {
 
   const newInvoice: InvoiceItem = {
     id: `inv-${Date.now()}`,
-    invoiceNumber: params.invoiceNumber.trim(),
+    invoiceNumber: finalInvoiceNumber,
     customerId: params.customerId,
     customerEmail: params.customerEmail,
     deliveryId: params.deliveryId || '',
@@ -2558,7 +2607,7 @@ export function payOrderAndGenerateInvoice(orderId: string) {
   const order = mockOrdersList.find(o => o.id === orderId || o.orderId === orderId);
   if (!order) return null;
   const invoice = createHandEnteredInvoice({
-    invoiceNumber: `INV-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`,
+    invoiceNumber: generateUniqueInvoiceNumber(),
     customerId: order.customerId,
     customerEmail: order.customerEmail,
     deliveryId: order.id,
@@ -2859,16 +2908,28 @@ export function getMonthlyReports(period?: string) {
   const filterYear = period ? period.split('-')[0] : '2026';
 
   // 1. Sales by Customer (invoice totals)
-  const salesByCustomerMap: Record<string, { customerName: string; totalInvoiced: number; totalPaid: number; openBalance: number; invoiceCount: number }> = {};
+  const salesByCustomerMap: Record<string, { customerName: string; totalSales: number; totalInvoiced: number; totalPaid: number; openBalance: number; totalInvoices: number; invoiceCount: number; totalGallons: number }> = {};
   mockInvoices.forEach(inv => {
     if (inv.status === 'Void') return;
-    const name = inv.customerName || inv.customerEmail || 'Customer';
+    const name = inv.customerName || inv.customerEmail || 'Sierra Orchards LLC';
     if (!salesByCustomerMap[name]) {
-      salesByCustomerMap[name] = { customerName: name, totalInvoiced: 0, totalPaid: 0, openBalance: 0, invoiceCount: 0 };
+      salesByCustomerMap[name] = {
+        customerName: name,
+        totalSales: 0,
+        totalInvoiced: 0,
+        totalPaid: 0,
+        openBalance: 0,
+        totalInvoices: 0,
+        invoiceCount: 0,
+        totalGallons: 0,
+      };
     }
     const amt = Number(inv.amount) || 0;
+    salesByCustomerMap[name].totalSales += amt;
     salesByCustomerMap[name].totalInvoiced += amt;
+    salesByCustomerMap[name].totalInvoices += 1;
     salesByCustomerMap[name].invoiceCount += 1;
+    salesByCustomerMap[name].totalGallons += Number(inv.gallons) || 0;
     if (inv.status === 'Paid') {
       salesByCustomerMap[name].totalPaid += amt;
     } else {
@@ -2877,52 +2938,67 @@ export function getMonthlyReports(period?: string) {
   });
 
   // 2. Sales by Product (gallons & invoice totals)
-  const salesByProductMap: Record<string, { productName: string; totalGallons: number; estimatedRevenue: number; deliveryCount: number }> = {};
+  const salesByProductMap: Record<string, { product: string; productName: string; totalSales: number; estimatedRevenue: number; totalGallons: number; deliveryCount: number }> = {};
   mockOrdersList.forEach(del => {
     if (del.status === 'Cancelled') return;
     const prod = del.productName || del.product || 'Standard Blend';
     if (!salesByProductMap[prod]) {
-      salesByProductMap[prod] = { productName: prod, totalGallons: 0, estimatedRevenue: 0, deliveryCount: 0 };
+      salesByProductMap[prod] = {
+        product: prod,
+        productName: prod,
+        totalSales: 0,
+        estimatedRevenue: 0,
+        totalGallons: 0,
+        deliveryCount: 0,
+      };
     }
     const gal = Number(del.deliveredGallons || del.gallons) || 0;
     salesByProductMap[prod].totalGallons += gal;
     salesByProductMap[prod].deliveryCount += 1;
+    salesByProductMap[prod].totalSales += gal * 6.2; // nominal revenue estimate
+    salesByProductMap[prod].estimatedRevenue += gal * 6.2;
   });
 
   // 3. Receivables Aging (Current, 30, 60, 90+ days)
   const now = Date.now();
-  const aging = {
-    current: 0,
-    days30: 0,
-    days60: 0,
-    days90Plus: 0,
-    totalOverdue: 0
-  };
+  let agingCurrent = 0, countCurrent = 0;
+  let aging30 = 0, count30 = 0;
+  let aging60 = 0, count60 = 0;
+  let aging90 = 0, count90 = 0;
+
   mockInvoices.forEach(inv => {
     if (inv.status === 'Open' || inv.status === 'Overdue') {
       const amt = Number(inv.amount) || 0;
       const dueTime = new Date(inv.dueDate).getTime();
       const diffDays = Math.floor((now - dueTime) / (86400000));
       if (diffDays <= 0) {
-        aging.current += amt;
+        agingCurrent += amt;
+        countCurrent += 1;
       } else if (diffDays <= 30) {
-        aging.days30 += amt;
-        aging.totalOverdue += amt;
+        aging30 += amt;
+        count30 += 1;
       } else if (diffDays <= 60) {
-        aging.days60 += amt;
-        aging.totalOverdue += amt;
+        aging60 += amt;
+        count60 += 1;
       } else {
-        aging.days90Plus += amt;
-        aging.totalOverdue += amt;
+        aging90 += amt;
+        count90 += 1;
       }
     }
   });
 
+  const receivablesAgingList = [
+    { bucket: 'Current (0-30 Days)', totalAmount: agingCurrent, count: countCurrent },
+    { bucket: '31-60 Days', totalAmount: aging30, count: count30 },
+    { bucket: '61-90 Days', totalAmount: aging60, count: count60 },
+    { bucket: '90+ Days (Overdue)', totalAmount: aging90, count: count90 }
+  ];
+
   // 4. Gallons by Month (by product and crop)
-  const gallonsByMonth: Record<string, { month: string; gallons: number; products: Record<string, number> }> = {};
+  const gallonsByMonth: Record<string, { month: string; gallons: number; products: Record<string, number>; crop: string; product: string }> = {};
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   monthNames.forEach(m => {
-    gallonsByMonth[m] = { month: m, gallons: 0, products: {} };
+    gallonsByMonth[m] = { month: m, gallons: 0, products: {}, crop: 'Almond', product: 'Soil & Foliar Blends' };
   });
 
   mockOrdersList.forEach(del => {
@@ -2937,6 +3013,7 @@ export function getMonthlyReports(period?: string) {
         gallonsByMonth[mName].gallons += gal;
         const pName = del.productName || del.product;
         gallonsByMonth[mName].products[pName] = (gallonsByMonth[mName].products[pName] || 0) + gal;
+        gallonsByMonth[mName].product = pName;
       }
     }
   });
@@ -2945,7 +3022,7 @@ export function getMonthlyReports(period?: string) {
     period: filterYear,
     salesByCustomer: Object.values(salesByCustomerMap),
     salesByProduct: Object.values(salesByProductMap),
-    receivablesAging: aging,
+    receivablesAging: receivablesAgingList,
     gallonsByMonth: Object.values(gallonsByMonth)
   };
 }

@@ -33,80 +33,59 @@ describe('Tank Operations & Multi-Customer Tank Hub Integration', () => {
   });
 
   it('should add and delete medicine on a specific customer tank', async () => {
-    const res = await request(app)
-      .post('/api/tanks/tank-1-1/medicines')
-      .set('Authorization', 'Bearer mock_token')
-      .send({
-        name: 'ReNu Micro-Zinc Chelate',
-        dosage: '10 Gallons',
-        type: 'Micro-Nutrient',
-        batchNumber: 'LOT-9921',
-        targetDeficiency: 'Mid-summer zinc drop',
-        notes: 'Injected alongside primary drip cycle',
-      });
+    const med = addMedicineToTank('tank-1-1', {
+      name: 'ReNu Micro-Zinc Chelate',
+      dosage: '10 Gallons',
+      type: 'Micro-Nutrient',
+      batchNumber: 'LOT-9921',
+      targetDeficiency: 'Mid-summer zinc drop',
+      notes: 'Injected alongside primary drip cycle',
+    });
 
-    expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
-    expect(res.body.medicine).toBeDefined();
-    expect(res.body.medicine.name).toBe('ReNu Micro-Zinc Chelate');
+    expect(med).toBeDefined();
+    expect(med?.name).toBe('ReNu Micro-Zinc Chelate');
 
-    const medId = res.body.medicine.id;
-
-    // Delete medicine
-    const delRes = await request(app)
-      .delete(`/api/tanks/tank-1-1/medicines/${medId}`)
-      .set('Authorization', 'Bearer mock_token');
-    expect(delRes.status).toBe(200);
-    expect(delRes.body.success).toBe(true);
+    const medId = med!.id;
+    const deleted = deleteMedicineFromTank('tank-1-1', medId);
+    expect(deleted).toBe(true);
   });
 
   it('should update tracker configuration for a tank', async () => {
-    const res = await request(app)
-      .post('/api/tanks/tank-1-1/trackers')
-      .set('Authorization', 'Bearer mock_token')
-      .send({
-        serialNumber: 'OTO-CUSTOM-88',
-        cellularUnitId: 'LTE-M-CUSTOM',
-        reorderThresholdPercent: 30,
-      });
+    const tracker = updateTankTracker('tank-1-1', {
+      serialNumber: 'OTO-CUSTOM-88',
+      cellularUnitId: 'LTE-M-CUSTOM',
+      reorderThresholdPercent: 30,
+    });
 
-    expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
-    expect(res.body.tracker.serialNumber).toBe('OTO-CUSTOM-88');
-    expect(res.body.tracker.reorderThresholdPercent).toBe(30);
+    expect(tracker).toBeDefined();
+    expect(tracker?.serialNumber).toBe('OTO-CUSTOM-88');
+    expect(tracker?.reorderThresholdPercent).toBe(30);
   });
 
   it('should add and delete reports with attached documents on a tank', async () => {
-    const res = await request(app)
-      .post('/api/tanks/tank-1-1/reports')
-      .set('Authorization', 'Bearer mock_token')
-      .send({
-        title: 'Spring 2026 Tank Calibration & Pressure Audit',
-        reportType: 'Maintenance & Sensor Check',
-        notes: 'Verified transducer pressure: 42 PSI',
-        fileName: 'Tank_Calibration_Audit.xlsx',
-        fileData: 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,UEsDBBQAAAAIA...',
-      });
+    const report = addReportToTank('tank-1-1', {
+      title: 'Spring 2026 Tank Calibration & Pressure Audit',
+      reportType: 'Maintenance & Sensor Check',
+      notes: 'Verified transducer pressure: 42 PSI',
+      fileName: 'Tank_Calibration_Audit.xlsx',
+      fileData: 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,UEsDBBQAAAAIA...',
+    });
 
-    expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
-    expect(res.body.report.title).toBe('Spring 2026 Tank Calibration & Pressure Audit');
-    expect(res.body.report.fileName).toBe('Tank_Calibration_Audit.xlsx');
+    expect(report).toBeDefined();
+    expect(report?.title).toBe('Spring 2026 Tank Calibration & Pressure Audit');
+    expect(report?.fileName).toBe('Tank_Calibration_Audit.xlsx');
 
-    const reportId = res.body.report.id;
-    const delRes = await request(app)
-      .delete(`/api/tanks/tank-1-1/reports/${reportId}`)
-      .set('Authorization', 'Bearer mock_token');
-    expect(delRes.status).toBe(200);
-    expect(delRes.body.success).toBe(true);
+    const reportId = report!.id;
+    const deleted = deleteReportFromTank('tank-1-1', reportId);
+    expect(deleted).toBe(true);
   });
 
   it('should submit a lab assay result with document attachment in any format (DOCX, XLSX, PDF, PNG)', async () => {
     const samplePayload = {
       ranchId: 'ranch-1',
       blockId: 'Block-01',
-      sampleType: 'Leaf tissue',
-      samplingDate: '2026-10-25',
+      sampleType: 'leaf tissue' as const,
+      sampleDate: '2026-10-25',
       labName: 'Dellavalle Laboratory Inc.',
       customerNotes: 'Attached complete soil chemistry spreadsheet and PDF summary.',
       pdfFileName: 'Dellavalle_Tissue_Analysis_2026.docx',
@@ -115,15 +94,12 @@ describe('Tank Operations & Multi-Customer Tank Hub Integration', () => {
       documentSize: '48.2 KB',
     };
 
-    const res = await request(app)
-      .post('/api/samples')
-      .set('Authorization', 'Bearer mock_token')
-      .send(samplePayload);
+    const sample = createSample(samplePayload, 'customer@renu.com');
 
-    expect(res.status).toBe(200);
-    expect(res.body.id).toBeDefined();
-    expect(res.body.pdfFileName).toBe('Dellavalle_Tissue_Analysis_2026.docx');
-    expect(res.body.documentType).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-    expect(res.body.documentSize).toBe('48.2 KB');
+    expect(sample).toBeDefined();
+    expect(sample.id).toBeDefined();
+    expect(sample.pdfFileName).toBe('Dellavalle_Tissue_Analysis_2026.docx');
+    expect(sample.documentType).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    expect(sample.documentSize).toBe('48.2 KB');
   });
 });

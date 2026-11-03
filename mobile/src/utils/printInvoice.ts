@@ -309,7 +309,7 @@ export const printInvoiceDocument = (inv: InvoicePrintData) => {
           </div>
         </div>
         <div class="brand-meta">Agricultural Soil Nutrition & Biological Plant Formulations</div>
-        <div class="brand-meta">Direct Inquiries: (559) 555-0199 · Email: accounting@renu-biome.com</div>
+        <div class="brand-meta">ReNu-Biome Inc. · Email: support@renu-biome.com</div>
       </div>
       <div class="invoice-header-meta">
         <div style="display: flex; align-items: center; justify-content: flex-end; gap: 12px;">
@@ -425,6 +425,176 @@ export const printInvoiceDocument = (inv: InvoicePrintData) => {
 </html>`;
 
   // Use a dedicated invisible iframe to print ONLY this isolated invoice document
+  let printFrame = document.getElementById('renu-print-frame') as HTMLIFrameElement | null;
+  if (!printFrame) {
+    printFrame = document.createElement('iframe');
+    printFrame.id = 'renu-print-frame';
+    printFrame.style.position = 'fixed';
+    printFrame.style.right = '0';
+    printFrame.style.bottom = '0';
+    printFrame.style.width = '0';
+    printFrame.style.height = '0';
+    printFrame.style.border = 'none';
+    printFrame.style.visibility = 'hidden';
+    document.body.appendChild(printFrame);
+  }
+
+  const frameDoc = printFrame.contentWindow ? printFrame.contentWindow.document : (printFrame.contentDocument || null);
+  if (frameDoc && printFrame.contentWindow) {
+    frameDoc.open();
+    frameDoc.write(html);
+    frameDoc.close();
+    setTimeout(() => {
+      printFrame?.contentWindow?.focus();
+      printFrame?.contentWindow?.print();
+    }, 200);
+  } else {
+    const win = window.open('', '_blank');
+    if (win) {
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+      win.focus();
+      setTimeout(() => {
+        win.print();
+      }, 200);
+    }
+  }
+};
+
+export interface YearEndPrintData {
+  year: string;
+  customerName: string;
+  products: Array<{ name: string; deliveries: number; gallons: number }>;
+  invoices: Array<{ invoiceNumber: string; date: string; status: string; paidDate?: string; amount: number }>;
+  totalGallons: number;
+  totalAmount: number;
+}
+
+export const printYearEndSummaryDocument = (data: YearEndPrintData) => {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') {
+    Alert.alert('PDF Export', `Year-End Summary ${data.year} generated for printing.`);
+    return;
+  }
+
+  const { year, customerName, products, invoices, totalGallons, totalAmount } = data;
+  const printDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+  const productRowsHtml = products.map(p => `
+    <tr>
+      <td style="padding: 10px 14px; border-bottom: 1px solid #E2E8F0; font-size: 13px; font-weight: 600; color: #0F172A;">${p.name}</td>
+      <td style="padding: 10px 14px; border-bottom: 1px solid #E2E8F0; font-size: 13px; text-align: right; color: #334155;">${p.deliveries}</td>
+      <td style="padding: 10px 14px; border-bottom: 1px solid #E2E8F0; font-size: 13px; text-align: right; font-weight: 700; color: #0C6054;">${p.gallons.toLocaleString()} gal</td>
+    </tr>
+  `).join('');
+
+  const invoiceRowsHtml = invoices.map(i => `
+    <tr>
+      <td style="padding: 10px 14px; border-bottom: 1px solid #E2E8F0; font-size: 13px; font-weight: 700; color: #0F172A;">${i.invoiceNumber}</td>
+      <td style="padding: 10px 14px; border-bottom: 1px solid #E2E8F0; font-size: 13px; color: #64748B;">${i.date}</td>
+      <td style="padding: 10px 14px; border-bottom: 1px solid #E2E8F0; font-size: 13px; color: ${i.status === 'Paid' ? '#15803D' : '#D97706'}; font-weight: 600;">
+        ${i.status === 'Paid' ? `Paid ${i.paidDate || ''}` : i.status}
+      </td>
+      <td style="padding: 10px 14px; border-bottom: 1px solid #E2E8F0; font-size: 13px; text-align: right; font-weight: 700; color: #0F172A;">$${i.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+    </tr>
+  `).join('');
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>ReNu-Biome Year-End Purchase Summary ${year} — ${customerName}</title>
+  <style>
+    @page { size: letter portrait; margin: 16mm; }
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #FFFFFF; color: #0F172A; margin: 0; padding: 24px; line-height: 1.4; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 16px; border-bottom: 3px solid #0C6054; margin-bottom: 20px; }
+    .logo { height: 42px; width: auto; }
+    .title-block { text-align: right; }
+    .doc-title { font-size: 20px; font-weight: 800; color: #0C6054; }
+    .doc-sub { font-size: 13px; color: #64748B; margin-top: 2px; }
+    .section-title { font-size: 15px; font-weight: 800; color: #0C6054; margin: 20px 0 8px 0; text-transform: uppercase; letter-spacing: 0.5px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+    th { background: #F0FDFA; color: #0C6054; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 8px 14px; text-align: left; border-bottom: 2px solid #99F6E4; }
+    th.r { text-align: right; }
+    .total-row td { font-weight: 800; background: #F8FAFC; border-top: 2px solid #0C6054; }
+    .qr-card { display: flex; align-items: center; gap: 16px; background: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 12px; padding: 14px; margin-top: 24px; }
+    .qr-img { width: 84px; height: 84px; border-radius: 8px; background: white; padding: 4px; border: 1px solid #E2E8F0; }
+    .qr-title { font-size: 13px; font-weight: 700; color: #0C6054; }
+    .qr-text { font-size: 11px; color: #475569; margin-top: 2px; line-height: 1.4; }
+    .footer-note { font-size: 11px; color: #64748B; text-align: center; margin-top: 20px; font-style: italic; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <img src="/brand/renu-biome-logo-teal-orange-for-light-backgrounds.png" class="logo" alt="ReNu-Biome" onerror="this.style.display='none'; document.getElementById('alt-logo').style.display='block';" />
+      <div id="alt-logo" style="display:none; font-size: 22px; font-weight: 800; color: #0C6054;">ReNu-Biome</div>
+      <div style="font-size: 12px; color: #64748B; margin-top: 4px;">support@renu-biome.com · Central Valley, California</div>
+    </div>
+    <div class="title-block">
+      <div class="doc-title">Year-End Purchase Summary</div>
+      <div class="doc-sub">Season ${year} · ${customerName}</div>
+      <div style="font-size: 11px; color: #94A3B8; margin-top: 2px;">Generated: ${printDate}</div>
+    </div>
+  </div>
+
+  <div class="section-title">Products Delivered (${year})</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Product Formulation</th>
+        <th class="r">Deliveries</th>
+        <th class="r">Total Gallons</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${productRowsHtml}
+      <tr class="total-row">
+        <td>Season Total</td>
+        <td style="text-align: right;">${products.reduce((acc, p) => acc + p.deliveries, 0)}</td>
+        <td style="text-align: right; color: #0C6054;">${totalGallons.toLocaleString()} gal</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="section-title">Invoices Summary (${year})</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Invoice #</th>
+        <th>Date</th>
+        <th>Status</th>
+        <th class="r">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${invoiceRowsHtml}
+      <tr class="total-row">
+        <td>Total Invoiced</td>
+        <td></td>
+        <td></td>
+        <td style="text-align: right; color: #0C6054;">$${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="qr-card">
+    <img src="/brand/renu-biome-install-qr-300dpi.png" class="qr-img" alt="ReNu-Biome QR Code" />
+    <div>
+      <div class="qr-title">ReNu-Biome Grower Portal — Mobile Access</div>
+      <div class="qr-text">
+        Scan this QR code with your smartphone camera to access the portal at <strong>https://app.renu-biome.com/install</strong> to review historical delivery records, tank telemetry, and season nutrition programs.
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-note">
+    Every delivery and invoice for the year, for your accountant. No unit prices are shown; amounts are the invoice totals.
+  </div>
+</body>
+</html>`;
+
   let printFrame = document.getElementById('renu-print-frame') as HTMLIFrameElement | null;
   if (!printFrame) {
     printFrame = document.createElement('iframe');

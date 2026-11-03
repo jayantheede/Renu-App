@@ -38,7 +38,7 @@ export const InstallScreen = () => {
       // Check if already launched in standalone PWA mode
       const isStandalone =
         (window.navigator as any).standalone ||
-        window.matchMedia('(display-mode: standalone)').matches;
+        (typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches);
       if (isStandalone) {
         setIsInstalled(true);
       }
@@ -48,9 +48,13 @@ export const InstallScreen = () => {
         e.preventDefault();
         setInstallPromptEvent(e);
       };
-      window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+      if (typeof window.addEventListener === 'function') {
+        window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+      }
       return () => {
-        window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+        if (typeof window.removeEventListener === 'function') {
+          window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+        }
       };
     }
   }, []);
@@ -264,8 +268,7 @@ export const InstallScreen = () => {
               onPress={() => Linking.openURL('mailto:support@renu-biome.com')}
             >
               support@renu-biome.com
-            </Text>{' '}
-            or call <Text style={{ fontWeight: '700' }}>(559) 555-0199</Text>.
+            </Text>.
           </Text>
         </View>
       </View>

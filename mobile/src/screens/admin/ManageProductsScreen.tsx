@@ -410,7 +410,7 @@ export const ManageProductsScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
-  scrollContent: { paddingBottom: 120, paddingHorizontal: 16 },
+  scrollContent: { paddingBottom: 160, paddingHorizontal: 16 },
   header: { paddingTop: 54, paddingBottom: 16 },
   title: { fontSize: 22, fontWeight: '800', color: '#0F172A' },
   subtitle: { fontSize: 13, color: '#64748B', marginTop: 2 },

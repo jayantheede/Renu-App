@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Dimensions, Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HomeScreen } from '../screens/HomeScreen';
@@ -95,6 +95,8 @@ export const MainTabNavigator = () => {
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
         headerShown: false,
+        unmountOnBlur: true,
+        sceneStyle: { backgroundColor: '#F8FAFC' },
       } as any}
     >
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Home' }} />
@@ -102,8 +104,8 @@ export const MainTabNavigator = () => {
       <Tab.Screen name="Deliveries" component={DeliveriesScreen} options={{ title: 'Deliveries' }} />
       <Tab.Screen name="Invoices" component={InvoicesScreen} options={{ title: 'Invoices' }} />
       <Tab.Screen name="More" component={MoreScreen} options={{ title: 'More' }} />
-      <Tab.Screen name="Shop" component={ShopScreen} options={{ title: 'Shop' }} />
-      <Tab.Screen name="Messages" component={MessagesScreen} options={{ title: 'Messages' }} />
+      <Tab.Screen name="Shop" component={ShopScreen} options={{ title: 'Shop', tabBarItemStyle: { display: 'none' } }} />
+      <Tab.Screen name="Messages" component={MessagesScreen} options={{ title: 'Messages', tabBarItemStyle: { display: 'none' } }} />
     </Tab.Navigator>
   );
 };
@@ -112,8 +114,11 @@ const styles = StyleSheet.create({
   tabBarWrapper: {
     position: 'absolute',
     bottom: 14,
-    left: 12,
-    right: 12,
+    left: Platform.OS === 'web' ? 0 : 12,
+    right: Platform.OS === 'web' ? 0 : 12,
+    maxWidth: 440,
+    alignSelf: 'center',
+    marginHorizontal: 'auto',
     borderRadius: 24,
     backgroundColor: '#FFFFFF',
     shadowColor: '#000',

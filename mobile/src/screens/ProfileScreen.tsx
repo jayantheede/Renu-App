@@ -20,8 +20,7 @@ export const ProfileScreen = () => {
         <List.Section>
           <List.Subheader>Account Details</List.Subheader>
           <List.Item title="Email" description={email} left={() => <List.Icon icon="email" />} />
-          <List.Item title="Phone" description="(555) 123-4567" left={() => <List.Icon icon="phone" />} />
-          <List.Item title="Shipping Address" description="123 Farm Road, Agriville, CA 90210" left={() => <List.Icon icon="map-marker" />} />
+          <List.Item title="Shipping Address" description="123 Farm Road, Central Valley, CA" left={() => <List.Icon icon="map-marker" />} />
         </List.Section>
       </Card>
 
@@ -29,14 +28,14 @@ export const ProfileScreen = () => {
         <List.Section>
           <List.Subheader>Preferences</List.Subheader>
           <List.Item title="Reapplication Reminders" description="Enabled" left={() => <List.Icon icon="bell" />} />
-          <List.Item title="Order Updates" description="Enabled (SMS & Email)" left={() => <List.Icon icon="package" />} />
+          <List.Item title="Order Updates" description="Enabled (Email)" left={() => <List.Icon icon="package" />} />
         </List.Section>
       </Card>
 
       <Card style={styles.card}>
         <List.Section>
           <List.Subheader>Support</List.Subheader>
-          <List.Item title="Contact Support" description="support@ReNu-Biome.com" left={() => <List.Icon icon="help-circle" />} onPress={() => {}} />
+          <List.Item title="Contact Support" description="support@renu-biome.com" left={() => <List.Icon icon="help-circle" />} onPress={() => {}} />
         </List.Section>
       </Card>
 

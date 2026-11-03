@@ -86,12 +86,44 @@ import {
   renderCustomerConfirmHtmlPage,
   renderDispatchActionHtmlPage,
   getBaseBackendUrl,
-  DISPATCH_NOTIFICATION_EMAIL
+  DISPATCH_NOTIFICATION_EMAIL,
+  sendDeliveryStatusEmailToCustomer,
+  sendDeliveryCompletedEmailToAdmin,
+  sendLowTankAlertEmail,
+  sendLabSampleReceivedEmailToOffice,
+  sendRecommendationReadyEmailToCustomer,
+  sendProgramWindowReminderEmailToOffice,
+  sendNewUserInvitationEmail
 } from './orderEmailService';
+import {
+  createOptimoRouteOrder,
+  getOptimoRouteOrderStatus,
+  getOptimoRouteOrdersForDate,
+  deleteOptimoRouteOrder,
+  getOptimoRouteDrivers,
+  optimizeRoutes,
+  syncOpenDeliveriesWithOptimoRoute,
+  getOptimoRouteSyncStatus
+} from './optimoRouteService';
+import {
+  syncAllTanksTelemetry,
+  getTelemetrySyncStatus,
+  fetchOtodataReading
+} from './otodataService';
 
 const router = Router();
 
 router.use(requireAuth);
+
+function requireAdminRole(req: AuthenticatedRequest, res: any, next: any) {
+  const role = req.user?.role?.toLowerCase();
+  if (role !== 'admin' && role !== 'office' && role !== 'owner') {
+    return res.status(403).json({ error: 'Access forbidden: Administrator privileges required.' });
+  }
+  next();
+}
+
+router.use('/admin', requireAdminRole);
 
 // ---------------------------------
 // Profile & User Settings
@@ -163,20 +195,50 @@ router.get('/grower/dashboard', async (req: AuthenticatedRequest, res) => {
   const user = req.user!;
   const ranches = getRanchesForCustomer(user.email, user.role);
   const totalAcres = ranches.reduce((s, r) => s + (r.ac || 0), 0);
+  const normEmail = user.email.toLowerCase().trim();
+  const isCust = user.id === 'mock-cust-1' || normEmail === 'sravangaaismartsolutions.com' || normEmail === 'sravangaaismartsolutions@gmail.com' || normEmail === 'customer@renu.com';
   const userDeliveries = mockOrdersList.filter(
-    d => d.customerId === user.id || d.customerEmail?.toLowerCase() === user.email.toLowerCase()
+    d => (isCust && (d.customerId === 'mock-cust-1' || d.customerEmail?.toLowerCase() === 'customer@renu.com' || d.customerEmail?.toLowerCase() === 'sravangaaismartsolutions.com' || d.customerEmail?.toLowerCase() === 'sravangaaismartsolutions@gmail.com')) ||
+         d.customerId === user.id || d.customerEmail?.toLowerCase() === normEmail
   );
   const userInvoices = mockInvoices.filter(
-    i => i.customerId === user.id || i.customerEmail?.toLowerCase() === user.email.toLowerCase()
+    i => (isCust && (i.customerId === 'mock-cust-1' || i.customerEmail?.toLowerCase() === 'customer@renu.com' || i.customerEmail?.toLowerCase() === 'sravangaaismartsolutions.com' || i.customerEmail?.toLowerCase() === 'sravangaaismartsolutions@gmail.com')) ||
+         i.customerId === user.id || i.customerEmail?.toLowerCase() === normEmail
   );
+
+  const upcoming = userDeliveries
+    .filter(d => d.status === 'Scheduled' || d.status === 'Out for delivery')
+    .sort((a, b) => (a.status === 'Out for delivery' ? -1 : 1));
+  const nextDeliv = upcoming[0] || null;
+
+  const openInvoicesList = userInvoices.filter(i => i.status === 'Open' || i.status === 'Overdue');
+  const balanceDue = openInvoicesList.reduce((s, i) => s + (Number(i.amount) || 0), 0);
 
   res.json({
     role: user.role,
+    customerName: isCust ? 'Sierra Orchards LLC' : (user.name || 'Sierra Orchards LLC'),
+    userFirstName: isCust ? 'Maria' : (user.name?.split(' ')[0] || 'Maria'),
+    mainCrop: 'almond',
+    currentStage: 'Post-harvest',
+    stageIdx: 4,
+    nextDelivery: nextDeliv ? {
+      id: nextDeliv.id || nextDeliv.orderId,
+      date: nextDeliv.date,
+      gallons: nextDeliv.gallons,
+      productName: nextDeliv.productName || nextDeliv.product,
+      tankName: nextDeliv.tankName || (nextDeliv as any).tank || 'Tank 1',
+      ranchName: nextDeliv.ranchName || 'Sierra Foothills Ranch',
+      status: nextDeliv.status,
+      deliveryWindow: nextDeliv.deliveryWindow,
+      eta: (nextDeliv as any).optimoroute?.eta
+    } : null,
+    openInvoiceCount: openInvoicesList.length,
+    balanceDue,
     metrics: {
       assignedRanches: ranches.length,
       totalAcres,
-      upcomingDeliveries: userDeliveries.filter(d => d.status === 'Scheduled' || d.status === 'Out for delivery').length,
-      openInvoices: userInvoices.filter(i => i.status === 'Open' || i.status === 'Overdue').length,
+      upcomingDeliveries: upcoming.length,
+      openInvoices: openInvoicesList.length,
       unreadMessages: 0,
       activeRecommendations: 0
     }
@@ -437,8 +499,10 @@ router.get(['/deliveries', '/orders'], async (req: AuthenticatedRequest, res) =>
   }
   const norm = user.email.toLowerCase().trim();
   const userId = user.id ? user.id.toLowerCase().trim() : '';
+  const isCust = userId === 'mock-cust-1' || norm === 'sravangaaismartsolutions.com' || norm === 'sravangaaismartsolutions@gmail.com' || norm === 'customer@renu.com';
   const userDeliveries = mockOrdersList.filter(
-    d => (d.customerId && (d.customerId.toLowerCase() === norm || d.customerId.toLowerCase() === userId)) ||
+    d => (isCust && (d.customerId === 'mock-cust-1' || d.customerEmail?.toLowerCase() === 'customer@renu.com' || d.customerEmail?.toLowerCase() === 'sravangaaismartsolutions.com' || d.customerEmail?.toLowerCase() === 'sravangaaismartsolutions@gmail.com')) ||
+         (d.customerId && (d.customerId.toLowerCase() === norm || d.customerId.toLowerCase() === userId)) ||
          (d.customerEmail && d.customerEmail.toLowerCase() === norm)
   );
   res.json(userDeliveries.map(d => enrichDelivery(d)));
@@ -1197,17 +1261,28 @@ router.post('/samples/:id/reply', async (req: AuthenticatedRequest, res) => {
 // ---------------------------------
 // Otodata Tank Telemetry Routes (Phase 2 - Section 3)
 // ---------------------------------
-router.get('/tanks/:id/telemetry', async (req: AuthenticatedRequest, res) => {
-  for (const ranch of mockRanches) {
-    const tank = (ranch.tanks || []).find(t => t.id === req.params.id);
-    if (tank) {
+
+/** GET /telemetry/tanks — all tanks with live Otodata readings sorted by level */
+router.get(['/telemetry/tanks', '/tanks/telemetry'], async (req: AuthenticatedRequest, res) => {
+  const user = req.user!;
+  const ranches = user.role === 'admin'
+    ? mockRanches
+    : mockRanches.filter(r => r.customerId === user.id || (r.customerEmail && r.customerEmail.toLowerCase() === user.email.toLowerCase()));
+
+  const allTanks: any[] = [];
+  ranches.forEach(ranch => {
+    (ranch.tanks || []).forEach(tank => {
       const levelPercent = tank.levelPercent !== undefined ? tank.levelPercent : parseInt(tank.level || '75', 10);
-      const levelGallons = tank.levelGallons || tank.currentGallons || Math.round(tank.capacity * 0.75);
-      return res.json({
+      const cap = tank.capacity || tank.capacityGallons || 3000;
+      const levelGallons = tank.levelGallons || tank.currentGallons || Math.round((levelPercent / 100) * cap);
+      allTanks.push({
+        id: tank.id,
         tankId: tank.id,
         tankName: tank.name,
+        name: tank.name,
+        ranchId: ranch.id,
         ranchName: ranch.name,
-        capacity: tank.capacity,
+        capacity: cap,
         serial: tank.otodataDeviceId || tank.serial || 'OTO-99214',
         otodataDeviceId: tank.otodataDeviceId || tank.serial || 'OTO-99214',
         levelPercent,
@@ -1218,8 +1293,89 @@ router.get('/tanks/:id/telemetry', async (req: AuthenticatedRequest, res) => {
         weeklyUsageAvg: tank.weeklyUsageAvg || 210,
         daysToEmpty: tank.daysToEmpty || 35,
         reorderThresholdPercent: tank.reorderThresholdPercent || 25,
-        status: tank.status || 'Normal'
+        status: tank.status || (levelPercent <= (tank.reorderThresholdPercent || 25) ? `Needs a delivery (${levelPercent}%)` : 'Normal'),
+        noRecentReading: tank.noRecentReading || false,
+        readingHistory: tank.readingHistory || []
       });
+    });
+  });
+
+  // Sort by level percent ascending (lowest tanks first, Section 3.4)
+  allTanks.sort((a, b) => a.levelPercent - b.levelPercent);
+  res.json({ success: true, count: allTanks.length, tanks: allTanks });
+});
+
+/** GET /telemetry/status — Otodata sync status */
+router.get('/telemetry/status', async (req: AuthenticatedRequest, res) => {
+  res.json({ success: true, status: getTelemetrySyncStatus() });
+});
+
+/** POST /telemetry/sync and POST /otodata/sync — trigger immediate Otodata sync */
+router.post(['/telemetry/sync', '/otodata/sync', '/api/telemetry/sync'], async (req: AuthenticatedRequest, res) => {
+  try {
+    const summary = await syncAllTanksTelemetry();
+    addAuditLog({
+      action: 'OTODATA_SYNC_TRIGGERED',
+      details: `Manual Otodata sync executed. Synced ${summary.syncedTanks} tanks, detected ${summary.lowTanksCount} low tanks.`,
+      actor: req.user?.email || 'admin',
+      category: 'RANCHES'
+    });
+    res.json({ success: true, summary });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Telemetry sync failed' });
+  }
+});
+
+router.get('/tanks/:id/telemetry', async (req: AuthenticatedRequest, res) => {
+  for (const ranch of mockRanches) {
+    const tank = (ranch.tanks || []).find(t => t.id === req.params.id);
+    if (tank) {
+      const levelPercent = tank.levelPercent !== undefined ? tank.levelPercent : parseInt(tank.level || '75', 10);
+      const cap = tank.capacity || tank.capacityGallons || 3000;
+      const levelGallons = tank.levelGallons || tank.currentGallons || Math.round((levelPercent / 100) * cap);
+      return res.json({
+        tankId: tank.id,
+        tankName: tank.name,
+        ranchName: ranch.name,
+        capacity: cap,
+        serial: tank.otodataDeviceId || tank.serial || 'OTO-99214',
+        otodataDeviceId: tank.otodataDeviceId || tank.serial || 'OTO-99214',
+        levelPercent,
+        currentGallons: levelGallons,
+        levelGallons,
+        pressurePSI: parseInt(tank.pressure || '32', 10),
+        lastReadingTime: tank.lastReadingTime || new Date().toISOString(),
+        weeklyUsageAvg: tank.weeklyUsageAvg || 210,
+        daysToEmpty: tank.daysToEmpty || 35,
+        reorderThresholdPercent: tank.reorderThresholdPercent || 25,
+        status: tank.status || (levelPercent <= (tank.reorderThresholdPercent || 25) ? `Needs a delivery (${levelPercent}%)` : 'Normal'),
+        noRecentReading: tank.noRecentReading || false,
+        readingHistory: tank.readingHistory || []
+      });
+    }
+  }
+  res.status(404).json({ error: 'Tank not found' });
+});
+
+router.put(['/tanks/:id/threshold', '/tanks/:id/telemetry/threshold'], async (req: AuthenticatedRequest, res) => {
+  const { thresholdPercent } = req.body;
+  const num = Number(thresholdPercent);
+  if (isNaN(num) || num < 1 || num > 100) {
+    return res.status(400).json({ error: 'Valid threshold percent (1-100) is required' });
+  }
+
+  for (const ranch of mockRanches) {
+    const tank = (ranch.tanks || []).find(t => t.id === req.params.id);
+    if (tank) {
+      tank.reorderThresholdPercent = num;
+      saveStore();
+      addAuditLog({
+        action: 'TANK_THRESHOLD_UPDATED',
+        details: `Reorder threshold for tank ${tank.name} updated to ${num}%`,
+        actor: req.user?.email || 'admin',
+        category: 'RANCHES'
+      });
+      return res.json({ success: true, tankId: tank.id, reorderThresholdPercent: num });
     }
   }
   res.status(404).json({ error: 'Tank not found' });
@@ -1234,7 +1390,7 @@ router.put('/tanks/:id/telemetry', async (req: AuthenticatedRequest, res) => {
 // ---------------------------------
 // Monthly Reports Routes (Section A6.7)
 // ---------------------------------
-router.get('/reports/monthly', async (req: AuthenticatedRequest, res) => {
+router.get('/reports/monthly', requireAdminRole, async (req: AuthenticatedRequest, res) => {
   const period = req.query.period as string | undefined;
   const reports = getMonthlyReports(period);
   res.json(reports);
@@ -1317,19 +1473,102 @@ router.put('/admin/customers/:id/reset-password', async (req: AuthenticatedReque
 });
 
 // ---------------------------------
-// OptimoRoute Integration Routes (Phase 2 - Section 2)
+// OptimoRoute Integration Routes
 // ---------------------------------
+
+/** GET /optimoroute/drivers — list available drivers */
+router.get('/optimoroute/drivers', async (req: AuthenticatedRequest, res) => {
+  try {
+    const drivers = await getOptimoRouteDrivers();
+    res.json({ success: true, drivers });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to fetch drivers' });
+  }
+});
+
+/** GET /optimoroute/orders?date=YYYY-MM-DD — list orders for a date */
+router.get('/optimoroute/orders', async (req: AuthenticatedRequest, res) => {
+  try {
+    const date = (req.query.date as string) || new Date().toISOString().split('T')[0];
+    const orders = await getOptimoRouteOrdersForDate(date);
+    res.json({ success: true, date, orders });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to fetch OptimoRoute orders' });
+  }
+});
+
+/** GET /optimoroute/orders/:orderNo/status — real-time status of one order */
+router.get('/optimoroute/orders/:orderNo/status', async (req: AuthenticatedRequest, res) => {
+  try {
+    const status = await getOptimoRouteOrderStatus(req.params.orderNo as string);
+    if (!status) return res.status(404).json({ error: 'Order not found in OptimoRoute' });
+    res.json({ success: true, order: status });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to get order status' });
+  }
+});
+
+/** POST /optimoroute/orders — push a local delivery order to OptimoRoute */
+router.post('/optimoroute/orders', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { orderId } = req.body;
+    const order = mockOrdersList.find(o => o.id === orderId || o.orderId === orderId);
+    if (!order) return res.status(404).json({ error: 'Local order not found' });
+
+    const result = await createOptimoRouteOrder(order);
+    if (result) {
+      order.optimoRouteOrderId = result.id;
+      saveStore();
+      addAuditLog({
+        action: 'OPTIMOROUTE_ORDER_PUSHED',
+        details: `Order ${order.orderId} pushed to OptimoRoute (id: ${result.id})`,
+        actor: req.user?.email || 'admin',
+        category: 'ORDERS'
+      });
+    }
+    res.json({ success: true, optimoRouteOrder: result });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to push order to OptimoRoute' });
+  }
+});
+
+/** DELETE /optimoroute/orders/:orderNo — cancel/delete an OptimoRoute order */
+router.delete('/optimoroute/orders/:orderNo', async (req: AuthenticatedRequest, res) => {
+  try {
+    const deleted = await deleteOptimoRouteOrder(req.params.orderNo as string);
+    res.json({ success: deleted });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to delete OptimoRoute order' });
+  }
+});
+
+/** POST /optimoroute/optimize?date=YYYY-MM-DD — trigger route optimization */
+router.post('/optimoroute/optimize', async (req: AuthenticatedRequest, res) => {
+  try {
+    const date = (req.body.date as string) || new Date().toISOString().split('T')[0];
+    const ok = await optimizeRoutes(date);
+    res.json({ success: ok, date, message: ok ? 'Route optimization triggered' : 'Optimization skipped (no API key)' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to optimize routes' });
+  }
+});
+
+/** POST /optimoroute/webhook — inbound status updates from OptimoRoute */
 router.post(['/optimoroute/webhook', '/webhooks/optimoroute'], async (req: AuthenticatedRequest, res) => {
   try {
-    const { orderId, status, driverName, eta, completionTime } = req.body;
-    const order = mockOrdersList.find(o => o.id === orderId || o.orderId === orderId || o.optimoRouteOrderId === orderId);
+    const { orderId, orderNo, status, driverName, driverPhone, eta, completionTime } = req.body;
+    const lookupId = orderId || orderNo;
+    const order = mockOrdersList.find(o =>
+      o.id === lookupId || o.orderId === lookupId || o.optimoRouteOrderId === lookupId
+    );
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
-    if (status === 'Out for delivery' || status === 'en_route') {
+    if (status === 'Out for delivery' || status === 'en_route' || status === 'in_progress') {
       updateDeliveryStatus(order.id, 'Out for delivery');
       if (driverName) order.driverName = driverName;
+      if (driverPhone) order.driverPhone = driverPhone;
       if (eta) order.estimatedArrival = eta;
-    } else if (status === 'Delivered' || status === 'completed') {
+    } else if (status === 'Delivered' || status === 'completed' || status === 'success') {
       updateDeliveryStatus(order.id, 'Delivered', {
         deliveredDate: completionTime || new Date().toISOString().split('T')[0]
       });
@@ -1337,10 +1576,37 @@ router.post(['/optimoroute/webhook', '/webhooks/optimoroute'], async (req: Authe
     }
 
     saveStore();
+    addAuditLog({
+      action: 'OPTIMOROUTE_STATUS_UPDATE',
+      details: `Order ${order.orderId} updated via OptimoRoute webhook: ${status}`,
+      actor: 'optimoroute-webhook',
+      category: 'ORDERS'
+    });
     res.json({ success: true, order: enrichDelivery(order) });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Webhook failed' });
   }
+});
+
+/** POST /optimoroute/sync — sync all open deliveries with OptimoRoute */
+router.post('/optimoroute/sync', async (req: AuthenticatedRequest, res) => {
+  try {
+    const summary = await syncOpenDeliveriesWithOptimoRoute();
+    addAuditLog({
+      action: 'OPTIMOROUTE_SYNC_TRIGGERED',
+      details: `OptimoRoute open delivery sync executed. Checked ${summary.openDeliveriesChecked} deliveries, updated ${summary.deliveriesUpdated}.`,
+      actor: req.user?.email || 'admin',
+      category: 'ORDERS'
+    });
+    res.json({ success: true, summary });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'OptimoRoute sync failed' });
+  }
+});
+
+/** GET /optimoroute/status — get OptimoRoute sync status */
+router.get('/optimoroute/status', async (req: AuthenticatedRequest, res) => {
+  res.json({ success: true, status: getOptimoRouteSyncStatus() });
 });
 
 // ---------------------------------

@@ -62,31 +62,11 @@ export const SignInScreen = ({ navigation }: any) => {
       return;
     }
 
-    // Quick offline demo fallback
-    if ((loginEmail === 'Admin' || loginEmail === 'support@renu-biome.com' || loginEmail === 'admin@renu.com') && (loginPassword === 'Admin' || loginPassword === 'admin')) {
-      setSession({ id: 'admin', email: 'support@renu-biome.com', name: 'Administrator', role: 'admin' }, 'mock_token');
-      setLoading(false);
-      return;
-    }
-
-    if ((loginEmail === 'User' || loginEmail === 'customer@renu.com') && (loginPassword === 'User' || loginPassword === 'customer')) {
-      setSession({ id: 'user', email: 'customer@renu.com', name: 'Sierra Agri Group (Grower)', role: 'Grower' }, 'mock_token');
-      setLoading(false);
-      return;
-    }
-
-    if ((loginEmail === 'Employee' || loginEmail === 'employee@renu.com') && (loginPassword === 'Employee' || loginPassword === 'employee')) {
-      setSession({ id: 'employee-1', email: 'employee@renu.com', name: 'Dave Miller (Staff)', role: 'Staff' }, 'mock_token');
-      setLoading(false);
-      return;
-    }
-
     try {
       const data = await login(loginEmail, loginPassword);
       if (data.mfaRequired) {
         setMfaEmail(loginEmail);
-        setMfaDemoCode(data.demoCode || '123456');
-        setMfaCode(data.demoCode || '');
+        setMfaCode('');
         setMfaStep(true);
         return;
       }
@@ -95,7 +75,7 @@ export const SignInScreen = ({ navigation }: any) => {
       const raw = error.message || '';
       let friendly = 'Could not sign in. Please verify your email and password.';
       if (raw.toLowerCase().includes('password')) {
-        friendly = "That password doesn't match our records.";
+        friendly = "That password doesn't match.";
       } else if (raw.toLowerCase().includes('user') || raw.toLowerCase().includes('not found') || raw.toLowerCase().includes('account')) {
         friendly = 'No account found with that email address.';
       } else if (raw.toLowerCase().includes('failed to fetch') || raw.toLowerCase().includes('network')) {
@@ -130,12 +110,8 @@ export const SignInScreen = ({ navigation }: any) => {
   const handleResendCode = async () => {
     setResending(true);
     try {
-      const data = await resendMfa(mfaEmail);
-      if (data.demoCode) {
-        setMfaDemoCode(data.demoCode);
-        setMfaCode(data.demoCode);
-      }
-      Alert.alert('Code Dispatched', 'A fresh 6-digit verification code has been dispatched.');
+      await resendMfa(mfaEmail);
+      Alert.alert('Code Dispatched', `A fresh 6-digit verification code has been dispatched to ${mfaEmail}.`);
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to resend verification code.');
     } finally {
@@ -212,17 +188,12 @@ export const SignInScreen = ({ navigation }: any) => {
                     style={{ alignSelf: 'center', marginBottom: 6 }}
                   />
                   <Text style={styles.mfaInstruction}>
-                    A 6-digit security verification code was sent to:
+                    A 6-digit security verification code was sent to your email:
                   </Text>
                   <Text style={styles.mfaTargetEmail}>{mfaEmail}</Text>
-                  {mfaDemoCode ? (
-                    <TouchableOpacity
-                      onPress={() => setMfaCode(mfaDemoCode)}
-                      style={styles.demoCodeBadge}
-                    >
-                      <Text style={styles.demoCodeText}>Security Code: {mfaDemoCode} (Tap to fill)</Text>
-                    </TouchableOpacity>
-                  ) : null}
+                  <Text style={{ fontSize: 12, color: '#64748B', textAlign: 'center', marginTop: 4 }}>
+                    Please check your inbox (and spam folder) and enter the code below.
+                  </Text>
                 </View>
 
                 <TextInput
@@ -375,23 +346,13 @@ export const SignInScreen = ({ navigation }: any) => {
                       </Button>
                       <Button
                         mode="outlined"
-                        onPress={() => handleSignIn('customer@renu.com', 'customer')}
+                        onPress={() => handleSignIn('sravangaaismartsolutions@gmail.com', 'customer')}
                         textColor={BRAND_COLORS.primaryTeal}
                         style={styles.demoButton}
                         compact
                         labelStyle={styles.demoButtonLabel}
                       >
                         Grower
-                      </Button>
-                      <Button
-                        mode="outlined"
-                        onPress={() => handleSignIn('employee@renu.com', 'employee')}
-                        textColor={BRAND_COLORS.accentOrange}
-                        style={[styles.demoButton, { borderColor: BRAND_COLORS.accentOrange }]}
-                        compact
-                        labelStyle={styles.demoButtonLabel}
-                      >
-                        Staff
                       </Button>
                     </View>
                   </View>

@@ -8,31 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAuthStore } from './src/store/useAuthStore';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-// Web Polyfill for React Native Alert.alert to support confirmation dialogs and buttons
-if (Platform.OS === 'web' && typeof window !== 'undefined') {
-  Alert.alert = (title: string, message?: string, buttons?: any[]) => {
-    const text = [title, message].filter(Boolean).join('\n\n');
-    if (!buttons || buttons.length <= 1) {
-      window.alert(text);
-      if (buttons && buttons[0] && typeof buttons[0].onPress === 'function') {
-        buttons[0].onPress();
-      }
-    } else {
-      const confirmed = window.confirm(text);
-      if (confirmed) {
-        const actionBtn = buttons.find((b: any) => b.style !== 'cancel' && b.text?.toLowerCase() !== 'cancel') || buttons[buttons.length - 1];
-        if (actionBtn && typeof actionBtn.onPress === 'function') {
-          actionBtn.onPress();
-        }
-      } else {
-        const cancelBtn = buttons.find((b: any) => b.style === 'cancel' || b.text?.toLowerCase() === 'cancel');
-        if (cancelBtn && typeof cancelBtn.onPress === 'function') {
-          cancelBtn.onPress();
-        }
-      }
-    }
-  };
-}
+import './src/utils/alertPolyfill';
 
 export default function App() {
   const colorScheme = useColorScheme();
@@ -123,6 +99,18 @@ export default function App() {
             src: local('MaterialCommunityIcons'),
                  url('/assets/MaterialCommunityIcons.ttf') format('truetype');
             font-display: swap;
+          }
+          @keyframes rbFadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+          }
+          @keyframes rbFadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+          }
+          @keyframes rbScaleUp {
+            from { opacity: 0; transform: scale(0.94); }
+            to { opacity: 1; transform: scale(1); }
           }
         `));
         document.head.appendChild(style);

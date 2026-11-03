@@ -959,7 +959,7 @@ export const AdminCustomersScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
-  scrollContent: { paddingHorizontal: 16 },
+  scrollContent: { paddingHorizontal: 16, paddingBottom: 160 },
   header: {
     paddingBottom: 16,
   },

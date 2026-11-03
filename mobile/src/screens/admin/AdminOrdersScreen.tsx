@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NotificationBellButton } from '../../components/NotificationBellButton';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
+import { CreateOrderModal } from '../../components/CreateOrderModal';
 
 const AdminOrdersScreenInner = ({ route }: any) => {
   const insets = useSafeAreaInsets();
@@ -526,54 +527,11 @@ const AdminOrdersScreenInner = ({ route }: any) => {
       </ScrollView>
 
       {/* ================= CREATE DELIVERY ORDER MODAL ================= */}
-      <Modal visible={createModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>Create Delivery Order</Text>
-                <Text style={styles.modalSubtitle}>Office phone-in order entry</Text>
-              </View>
-              <TouchableOpacity onPress={() => setCreateModalVisible(false)}>
-                <MaterialCommunityIcons name="close" size={24} color="#64748B" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <TextInput label="Customer Name" value={newCustomerName} onChangeText={setNewCustomerName} mode="outlined" style={styles.modalInput} />
-              <TextInput label="Customer Email" value={newCustomerEmail} onChangeText={setNewCustomerEmail} mode="outlined" style={styles.modalInput} />
-              <TextInput label="Product" value={newProduct} onChangeText={setNewProduct} mode="outlined" style={styles.modalInput} />
-              <TextInput label="Quantity (Gallons)" value={newGallons} onChangeText={setNewGallons} keyboardType="numeric" mode="outlined" placeholder="e.g. 500" style={styles.modalInput} />
-
-              <Text style={{ fontWeight: '700', fontSize: 13, marginTop: 6, marginBottom: 4 }}>Select Ranch</Text>
-              {ranchesList.map(r => (
-                <TouchableOpacity
-                  key={r.id}
-                  onPress={() => {
-                    setNewRanchId(r.id);
-                    setNewTankId(r.tanks?.[0]?.id || '');
-                  }}
-                  style={[styles.pickerItem, newRanchId === r.id && styles.pickerItemActive]}
-                >
-                  <Text style={{ fontWeight: '700', color: newRanchId === r.id ? '#15803D' : '#1E293B' }}>{r.name}</Text>
-                  <Text style={{ fontSize: 11, color: '#64748B' }}>Tanks: {(r.tanks || []).map((t: any) => t.name).join(', ') || 'None'}</Text>
-                </TouchableOpacity>
-              ))}
-
-              <TextInput label="Requested Delivery Date" value={newDate} onChangeText={setNewDate} mode="outlined" placeholder="YYYY-MM-DD" style={styles.modalInput} />
-              <TextInput label="Delivery Window" value={newWindow} onChangeText={setNewWindow} mode="outlined" style={styles.modalInput} />
-              <TextInput label="Gate Code" value={newGateCode} onChangeText={setNewGateCode} mode="outlined" style={styles.modalInput} />
-              <TextInput label="Who to Call on Arrival" value={newWhoToCall} onChangeText={setNewWhoToCall} mode="outlined" style={styles.modalInput} />
-              <TextInput label="Delivery Notes" value={newNotes} onChangeText={setNewNotes} mode="outlined" multiline numberOfLines={2} style={styles.modalInput} />
-            </ScrollView>
-
-            <View style={styles.modalActions}>
-              <Button mode="outlined" onPress={() => setCreateModalVisible(false)} textColor="#64748B" style={{ flex: 1, marginRight: 8, minHeight: 48, justifyContent: 'center' }}>Cancel</Button>
-              <Button mode="contained" onPress={handleCreateOrder} loading={creating} buttonColor="#2E5D36" style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}>Schedule Delivery</Button>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <CreateOrderModal
+        visible={createModalVisible}
+        onClose={() => setCreateModalVisible(false)}
+        onSuccess={loadData}
+      />
 
       {/* ================= RESCHEDULE MODAL ================= */}
       <Modal visible={rescheduleModalVisible} animationType="fade" transparent>
@@ -665,7 +623,7 @@ export const AdminOrdersScreen = (props: any) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
-  scrollContent: { paddingHorizontal: 16 },
+  scrollContent: { paddingHorizontal: 16, paddingBottom: 160 },
   header: {
     paddingBottom: 16,
   },
