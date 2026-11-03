@@ -16,6 +16,7 @@ const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-jwt-key';
 
 import { mockAvatars, transporter } from './usersStore';
+import { getLogoAttachment, getEmailHeaderHtml, getEmailFooterHtml } from './emailTemplateHelper';
 export { mockAvatars, transporter };
 
 import {
@@ -217,23 +218,45 @@ app.post('/api/auth/send-otp', async (req, res) => {
     const norm = email.toLowerCase().trim();
     (global as any).mockOtp = { email: norm, code, expiresAt: Date.now() + 10 * 60 * 1000 };
 
+    const logoAtt = getLogoAttachment();
     const mailOptions = {
       from: `"ReNu-Biome Security" <${process.env.SMTP_USER || 'support@renu-biome.com'}>`,
       to: email,
       subject: `Your ReNu-Biome Verification Code: ${code}`,
       html: `
-        <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 24px; color: #1E293B;">
-          <h2 style="color: #0C6054;">ReNu-Biome Portal Verification</h2>
-          <p>Your verification code is:</p>
-          <div style="font-size: 32px; font-weight: 800; letter-spacing: 6px; color: #0C6054; margin: 16px 0;">${code}</div>
-          <p>This code will expire in 10 minutes.</p>
-        </div>
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #F8FAFC; color: #1E293B; margin: 0; padding: 24px; }
+            .card { max-width: 500px; margin: 0 auto; background: #FFFFFF; border-radius: 12px; border: 1px solid #CBD5E1; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.08); text-align: center; }
+            .header { background: #0C6054; padding: 28px 24px 20px; text-align: center; }
+            .content { padding: 32px 24px; }
+            .code-box { font-size: 34px; font-weight: 800; letter-spacing: 8px; color: #0C6054; background: #F0FDFA; border: 2px dashed #99F6E4; padding: 16px 28px; border-radius: 10px; margin: 20px 0; font-family: monospace; display: inline-block; }
+            .note { font-size: 13px; color: #64748B; margin-top: 14px; line-height: 1.5; }
+            .footer { padding: 14px; background: #F8FAFC; border-top: 1px solid #E2E8F0; font-size: 11px; color: #94A3B8; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            ${getEmailHeaderHtml('Portal Verification', 'Security Verification Code')}
+            <div class="content">
+              <p style="margin-top: 0; font-size: 15px;">Your verification code is:</p>
+              <div class="code-box">${code}</div>
+              <p class="note">This code will expire in 10 minutes. Never share this code with anyone.</p>
+            </div>
+            ${getEmailFooterHtml()}
+          </div>
+        </body>
+        </html>
       `,
+      attachments: logoAtt ? [logoAtt] : []
     };
 
     if (process.env.SMTP_USER && process.env.SMTP_PASS) {
       await transporter.sendMail(mailOptions);
-      console.log(`[Auth] Real OTP sent to: ${email} via Office 365 SMTP.`);
+      console.log(`[Auth] Real OTP sent to: ${email} via SMTP.`);
       res.json({ success: true, message: 'OTP sent successfully to your email' });
     } else {
       console.log(`[Auth Simulation] OTP generated for: ${email}: ${code}`);
@@ -350,6 +373,7 @@ app.post(['/api/auth/login', '/auth/login', '/app/login', '/api/app/login', '/ap
 
       if (process.env.SMTP_USER && process.env.SMTP_PASS) {
         try {
+          const logoAtt = getLogoAttachment();
           await transporter.sendMail({
             from: `"ReNu-Biome Security" <${process.env.SMTP_USER}>`,
             to: targetEmail,
@@ -362,31 +386,25 @@ app.post(['/api/auth/login', '/auth/login', '/app/login', '/api/app/login', '/ap
                 <style>
                   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #F8FAFC; color: #1E293B; margin: 0; padding: 24px; }
                   .card { max-width: 500px; margin: 0 auto; background: #FFFFFF; border-radius: 12px; border: 1px solid #CBD5E1; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.08); text-align: center; }
-                  .header { background: #0C6054; padding: 24px; color: #FFFFFF; }
-                  .header h1 { margin: 0; font-size: 20px; font-weight: 700; color: #FFFFFF; }
                   .content { padding: 32px 24px; }
                   .code-box { font-size: 34px; font-weight: 800; letter-spacing: 8px; color: #0C6054; background: #F0FDFA; border: 2px dashed #99F6E4; padding: 16px 28px; border-radius: 10px; margin: 20px 0; font-family: monospace; display: inline-block; }
                   .note { font-size: 13px; color: #64748B; margin-top: 14px; line-height: 1.5; }
-                  .footer { padding: 14px; background: #F8FAFC; border-top: 1px solid #E2E8F0; font-size: 11px; color: #94A3B8; }
                 </style>
               </head>
               <body>
                 <div class="card">
-                  <div class="header">
-                    <h1>ReNu-Biome Two-Factor Authentication</h1>
-                  </div>
+                  ${getEmailHeaderHtml('Two-Factor Authentication', 'Sign-In Security Verification')}
                   <div class="content">
                     <p style="margin-top: 0; font-size: 15px;">Please use the following 6-digit verification code to complete your sign-in:</p>
                     <div class="code-box">${code}</div>
                     <p class="note">This code is valid for 10 minutes. Never share this code with anyone.</p>
                   </div>
-                  <div class="footer">
-                    ReNu-Biome Inc. · Automated Security · support@renu-biome.com
-                  </div>
+                  ${getEmailFooterHtml()}
                 </div>
               </body>
               </html>
-            `
+            `,
+            attachments: logoAtt ? [logoAtt] : []
           });
           console.log(`[MFA] Sent 6-digit real security OTP email to ${targetEmail}`);
         } catch (mailErr: any) {

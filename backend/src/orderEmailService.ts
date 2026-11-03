@@ -1,4 +1,5 @@
 import { transporter, OrderItem, mockRanches, TankItem, RanchItem, LabSample } from './usersStore';
+import { getLogoAttachment } from './emailTemplateHelper';
 
 export const DISPATCH_NOTIFICATION_EMAIL = process.env.DISPATCH_EMAIL || 'support@renu-biome.com';
 
@@ -62,6 +63,7 @@ export async function sendOrderAcceptedEmailToCustomer(order: OrderItem, req?: a
     <body>
       <div class="card">
         <div class="header">
+          <img src="cid:renu-logo-white" alt="ReNu-Biome" style="height: 38px; max-width: 190px; width: auto; display: block; margin: 0 0 12px 0; border: 0;" />
           <h1>Order #${order.orderId} Accepted!</h1>
           <p>ReNu-Biome Agronomy & Dispatch</p>
         </div>
@@ -94,11 +96,13 @@ export async function sendOrderAcceptedEmailToCustomer(order: OrderItem, req?: a
 
   if (process.env.SMTP_USER && process.env.SMTP_PASS) {
     try {
+      const logoAtt = getLogoAttachment();
       await transporter.sendMail({
         from: `"ReNu-Biome Dispatch" <${process.env.SMTP_USER}>`,
         to: customerEmail,
         subject: `Order #${order.orderId} Accepted: Please Confirm Delivery Details`,
-        html
+        html,
+        attachments: logoAtt ? [logoAtt] : []
       });
       console.log(`[Email Success] Sent confirmation request to customer: ${customerEmail}`);
       return true;
@@ -157,6 +161,7 @@ export async function sendCustomerConfirmedEmailToDispatch(order: OrderItem, req
     <body>
       <div class="card">
         <div class="header">
+          <img src="cid:renu-logo-white" alt="ReNu-Biome" style="height: 38px; max-width: 190px; width: auto; display: block; margin: 0 0 12px 0; border: 0;" />
           <div class="badge">Action Required • Customer Confirmed</div>
           <h1>Delivery Details Ready for Order #${order.orderId}</h1>
           <p>The customer has verified destination address, gate code & delivery window</p>
@@ -230,11 +235,13 @@ export async function sendCustomerConfirmedEmailToDispatch(order: OrderItem, req
 
   if (process.env.SMTP_USER && process.env.SMTP_PASS) {
     try {
+      const logoAtt = getLogoAttachment();
       await transporter.sendMail({
         from: `"ReNu-Biome Orders" <${process.env.SMTP_USER}>`,
         to: DISPATCH_NOTIFICATION_EMAIL,
         subject: `⚡ Customer Delivery Confirmed: Order #${order.orderId} (${order.product}) - Action Required`,
-        html
+        html,
+        attachments: logoAtt ? [logoAtt] : []
       });
       console.log(`[Email Success] Sent confirmed order details to dispatch: ${DISPATCH_NOTIFICATION_EMAIL}`);
       return true;
@@ -503,6 +510,7 @@ export async function sendDeliveryStatusEmailToCustomer(
     <body>
       <div class="card">
         <div class="header">
+          <img src="cid:renu-logo-white" alt="ReNu-Biome" style="height: 38px; max-width: 190px; width: auto; display: block; margin: 0 0 12px 0; border: 0;" />
           <div class="badge">${status}</div>
           <h1>Delivery Update: Order #${order.orderId}</h1>
           <p>ReNu-Biome Precision Agricultural Nutrition</p>
@@ -574,11 +582,13 @@ export async function sendDeliveryStatusEmailToCustomer(
 
   if (process.env.SMTP_USER && process.env.SMTP_PASS) {
     try {
+      const logoAtt = getLogoAttachment();
       await transporter.sendMail({
         from: `"ReNu-Biome Operations" <${process.env.SMTP_USER}>`,
         to: customerEmail,
         subject: `Delivery Update: Order #${order.orderId} is ${status}`,
-        html
+        html,
+        attachments: logoAtt ? [logoAtt] : []
       });
       console.log(`[Email Success] Sent status "${status}" email to: ${customerEmail}`);
       return true;
@@ -647,9 +657,10 @@ export async function sendLowTankAlertEmail(
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 24px; color: #1E293B; background: #F8FAFC;">
       <div style="max-width: 580px; margin: 0 auto; background: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
-        <div style="background: #D97706; padding: 20px 24px; color: #FFFFFF;">
-          <h2 style="margin: 0; font-size: 20px;">⚠️ Low Tank Alert: ${tank.name}</h2>
-          <p style="margin: 4px 0 0 0; font-size: 13px; color: #FEF3C7;">Otodata Telemetry Automated Notice</p>
+        <div style="background: #0C6054; padding: 22px 24px; color: #FFFFFF; text-align: left;">
+          <img src="cid:renu-logo-white" alt="ReNu-Biome" style="height: 36px; max-width: 180px; width: auto; display: block; margin: 0 0 10px 0; border: 0;" />
+          <h2 style="margin: 0; font-size: 20px; color: #FFFFFF;">⚠️ Low Tank Alert: ${tank.name}</h2>
+          <p style="margin: 4px 0 0 0; font-size: 13px; color: #CCFBF1;">Otodata Telemetry Automated Notice</p>
         </div>
         <div style="padding: 24px;">
           <p>The tank monitor for <strong>${tank.name}</strong> on ranch <strong>${ranch.name}</strong> has dropped below its reorder threshold.</p>
@@ -674,11 +685,13 @@ export async function sendLowTankAlertEmail(
       if (customerEmail && customerEmail !== officeEmail) {
         recipients.push(customerEmail);
       }
+      const logoAtt = getLogoAttachment();
       await transporter.sendMail({
         from: `"ReNu-Biome Telemetry" <${process.env.SMTP_USER}>`,
         to: recipients.join(', '),
         subject: `⚠️ Low Tank Alert: ${tank.name} on ${ranch.name} (${currentLevel}%)`,
-        html
+        html,
+        attachments: logoAtt ? [logoAtt] : []
       });
       console.log(`[Email Success] Sent low-tank alert for ${tank.name} to: ${recipients.join(', ')}`);
       return true;
@@ -700,30 +713,43 @@ export async function sendLabSampleReceivedEmailToOffice(
   const officeEmail = DISPATCH_NOTIFICATION_EMAIL;
 
   const html = `
-    <div style="font-family: sans-serif; padding: 20px; color: #0F172A;">
-      <h2 style="color: #0C6054;">🔬 New Lab Sample Submitted</h2>
-      <p>A customer has uploaded lab results awaiting agronomist review.</p>
-      <ul>
-        <li><strong>Customer:</strong> ${customerName || sample.customerEmail}</li>
-        <li><strong>Ranch:</strong> ${sample.ranchName}</li>
-        <li><strong>Block:</strong> ${sample.blockId}</li>
-        <li><strong>Sample Type:</strong> ${sample.sampleType}</li>
-        <li><strong>Sample Date:</strong> ${sample.sampleDate}</li>
-        <li><strong>Lab Name:</strong> ${sample.labName}</li>
-        ${sample.customerNotes ? `<li><strong>Notes:</strong> ${sample.customerNotes}</li>` : ''}
-        ${sample.pdfFileName ? `<li><strong>Attached File:</strong> ${sample.pdfFileName}</li>` : ''}
-      </ul>
-      <p>Log into Admin Console &rarr; Samples to review and generate recommendation.</p>
+    <div style="font-family: sans-serif; padding: 24px; color: #0F172A; background: #F8FAFC;">
+      <div style="max-width: 580px; margin: 0 auto; background: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+        <div style="background: #0C6054; padding: 22px 24px; color: #FFFFFF; text-align: left;">
+          <img src="cid:renu-logo-white" alt="ReNu-Biome" style="height: 36px; max-width: 180px; width: auto; display: block; margin: 0 0 10px 0; border: 0;" />
+          <h2 style="margin: 0; font-size: 20px; color: #FFFFFF;">🔬 New Lab Sample Submitted</h2>
+          <p style="margin: 4px 0 0 0; font-size: 13px; color: #CCFBF1;">Awaiting Agronomist Review</p>
+        </div>
+        <div style="padding: 24px;">
+          <p>A customer has uploaded lab results awaiting agronomist review.</p>
+          <ul>
+            <li><strong>Customer:</strong> ${customerName || sample.customerEmail}</li>
+            <li><strong>Ranch:</strong> ${sample.ranchName}</li>
+            <li><strong>Block:</strong> ${sample.blockId}</li>
+            <li><strong>Sample Type:</strong> ${sample.sampleType}</li>
+            <li><strong>Sample Date:</strong> ${sample.sampleDate}</li>
+            <li><strong>Lab Name:</strong> ${sample.labName}</li>
+            ${sample.customerNotes ? `<li><strong>Notes:</strong> ${sample.customerNotes}</li>` : ''}
+            ${sample.pdfFileName ? `<li><strong>Attached File:</strong> ${sample.pdfFileName}</li>` : ''}
+          </ul>
+          <p>Log into Admin Console &rarr; Samples to review and generate recommendation.</p>
+        </div>
+        <div style="padding: 16px; background: #F8FAFC; border-top: 1px solid #E2E8F0; font-size: 12px; color: #64748B; text-align: center;">
+          ReNu-Biome Inc. · Agronomy Operations
+        </div>
+      </div>
     </div>
   `;
 
   if (process.env.SMTP_USER && process.env.SMTP_PASS) {
     try {
+      const logoAtt = getLogoAttachment();
       await transporter.sendMail({
         from: `"ReNu-Biome Agronomy" <${process.env.SMTP_USER}>`,
         to: officeEmail,
         subject: `[Sample Received] ${sample.sampleType} analysis for ${sample.ranchName} (${customerName || sample.customerEmail})`,
-        html
+        html,
+        attachments: logoAtt ? [logoAtt] : []
       });
       return true;
     } catch (e: any) {
@@ -747,7 +773,8 @@ export async function sendRecommendationReadyEmailToCustomer(
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 24px; color: #1E293B; background: #F8FAFC;">
       <div style="max-width: 580px; margin: 0 auto; background: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0; overflow: hidden;">
-        <div style="background: #0C6054; padding: 20px 24px; color: #FFFFFF;">
+        <div style="background: #0C6054; padding: 22px 24px; color: #FFFFFF; text-align: left;">
+          <img src="cid:renu-logo-white" alt="ReNu-Biome" style="height: 36px; max-width: 180px; width: auto; display: block; margin: 0 0 10px 0; border: 0;" />
           <h2 style="margin: 0; font-size: 20px;">🌿 Agronomic Nutrition Recommendation Ready</h2>
           <p style="margin: 4px 0 0 0; font-size: 13px; color: #CCFBF1;">ReNu-Biome Custom Recommendation</p>
         </div>
@@ -765,11 +792,13 @@ export async function sendRecommendationReadyEmailToCustomer(
 
   if (process.env.SMTP_USER && process.env.SMTP_PASS) {
     try {
+      const logoAtt = getLogoAttachment();
       await transporter.sendMail({
         from: `"ReNu-Biome Agronomy" <${process.env.SMTP_USER}>`,
         to: customerEmail,
         subject: `Nutrition Recommendation Ready: ${sample.ranchName} (${sample.blockId})`,
-        html
+        html,
+        attachments: logoAtt ? [logoAtt] : []
       });
       return true;
     } catch (e: any) {

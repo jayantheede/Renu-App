@@ -95,6 +95,7 @@ import {
   sendProgramWindowReminderEmailToOffice,
   sendNewUserInvitationEmail
 } from './orderEmailService';
+import { getLogoAttachment, getEmailHeaderHtml, getEmailFooterHtml } from './emailTemplateHelper';
 import {
   createOptimoRouteOrder,
   getOptimoRouteOrderStatus,
@@ -543,24 +544,30 @@ router.post(['/deliveries', '/orders'], async (req: AuthenticatedRequest, res) =
 
     // Send email notification to customer on Scheduled (non-blocking)
     if (process.env.SMTP_USER && process.env.SMTP_PASS && targetEmail) {
+      const logoAtt = getLogoAttachment();
       transporter.sendMail({
         from: `"ReNu-Biome Deliveries" <${process.env.SMTP_USER}>`,
         to: targetEmail,
         subject: `Delivery Scheduled: Order #${delivery.orderId} (${delivery.product})`,
         html: `
-          <div style="font-family: sans-serif; padding: 20px; color: #1E293B;">
-            <h2 style="color: #2E5D36;">ReNu-Biome Delivery Scheduled</h2>
-            <p>Your delivery has been scheduled with the following details:</p>
-            <ul>
-              <li><strong>Order #:</strong> ${delivery.orderId}</li>
-              <li><strong>Product:</strong> ${delivery.product}</li>
-              <li><strong>Gallons:</strong> ${delivery.gallons.toLocaleString()} Gal</li>
-              <li><strong>Delivery Window:</strong> ${delivery.deliveryWindow}</li>
-              <li><strong>Status:</strong> Scheduled</li>
-            </ul>
-            <p>You can track delivery status anytime in the ReNu-Biome portal.</p>
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #F8FAFC; padding: 24px; color: #1E293B;">
+            <div style="max-width: 560px; margin: 0 auto; background: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0; overflow: hidden;">
+              ${getEmailHeaderHtml('Delivery Scheduled', `Order #${delivery.orderId}`)}
+              <div style="padding: 24px;">
+                <p>Your delivery has been scheduled with the following details:</p>
+                <div style="background: #F0FDFA; border: 1px solid #99F6E4; border-radius: 8px; padding: 16px; margin: 16px 0;">
+                  <div style="font-size: 15px; font-weight: 700; color: #0C6054; margin-bottom: 6px;">${delivery.product}</div>
+                  <div style="font-size: 13px; color: #334155; margin-bottom: 4px;"><strong>Quantity:</strong> ${delivery.gallons.toLocaleString()} Gallons</div>
+                  <div style="font-size: 13px; color: #334155; margin-bottom: 4px;"><strong>Delivery Window:</strong> ${delivery.deliveryWindow}</div>
+                  <div style="font-size: 13px; color: #334155;"><strong>Status:</strong> Scheduled</div>
+                </div>
+                <p>You can track delivery status anytime in the ReNu-Biome grower portal.</p>
+              </div>
+              ${getEmailFooterHtml()}
+            </div>
           </div>
-        `
+        `,
+        attachments: logoAtt ? [logoAtt] : []
       }).catch((err: any) => {
         console.warn('[Email Warning] Could not send scheduled delivery email:', err.message);
       });
@@ -603,22 +610,28 @@ router.put(['/deliveries/:id/status', '/orders/:id/status'], async (req: Authent
         msg = `<p>Successfully injected <strong>${delivery.deliveredGallons || delivery.gallons} Gal</strong> of <strong>${delivery.product}</strong> on ${delivery.deliveredDate || 'today'}.</p>`;
       }
 
+      const logoAtt = getLogoAttachment();
       transporter.sendMail({
         from: `"ReNu-Biome Deliveries" <${process.env.SMTP_USER}>`,
         to: delivery.customerEmail,
         subject,
         html: `
-          <div style="font-family: sans-serif; padding: 20px; color: #1E293B;">
-            <h2 style="color: #2E5D36;">ReNu-Biome Delivery Update</h2>
-            ${msg}
-            <ul>
-              <li><strong>Order #:</strong> ${delivery.orderId}</li>
-              <li><strong>Product:</strong> ${delivery.product}</li>
-              <li><strong>Delivered Quantity:</strong> ${(delivery.deliveredGallons || delivery.gallons).toLocaleString()} Gal</li>
-              <li><strong>Status:</strong> ${status}</li>
-            </ul>
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #F8FAFC; padding: 24px; color: #1E293B;">
+            <div style="max-width: 560px; margin: 0 auto; background: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0; overflow: hidden;">
+              ${getEmailHeaderHtml('Delivery Update', `Order #${delivery.orderId}`)}
+              <div style="padding: 24px;">
+                ${msg}
+                <div style="background: #F0FDFA; border: 1px solid #99F6E4; border-radius: 8px; padding: 16px; margin: 16px 0;">
+                  <div style="font-size: 15px; font-weight: 700; color: #0C6054; margin-bottom: 6px;">${delivery.product}</div>
+                  <div style="font-size: 13px; color: #334155; margin-bottom: 4px;"><strong>Delivered Quantity:</strong> ${(delivery.deliveredGallons || delivery.gallons).toLocaleString()} Gal</div>
+                  <div style="font-size: 13px; color: #334155;"><strong>Status:</strong> ${status}</div>
+                </div>
+              </div>
+              ${getEmailFooterHtml()}
+            </div>
           </div>
-        `
+        `,
+        attachments: logoAtt ? [logoAtt] : []
       }).catch((err: any) => {
         console.warn('[Email Warning] Status update email failed:', err.message);
       });
