@@ -3,6 +3,7 @@ import { View, StyleSheet, Alert, ScrollView, KeyboardAvoidingView, Platform, Im
 import { Text, TextInput, Button, useTheme } from 'react-native-paper';
 import { GlassCard } from '../../components/GlassCard';
 import { useAuthStore } from '../../store/useAuthStore';
+import { getApiBaseUrl } from '../../api/client';
 
 export const SignUpScreen = ({ navigation }: any) => {
   const [name, setName] = useState('');
@@ -14,8 +15,6 @@ export const SignUpScreen = ({ navigation }: any) => {
   const [isOtpSent, setIsOtpSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const theme = useTheme();
-
-  const BACKEND_URL = (process.env.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
 
   const handleSignUp = async () => {
     if (!name || !username || !email || !password) {
@@ -30,7 +29,8 @@ export const SignUpScreen = ({ navigation }: any) => {
 
     setLoading(true);
     try {
-      const res = await fetch(`${BACKEND_URL}/api/auth/send-otp`, {
+      const baseUrl = await getApiBaseUrl();
+      const res = await fetch(`${baseUrl}/auth/send-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email })
@@ -63,7 +63,8 @@ export const SignUpScreen = ({ navigation }: any) => {
 
     setLoading(true);
     try {
-      const res = await fetch(`${BACKEND_URL}/api/auth/verify-otp`, {
+      const baseUrl = await getApiBaseUrl();
+      const res = await fetch(`${baseUrl}/auth/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, otp: otpCode, password, name, username, harvestStages })
@@ -77,7 +78,7 @@ export const SignUpScreen = ({ navigation }: any) => {
 
       // If token/user was not returned directly by verify-otp, perform auto-login
       if (!user || !token) {
-        const loginRes = await fetch(`${BACKEND_URL}/api/auth/login`, {
+        const loginRes = await fetch(`${baseUrl}/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password })

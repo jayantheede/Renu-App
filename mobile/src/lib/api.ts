@@ -1,4 +1,6 @@
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+const API_URL = typeof window !== 'undefined' && window.location
+  ? window.location.origin
+  : (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000');
 
 export const fetchHomeData = async (entityId?: string) => {
   const url = entityId ? `${API_URL}/api/portal/home?entityId=${entityId}` : `${API_URL}/api/portal/home`;

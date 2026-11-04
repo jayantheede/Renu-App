@@ -326,7 +326,7 @@ export const MoreScreen = () => {
 
   const handleExportAuditPack = () => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      window.open('http://localhost:3000/app/documents/audit-pack', '_blank');
+      window.open(`${window.location.origin}/app/documents/audit-pack`, '_blank');
     } else {
       Alert.alert('Audit Pack', 'Audit Pack generated and dispatched to your email.');
     }
@@ -334,7 +334,7 @@ export const MoreScreen = () => {
 
   const handleExportComplianceCsv = () => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      window.open('http://localhost:3000/app/compliance/export-csv?season=2026', '_blank');
+      window.open(`${window.location.origin}/app/compliance/export-csv?season=2026`, '_blank');
     } else {
       Alert.alert('Export CSV', 'Central Valley Coalition CSV dispatched.');
     }
@@ -1378,7 +1378,7 @@ export const MoreScreen = () => {
                           style={{ borderColor: '#0C6054', borderRadius: 6, marginTop: 8 }}
                           onPress={() => {
                             if (Platform.OS === 'web' && typeof window !== 'undefined') {
-                              window.open('http://localhost:3000/app/documents/audit-pack', '_blank');
+                              window.open(`${window.location.origin}/app/documents/audit-pack`, '_blank');
                             } else {
                               Alert.alert('Download', `Downloading ${doc.title}...`);
                             }

@@ -1,9 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Known production mapping: Render frontend → Render backend
-const RENDER_BACKEND_URL = 'https://renu-app-backend.onrender.com';
-const RENDER_FRONTEND_HOSTS = ['renu-app-1.onrender.com', 'renu-app.onrender.com'];
-
 export const getApiBaseUrl = async (): Promise<string> => {
   try {
     const custom = await AsyncStorage.getItem('@custom_api_url');
@@ -15,19 +11,26 @@ export const getApiBaseUrl = async (): Promise<string> => {
 
   if (typeof window !== 'undefined' && window.location) {
     const hostname = window.location.hostname;
-    // On Render production frontend → use Render backend
-    if (RENDER_FRONTEND_HOSTS.some(h => hostname === h || hostname.endsWith('.onrender.com'))) {
-      return `${RENDER_BACKEND_URL}/api`;
-    }
-    // Local dev
+    // Local dev on Metro bundler (port 8081 / 19006)
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://localhost:3000/api';
+      const port = window.location.port;
+      if (port && port !== '3000') {
+        return 'http://localhost:3000/api';
+      }
     }
+    // Unified Web Service: In production (Render, custom domain, or local port 3000),
+    // Express serves both the frontend web app and /api from the EXACT same origin.
+    return `${window.location.origin}/api`;
   }
 
-  const RENDER_URL = process.env.EXPO_PUBLIC_RENDER_BACKEND_URL;
-  const RAW_URL = (RENDER_URL || process.env.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
-  return RAW_URL.endsWith('/api') ? RAW_URL : `${RAW_URL}/api`;
+  // Native mobile app fallback (iOS / Android)
+  const ENV_URL = (
+    process.env.EXPO_PUBLIC_API_URL ||
+    process.env.EXPO_PUBLIC_BACKEND_URL ||
+    process.env.EXPO_PUBLIC_RENDER_BACKEND_URL ||
+    'https://renu-app.onrender.com'
+  ).replace(/\/+$/, '');
+  return ENV_URL.endsWith('/api') ? ENV_URL : `${ENV_URL}/api`;
 };
 
 export const setCustomApiUrl = async (url: string) => {
