@@ -1,5 +1,5 @@
 import { transporter, OrderItem, mockRanches, TankItem, RanchItem, LabSample } from './usersStore';
-import { getLogoAttachment } from './emailTemplateHelper';
+import { getLogoAttachment, getEmailHeaderHtml, getEmailFooterHtml } from './emailTemplateHelper';
 
 export const DISPATCH_NOTIFICATION_EMAIL = process.env.DISPATCH_EMAIL || 'support@renu-biome.com';
 
@@ -873,6 +873,538 @@ export async function sendNewUserInvitationEmail(user: any, resetUrl: string): P
       return true;
     } catch (e: any) {
       console.warn('[Email Warning] Failed to send user invitation email:', e.message);
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Admin creates user -> Send email with Username and Password to the user
+ */
+export async function sendNewUserCredentialsEmail(
+  user: { name?: string; email: string },
+  plainPassword: string,
+  role?: string,
+  portalUrl?: string
+): Promise<boolean> {
+  const loginUrl = portalUrl || (process.env.FRONTEND_PUBLIC_URL || 'https://app.renu-biome.com');
+  const logoAtt = getLogoAttachment();
+  const userName = user.name && user.name.trim() ? user.name.trim() : user.email.split('@')[0];
+  const userRole = role || 'Grower / Customer';
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Welcome to ReNu-Biome - Account Credentials</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #F8FAFC; color: #1E293B; margin: 0; padding: 24px; }
+        .card { max-width: 580px; margin: 0 auto; background: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .content { padding: 28px 24px; }
+        .cred-box { background: #F0FDFA; border: 1.5px solid #0C6054; border-radius: 10px; padding: 20px; margin: 20px 0; }
+        .btn-login { display: block; text-align: center; background: #0C6054; color: #FFFFFF !important; font-weight: 700; font-size: 16px; padding: 14px 24px; border-radius: 8px; text-decoration: none; margin: 24px 0 16px 0; }
+        .note { font-size: 12px; color: #64748B; line-height: 1.6; margin-top: 16px; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        ${getEmailHeaderHtml('Welcome to ReNu-Biome', 'Your Portal Login Credentials')}
+        <div class="content">
+          <p style="font-size: 15px; margin-top: 0;">Hello <strong>${userName}</strong>,</p>
+          <p style="font-size: 14px; line-height: 1.6; color: #334155;">
+            An authorized account has been created for you by ReNu-Biome Administration. You can now access your real-time tank telemetry, delivery schedules, fertility programs, and field maps.
+          </p>
+          
+          <div class="cred-box">
+            <div style="font-size: 13px; font-weight: 700; color: #0C6054; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px;">
+              🔑 Your Login Credentials
+            </div>
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+              <tr>
+                <td style="padding: 8px 0; color: #047857; font-weight: 600;">Username / Email:</td>
+                <td style="padding: 8px 0; text-align: right; font-weight: 700; font-family: monospace; color: #0F172A; font-size: 14px;">${user.email}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #047857; font-weight: 600;">Temporary Password:</td>
+                <td style="padding: 8px 0; text-align: right; font-weight: 700; font-family: monospace; color: #0C6054; font-size: 16px; background: #E6FFFA; padding: 4px 10px; border-radius: 4px; display: inline-block;">${plainPassword}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #047857; font-weight: 600;">Account Role:</td>
+                <td style="padding: 8px 0; text-align: right; font-weight: 600; color: #334155;">${userRole}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #047857; font-weight: 600;">Portal URL:</td>
+                <td style="padding: 8px 0; text-align: right;"><a href="${loginUrl}" style="color: #0C6054; font-weight: 600;">${loginUrl}</a></td>
+              </tr>
+            </table>
+          </div>
+
+          <a href="${loginUrl}" class="btn-login" style="color: #FFFFFF !important;">
+            Sign In to ReNu-Biome Portal &rarr;
+          </a>
+
+          <p class="note">
+            🔒 <strong>Security Notice:</strong> For your protection, we recommend updating your password upon your first sign in via your Profile settings.<br/>
+            If you need assistance or have agronomy questions, please contact our support team at <a href="mailto:support@renu-biome.com" style="color: #0C6054; font-weight: 600;">support@renu-biome.com</a>.
+          </p>
+        </div>
+        ${getEmailFooterHtml()}
+      </div>
+    </body>
+    </html>
+  `;
+
+  if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+      await transporter.sendMail({
+        from: `"ReNu-Biome Accounts" <${process.env.SMTP_USER}>`,
+        to: user.email,
+        subject: `Welcome to ReNu-Biome: Your Portal Username & Password`,
+        html,
+        attachments: logoAtt ? [logoAtt] : []
+      });
+      console.log(`[Email Success] Sent login credentials to: ${user.email}`);
+      return true;
+    } catch (e: any) {
+      console.warn(`[Email Warning] Failed to send credentials email to ${user.email}:`, e.message);
+      return false;
+    }
+  } else {
+    console.log(`[Email Simulation] Sent login credentials to ${user.email} (Password: ${plainPassword})`);
+    return true;
+  }
+}
+
+/**
+ * Admin or system resets password -> Send email with new password to the user
+ */
+export async function sendPasswordResetCredentialsEmail(
+  user: { name?: string; email: string },
+  newPlainPassword: string,
+  portalUrl?: string
+): Promise<boolean> {
+  const loginUrl = portalUrl || (process.env.FRONTEND_PUBLIC_URL || 'https://app.renu-biome.com');
+  const logoAtt = getLogoAttachment();
+  const userName = user.name && user.name.trim() ? user.name.trim() : user.email.split('@')[0];
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Your ReNu-Biome Password Has Been Updated</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #F8FAFC; color: #1E293B; margin: 0; padding: 24px; }
+        .card { max-width: 580px; margin: 0 auto; background: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .content { padding: 28px 24px; }
+        .cred-box { background: #F0FDFA; border: 1.5px solid #0C6054; border-radius: 10px; padding: 20px; margin: 20px 0; }
+        .btn-login { display: block; text-align: center; background: #0C6054; color: #FFFFFF !important; font-weight: 700; font-size: 16px; padding: 14px 24px; border-radius: 8px; text-decoration: none; margin: 24px 0 16px 0; }
+        .note { font-size: 12px; color: #64748B; line-height: 1.6; margin-top: 16px; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        ${getEmailHeaderHtml('Password Updated', 'Your ReNu-Biome Portal Credentials')}
+        <div class="content">
+          <p style="font-size: 15px; margin-top: 0;">Hello <strong>${userName}</strong>,</p>
+          <p style="font-size: 14px; line-height: 1.6; color: #334155;">
+            Your account password for the ReNu-Biome Portal has been reset by administration. Below are your updated credentials:
+          </p>
+          
+          <div class="cred-box">
+            <div style="font-size: 13px; font-weight: 700; color: #0C6054; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px;">
+              🔑 Updated Credentials
+            </div>
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+              <tr>
+                <td style="padding: 8px 0; color: #047857; font-weight: 600;">Username / Email:</td>
+                <td style="padding: 8px 0; text-align: right; font-weight: 700; font-family: monospace; color: #0F172A; font-size: 14px;">${user.email}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #047857; font-weight: 600;">New Password:</td>
+                <td style="padding: 8px 0; text-align: right; font-weight: 700; font-family: monospace; color: #0C6054; font-size: 16px; background: #E6FFFA; padding: 4px 10px; border-radius: 4px; display: inline-block;">${newPlainPassword}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #047857; font-weight: 600;">Portal URL:</td>
+                <td style="padding: 8px 0; text-align: right;"><a href="${loginUrl}" style="color: #0C6054; font-weight: 600;">${loginUrl}</a></td>
+              </tr>
+            </table>
+          </div>
+
+          <a href="${loginUrl}" class="btn-login" style="color: #FFFFFF !important;">
+            Log In with New Password &rarr;
+          </a>
+
+          <p class="note">
+            If you did not request this password reset, please contact ReNu-Biome support immediately at <a href="mailto:support@renu-biome.com" style="color: #0C6054; font-weight: 600;">support@renu-biome.com</a>.
+          </p>
+        </div>
+        ${getEmailFooterHtml()}
+      </div>
+    </body>
+    </html>
+  `;
+
+  if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+      await transporter.sendMail({
+        from: `"ReNu-Biome Security" <${process.env.SMTP_USER}>`,
+        to: user.email,
+        subject: `Your ReNu-Biome Portal Password Has Been Reset`,
+        html,
+        attachments: logoAtt ? [logoAtt] : []
+      });
+      console.log(`[Email Success] Sent password reset credentials to: ${user.email}`);
+      return true;
+    } catch (e: any) {
+      console.warn(`[Email Warning] Failed to send password reset email to ${user.email}:`, e.message);
+      return false;
+    }
+  } else {
+    console.log(`[Email Simulation] Sent password reset to ${user.email} (Password: ${newPlainPassword})`);
+    return true;
+  }
+}
+
+/**
+ * Customer account status changed (Approved, Suspended, Details Updated) -> Send alert email to customer
+ */
+export async function sendCustomerAccountStatusEmail(
+  user: { name?: string; email: string },
+  status: 'APPROVED' | 'PENDING' | 'REJECTED' | 'UPDATED',
+  details?: string,
+  portalUrl?: string
+): Promise<boolean> {
+  const loginUrl = portalUrl || (process.env.FRONTEND_PUBLIC_URL || 'https://app.renu-biome.com');
+  const logoAtt = getLogoAttachment();
+  const userName = user.name && user.name.trim() ? user.name.trim() : user.email.split('@')[0];
+
+  let title = 'Account Status Update';
+  let message = details || 'Your ReNu-Biome grower account has been updated by administration.';
+
+  if (status === 'APPROVED') {
+    title = 'Account Approved & Activated';
+    message = 'Your ReNu-Biome grower account has been verified and fully approved. You now have unrestricted access to telemetry, ranch blocks, order placement, and agronomic lab data.';
+  }
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>${title}</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #F8FAFC; color: #1E293B; margin: 0; padding: 24px; }
+        .card { max-width: 580px; margin: 0 auto; background: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .content { padding: 28px 24px; }
+        .box { background: #F0FDFA; border: 1px solid #99F6E4; border-radius: 8px; padding: 18px; margin: 18px 0; }
+        .btn { display: block; text-align: center; background: #0C6054; color: #FFFFFF !important; font-weight: 700; font-size: 16px; padding: 14px 24px; border-radius: 8px; text-decoration: none; margin: 24px 0 16px 0; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        ${getEmailHeaderHtml(title, 'ReNu-Biome Grower Portal')}
+        <div class="content">
+          <p style="font-size: 15px; margin-top: 0;">Hello <strong>${userName}</strong>,</p>
+          <div class="box">
+            <p style="font-size: 14px; margin: 0; line-height: 1.6; color: #0F172A;">${message}</p>
+          </div>
+          <a href="${loginUrl}" class="btn" style="color: #FFFFFF !important;">
+            Open ReNu-Biome Portal &rarr;
+          </a>
+        </div>
+        ${getEmailFooterHtml()}
+      </div>
+    </body>
+    </html>
+  `;
+
+  if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+      await transporter.sendMail({
+        from: `"ReNu-Biome Accounts" <${process.env.SMTP_USER}>`,
+        to: user.email,
+        subject: `ReNu-Biome Account Alert: ${title}`,
+        html,
+        attachments: logoAtt ? [logoAtt] : []
+      });
+      console.log(`[Email Success] Sent account status alert to: ${user.email}`);
+      return true;
+    } catch (e: any) {
+      console.warn(`[Email Warning] Failed to send account status email to ${user.email}:`, e.message);
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Any order placed or modified -> Send immediate confirmation alert to customer
+ */
+export async function sendOrderPlacedAlertEmailToCustomer(order: any, portalUrl?: string): Promise<boolean> {
+  const customerEmail = order.customerEmail;
+  if (!customerEmail) return false;
+
+  const loginUrl = portalUrl || (process.env.FRONTEND_PUBLIC_URL || 'https://app.renu-biome.com');
+  const logoAtt = getLogoAttachment();
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Order Placed • #${order.orderId || order.id}</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #F8FAFC; color: #1E293B; margin: 0; padding: 24px; }
+        .card { max-width: 580px; margin: 0 auto; background: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .content { padding: 28px 24px; }
+        .order-box { background: #F0FDFA; border: 1.5px solid #0C6054; border-radius: 10px; padding: 18px; margin: 18px 0; }
+        .btn { display: block; text-align: center; background: #0C6054; color: #FFFFFF !important; font-weight: 700; font-size: 16px; padding: 14px 24px; border-radius: 8px; text-decoration: none; margin: 24px 0 16px 0; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        ${getEmailHeaderHtml('Order Placed Successfully', `Order #${order.orderId || order.id}`)}
+        <div class="content">
+          <p style="font-size: 15px; margin-top: 0;">Hello <strong>${order.customerName || customerEmail}</strong>,</p>
+          <p style="font-size: 14px; line-height: 1.6; color: #334155;">
+            Your order has been recorded in the ReNu-Biome system. Our dispatch operations team will review injection staging and delivery schedules.
+          </p>
+
+          <div class="order-box">
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+              <tr>
+                <td style="padding: 6px 0; color: #047857; font-weight: 600;">Product:</td>
+                <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #0F172A;">${order.product}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; color: #047857; font-weight: 600;">Quantity:</td>
+                <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #0F172A;">${order.qty || (order.gallons ? `${order.gallons} Gal` : 'N/A')}</td>
+              </tr>
+              ${order.ranchName ? `
+              <tr>
+                <td style="padding: 6px 0; color: #047857; font-weight: 600;">Destination Ranch:</td>
+                <td style="padding: 6px 0; text-align: right; font-weight: 600; color: #334155;">${order.ranchName}</td>
+              </tr>` : ''}
+              ${order.tankName ? `
+              <tr>
+                <td style="padding: 6px 0; color: #047857; font-weight: 600;">Target Tank:</td>
+                <td style="padding: 6px 0; text-align: right; font-weight: 600; color: #334155;">${order.tankName}</td>
+              </tr>` : ''}
+              <tr>
+                <td style="padding: 6px 0; color: #047857; font-weight: 600;">Requested Date:</td>
+                <td style="padding: 6px 0; text-align: right; font-weight: 600; color: #334155;">${order.date || new Date().toISOString().split('T')[0]}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; color: #047857; font-weight: 600;">Status:</td>
+                <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #0C6054;">${order.status || 'PENDING'}</td>
+              </tr>
+            </table>
+          </div>
+
+          <a href="${loginUrl}" class="btn" style="color: #FFFFFF !important;">
+            Track Order in Portal &rarr;
+          </a>
+        </div>
+        ${getEmailFooterHtml()}
+      </div>
+    </body>
+    </html>
+  `;
+
+  if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+      await transporter.sendMail({
+        from: `"ReNu-Biome Orders" <${process.env.SMTP_USER}>`,
+        to: customerEmail,
+        subject: `Order Confirmation: #${order.orderId || order.id} (${order.product})`,
+        html,
+        attachments: logoAtt ? [logoAtt] : []
+      });
+      console.log(`[Email Success] Sent order placed alert to: ${customerEmail}`);
+      return true;
+    } catch (e: any) {
+      console.warn(`[Email Warning] Failed to send order placed alert:`, e.message);
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Lab sample / tissue test uploaded -> Send alert email to customer
+ */
+export async function sendLabResultReadyEmailToCustomer(sample: any, portalUrl?: string): Promise<boolean> {
+  const customerEmail = sample.customerEmail;
+  if (!customerEmail) return false;
+
+  const loginUrl = portalUrl || (process.env.FRONTEND_PUBLIC_URL || 'https://app.renu-biome.com');
+  const logoAtt = getLogoAttachment();
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Lab Results Ready • ${sample.sampleId || sample.id}</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #F8FAFC; color: #1E293B; margin: 0; padding: 24px; }
+        .card { max-width: 580px; margin: 0 auto; background: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .content { padding: 28px 24px; }
+        .box { background: #F0FDFA; border: 1.5px solid #0C6054; border-radius: 10px; padding: 18px; margin: 18px 0; }
+        .btn { display: block; text-align: center; background: #0C6054; color: #FFFFFF !important; font-weight: 700; font-size: 16px; padding: 14px 24px; border-radius: 8px; text-decoration: none; margin: 24px 0 16px 0; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        ${getEmailHeaderHtml('Lab Analysis Ready', `Sample #${sample.sampleId || sample.id}`)}
+        <div class="content">
+          <p style="font-size: 15px; margin-top: 0;">Hello <strong>${sample.customerName || customerEmail}</strong>,</p>
+          <p style="font-size: 14px; line-height: 1.6; color: #334155;">
+            The laboratory analysis for your field sample has been completed and published to your grower portal.
+          </p>
+
+          <div class="box">
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+              <tr>
+                <td style="padding: 6px 0; color: #047857; font-weight: 600;">Sample ID:</td>
+                <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #0F172A;">${sample.sampleId || sample.id}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; color: #047857; font-weight: 600;">Analysis Type:</td>
+                <td style="padding: 6px 0; text-align: right; font-weight: 600; color: #334155;">${sample.sampleType || sample.type || 'Tissue & Biological'}</td>
+              </tr>
+              ${sample.ranchName ? `
+              <tr>
+                <td style="padding: 6px 0; color: #047857; font-weight: 600;">Ranch / Field:</td>
+                <td style="padding: 6px 0; text-align: right; font-weight: 600; color: #334155;">${sample.ranchName}</td>
+              </tr>` : ''}
+              ${sample.blockId ? `
+              <tr>
+                <td style="padding: 6px 0; color: #047857; font-weight: 600;">Block:</td>
+                <td style="padding: 6px 0; text-align: right; font-weight: 600; color: #334155;">${sample.blockId}</td>
+              </tr>` : ''}
+              <tr>
+                <td style="padding: 6px 0; color: #047857; font-weight: 600;">Status:</td>
+                <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #059669;">Completed / Ready</td>
+              </tr>
+            </table>
+          </div>
+
+          <a href="${loginUrl}" class="btn" style="color: #FFFFFF !important;">
+            View Lab Report in Portal &rarr;
+          </a>
+        </div>
+        ${getEmailFooterHtml()}
+      </div>
+    </body>
+    </html>
+  `;
+
+  if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+      await transporter.sendMail({
+        from: `"ReNu-Biome Agronomy" <${process.env.SMTP_USER}>`,
+        to: customerEmail,
+        subject: `🔬 Lab Results Available: Sample #${sample.sampleId || sample.id}`,
+        html,
+        attachments: logoAtt ? [logoAtt] : []
+      });
+      console.log(`[Email Success] Sent lab result ready alert to: ${customerEmail}`);
+      return true;
+    } catch (e: any) {
+      console.warn(`[Email Warning] Failed to send lab result alert:`, e.message);
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Invoice generated or updated -> Send alert email to customer
+ */
+export async function sendInvoiceAlertEmailToCustomer(invoice: any, portalUrl?: string): Promise<boolean> {
+  const customerEmail = invoice.customerEmail;
+  if (!customerEmail) return false;
+
+  const loginUrl = portalUrl || (process.env.FRONTEND_PUBLIC_URL || 'https://app.renu-biome.com');
+  const logoAtt = getLogoAttachment();
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Invoice #${invoice.invoiceNumber || invoice.id}</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #F8FAFC; color: #1E293B; margin: 0; padding: 24px; }
+        .card { max-width: 580px; margin: 0 auto; background: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .content { padding: 28px 24px; }
+        .box { background: #F0FDFA; border: 1.5px solid #0C6054; border-radius: 10px; padding: 18px; margin: 18px 0; }
+        .btn { display: block; text-align: center; background: #0C6054; color: #FFFFFF !important; font-weight: 700; font-size: 16px; padding: 14px 24px; border-radius: 8px; text-decoration: none; margin: 24px 0 16px 0; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        ${getEmailHeaderHtml('Invoice Available', `Invoice #${invoice.invoiceNumber || invoice.id}`)}
+        <div class="content">
+          <p style="font-size: 15px; margin-top: 0;">Hello <strong>${invoice.customerName || customerEmail}</strong>,</p>
+          <p style="font-size: 14px; line-height: 1.6; color: #334155;">
+            An invoice has been generated for your ReNu-Biome biological deliveries. Details are available below and in your portal:
+          </p>
+
+          <div class="box">
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+              <tr>
+                <td style="padding: 6px 0; color: #047857; font-weight: 600;">Invoice Number:</td>
+                <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #0F172A;">${invoice.invoiceNumber || invoice.id}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; color: #047857; font-weight: 600;">Date:</td>
+                <td style="padding: 6px 0; text-align: right; font-weight: 600; color: #334155;">${invoice.date || new Date().toISOString().split('T')[0]}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; color: #047857; font-weight: 600;">Amount:</td>
+                <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #0C6054; font-size: 16px;">$${(invoice.amount || invoice.amt || 0).toLocaleString()}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; color: #047857; font-weight: 600;">Status:</td>
+                <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #059669;">${invoice.status || 'PAID'}</td>
+              </tr>
+            </table>
+          </div>
+
+          <a href="${loginUrl}" class="btn" style="color: #FFFFFF !important;">
+            View Invoices in Portal &rarr;
+          </a>
+        </div>
+        ${getEmailFooterHtml()}
+      </div>
+    </body>
+    </html>
+  `;
+
+  if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+      await transporter.sendMail({
+        from: `"ReNu-Biome Billing" <${process.env.SMTP_USER}>`,
+        to: customerEmail,
+        subject: `Invoice #${invoice.invoiceNumber || invoice.id} Available - ReNu-Biome`,
+        html,
+        attachments: logoAtt ? [logoAtt] : []
+      });
+      console.log(`[Email Success] Sent invoice alert to: ${customerEmail}`);
+      return true;
+    } catch (e: any) {
+      console.warn(`[Email Warning] Failed to send invoice alert:`, e.message);
       return false;
     }
   }

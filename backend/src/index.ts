@@ -58,6 +58,14 @@ import {
   renderCustomerConfirmHtmlPage,
   renderDispatchActionHtmlPage,
   getBaseBackendUrl,
+  getBaseFrontendUrl,
+  sendNewUserCredentialsEmail,
+  sendPasswordResetCredentialsEmail,
+  sendCustomerAccountStatusEmail,
+  sendOrderPlacedAlertEmailToCustomer,
+  sendLabResultReadyEmailToCustomer,
+  sendInvoiceAlertEmailToCustomer,
+  sendDeliveryStatusEmailToCustomer,
   DISPATCH_NOTIFICATION_EMAIL
 } from './orderEmailService';
 import { syncAllTanksTelemetry } from './otodataService';
@@ -704,13 +712,26 @@ app.post(['/api/admin/customers', '/api/app/admin/customers'], async (req, res) 
     const { name, email, password, role } = req.body;
     if (!email) return res.status(400).json({ error: 'Email is required' });
 
+    const plainPassword = password || 'Customer123!';
     const newCust = await createNewUser({
       name,
       email,
-      password: password || 'Customer123!',
+      password: plainPassword,
       role: role || 'Grower',
       approvalStatus: 'APPROVED'
     });
+
+    // Send credentials (username & password) directly to the user's email
+    try {
+      await sendNewUserCredentialsEmail(
+        { name: newCust.name, email: newCust.email },
+        plainPassword,
+        newCust.role,
+        getBaseFrontendUrl(req)
+      );
+    } catch (mailErr: any) {
+      console.warn('[Admin] Failed to send credentials email:', mailErr.message);
+    }
 
     res.json({
       success: true,
@@ -779,7 +800,8 @@ app.put(['/api/admin/customers/:id/reset-password', '/api/app/admin/customers/:i
     if (!password || !password.trim()) {
       return res.status(400).json({ error: 'New password is required' });
     }
-    const updated = await updateCustomerDetails(req.params.id as string, { password: password.trim() });
+    const newPlainPassword = password.trim();
+    const updated = await updateCustomerDetails(req.params.id as string, { password: newPlainPassword });
     if (updated) {
       addAuditLog({
         action: 'CUSTOMER_PASSWORD_RESET',
@@ -787,6 +809,18 @@ app.put(['/api/admin/customers/:id/reset-password', '/api/app/admin/customers/:i
         actor: 'support@renu-biome.com',
         category: 'SECURITY'
       });
+
+      // Send email alert with new password to user
+      try {
+        await sendPasswordResetCredentialsEmail(
+          { name: updated.name, email: updated.email },
+          newPlainPassword,
+          getBaseFrontendUrl(req)
+        );
+      } catch (mailErr: any) {
+        console.warn('[Admin] Failed to send password reset email:', mailErr.message);
+      }
+
       res.json({ success: true, message: 'Password reset successfully', customer: updated });
     } else {
       res.status(404).json({ error: 'Customer not found' });
@@ -817,6 +851,18 @@ app.post(['/api/admin/approvals/customer/:id'], async (req, res) => {
   try {
     const { status } = req.body;
     const updated = updateCustomerApprovalStatus(req.params.id as string, status);
+    if (updated) {
+      try {
+        await sendCustomerAccountStatusEmail(
+          { name: updated.name, email: updated.email },
+          status,
+          undefined,
+          getBaseFrontendUrl(req)
+        );
+      } catch (mailErr: any) {
+        console.warn('[Admin] Failed to send approval alert email:', mailErr.message);
+      }
+    }
     res.json({ success: true, customer: updated });
   } catch (e: any) {
     res.status(500).json({ error: 'Failed to update customer approval' });
@@ -866,6 +912,12 @@ app.post(['/api/orders', '/api/app/orders'], async (req, res) => {
       actor: email,
       category: 'ORDERS'
     });
+
+    try {
+      await sendOrderPlacedAlertEmailToCustomer(newOrder, getBaseFrontendUrl(req));
+    } catch (mailErr: any) {
+      console.warn('[Orders] Failed to send order placed alert email:', mailErr.message);
+    }
 
     res.json({ success: true, order: newOrder });
   } catch (err: any) {
@@ -1171,6 +1223,13 @@ app.put(['/api/admin/orders/:id/tracking', '/api/app/admin/orders/:id/tracking']
     const { status, step } = req.body;
     const order = updateOrderTracking(req.params.id as string, status, Number(step));
     if (!order) return res.status(404).json({ error: 'Order not found' });
+
+    try {
+      await sendDeliveryStatusEmailToCustomer(order, status || 'Updated', order.estimatedArrival, req);
+    } catch (mailErr: any) {
+      console.warn('[Tracking] Failed to send status update email:', mailErr.message);
+    }
+
     res.json({ success: true, order });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to update tracking' });

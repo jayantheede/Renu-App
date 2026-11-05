@@ -93,7 +93,14 @@ import {
   sendLabSampleReceivedEmailToOffice,
   sendRecommendationReadyEmailToCustomer,
   sendProgramWindowReminderEmailToOffice,
-  sendNewUserInvitationEmail
+  sendNewUserInvitationEmail,
+  sendNewUserCredentialsEmail,
+  sendPasswordResetCredentialsEmail,
+  sendCustomerAccountStatusEmail,
+  sendOrderPlacedAlertEmailToCustomer,
+  sendLabResultReadyEmailToCustomer,
+  sendInvoiceAlertEmailToCustomer,
+  getBaseFrontendUrl
 } from './orderEmailService';
 import { getLogoAttachment, getEmailHeaderHtml, getEmailFooterHtml } from './emailTemplateHelper';
 import {
@@ -955,6 +962,12 @@ router.post('/invoices', async (req: AuthenticatedRequest, res) => {
       category: 'SYSTEM'
     });
 
+    try {
+      await sendInvoiceAlertEmailToCustomer(invoice, getBaseFrontendUrl(req));
+    } catch (mailErr: any) {
+      console.warn('[Invoices] Failed to send invoice alert email:', mailErr.message);
+    }
+
     res.json({ success: true, invoice });
   } catch (e: any) {
     res.status(500).json({ error: e.message || 'Failed to create invoice' });
@@ -1231,6 +1244,13 @@ router.put('/samples/:id/values', async (req: AuthenticatedRequest, res) => {
   try {
     const updated = updateSampleValues(req.params.id as string, req.body);
     if (!updated) return res.status(404).json({ error: 'Sample not found' });
+
+    try {
+      await sendLabResultReadyEmailToCustomer(updated, getBaseFrontendUrl(req));
+    } catch (mailErr: any) {
+      console.warn('[Samples] Failed to send lab result ready email:', mailErr.message);
+    }
+
     res.json(updated);
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to update sample values' });
@@ -1464,14 +1484,27 @@ router.post('/admin/customers', async (req: AuthenticatedRequest, res) => {
     const { name, email, password, phone, role } = req.body;
     if (!email) return res.status(400).json({ error: 'Email is required' });
 
+    const plainPassword = password || 'Customer123!';
     const newCust = await createNewUser({
       name: name || 'New Customer',
       email,
-      password: password || 'Customer123!',
+      password: plainPassword,
       phone,
       role: role || 'Grower',
       approvalStatus: 'APPROVED'
     });
+
+    // Send credentials (username & password) directly to the user's email
+    try {
+      await sendNewUserCredentialsEmail(
+        { name: newCust.name, email: newCust.email },
+        plainPassword,
+        newCust.role,
+        getBaseFrontendUrl(req)
+      );
+    } catch (mailErr: any) {
+      console.warn('[Admin] Failed to send credentials email:', mailErr.message);
+    }
 
     res.json({ success: true, customer: newCust });
   } catch (error: any) {
@@ -1482,6 +1515,18 @@ router.post('/admin/customers', async (req: AuthenticatedRequest, res) => {
 router.put('/admin/customers/:id', async (req: AuthenticatedRequest, res) => {
   try {
     const updated = await updateCustomerDetails(req.params.id as string, req.body);
+    if (updated && req.body.approvalStatus) {
+      try {
+        await sendCustomerAccountStatusEmail(
+          { name: updated.name, email: updated.email },
+          req.body.approvalStatus,
+          undefined,
+          getBaseFrontendUrl(req)
+        );
+      } catch (mailErr: any) {
+        console.warn('[Admin] Failed to send account update email:', mailErr.message);
+      }
+    }
     res.json({ success: true, customer: updated });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to update customer' });
@@ -1492,7 +1537,19 @@ router.put('/admin/customers/:id/reset-password', async (req: AuthenticatedReque
   try {
     const { password } = req.body;
     if (!password) return res.status(400).json({ error: 'Password is required' });
-    const updated = await updateCustomerDetails(req.params.id as string, { password });
+    const newPlainPassword = password.trim();
+    const updated = await updateCustomerDetails(req.params.id as string, { password: newPlainPassword });
+    if (updated) {
+      try {
+        await sendPasswordResetCredentialsEmail(
+          { name: updated.name, email: updated.email },
+          newPlainPassword,
+          getBaseFrontendUrl(req)
+        );
+      } catch (mailErr: any) {
+        console.warn('[Admin] Failed to send password reset email:', mailErr.message);
+      }
+    }
     res.json({ success: true, message: 'Password reset successfully', customer: updated });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to reset password' });
