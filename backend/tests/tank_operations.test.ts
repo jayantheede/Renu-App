@@ -18,9 +18,9 @@ app.use('/api', router);
 
 describe('Tank Operations & Multi-Customer Tank Hub Integration', () => {
   it('should retrieve customer ranches with differentiated tanks, medicines, trackers, and reports', () => {
-    const growerRanches = getRanchesForCustomer('customer@renu.com', 'grower');
+    const growerRanches = getRanchesForCustomer('rgundavelli@gmail.com', 'grower');
     expect(growerRanches.length).toBeGreaterThan(0);
-    const sierraRanch = growerRanches.find((r) => r.id === 'ranch-1');
+    const sierraRanch = growerRanches[0];
     expect(sierraRanch).toBeDefined();
     expect(sierraRanch?.tanks).toBeDefined();
     expect(sierraRanch?.tanks?.length).toBeGreaterThan(0);
@@ -33,7 +33,10 @@ describe('Tank Operations & Multi-Customer Tank Hub Integration', () => {
   });
 
   it('should add and delete medicine on a specific customer tank', async () => {
-    const med = addMedicineToTank('tank-1-1', {
+    const growerRanches = getRanchesForCustomer('rgundavelli@gmail.com', 'grower');
+    const tankId = growerRanches[0]?.tanks?.[0]?.id || 'tank-3';
+
+    const med = addMedicineToTank(tankId, {
       name: 'ReNu Micro-Zinc Chelate',
       dosage: '10 Gallons',
       type: 'Micro-Nutrient',
@@ -46,12 +49,15 @@ describe('Tank Operations & Multi-Customer Tank Hub Integration', () => {
     expect(med?.name).toBe('ReNu Micro-Zinc Chelate');
 
     const medId = med!.id;
-    const deleted = deleteMedicineFromTank('tank-1-1', medId);
+    const deleted = deleteMedicineFromTank(tankId, medId);
     expect(deleted).toBe(true);
   });
 
   it('should update tracker configuration for a tank', async () => {
-    const tracker = updateTankTracker('tank-1-1', {
+    const growerRanches = getRanchesForCustomer('rgundavelli@gmail.com', 'grower');
+    const tankId = growerRanches[0]?.tanks?.[0]?.id || 'tank-3';
+
+    const tracker = updateTankTracker(tankId, {
       serialNumber: 'OTO-CUSTOM-88',
       cellularUnitId: 'LTE-M-CUSTOM',
       reorderThresholdPercent: 30,
@@ -63,7 +69,10 @@ describe('Tank Operations & Multi-Customer Tank Hub Integration', () => {
   });
 
   it('should add and delete reports with attached documents on a tank', async () => {
-    const report = addReportToTank('tank-1-1', {
+    const growerRanches = getRanchesForCustomer('rgundavelli@gmail.com', 'grower');
+    const tankId = growerRanches[0]?.tanks?.[0]?.id || 'tank-3';
+
+    const report = addReportToTank(tankId, {
       title: 'Spring 2026 Tank Calibration & Pressure Audit',
       reportType: 'Maintenance & Sensor Check',
       notes: 'Verified transducer pressure: 42 PSI',
@@ -76,14 +85,16 @@ describe('Tank Operations & Multi-Customer Tank Hub Integration', () => {
     expect(report?.fileName).toBe('Tank_Calibration_Audit.xlsx');
 
     const reportId = report!.id;
-    const deleted = deleteReportFromTank('tank-1-1', reportId);
+    const deleted = deleteReportFromTank(tankId, reportId);
     expect(deleted).toBe(true);
   });
 
   it('should submit a lab assay result with document attachment in any format (DOCX, XLSX, PDF, PNG)', async () => {
+    const growerRanches = getRanchesForCustomer('rgundavelli@gmail.com', 'grower');
+    const ranchId = growerRanches[0]?.id || 'ranch-home';
     const samplePayload = {
-      ranchId: 'ranch-1',
-      blockId: 'Block-01',
+      ranchId,
+      blockId: 'N-1',
       sampleType: 'leaf tissue' as const,
       sampleDate: '2026-10-25',
       labName: 'Dellavalle Laboratory Inc.',
@@ -94,7 +105,7 @@ describe('Tank Operations & Multi-Customer Tank Hub Integration', () => {
       documentSize: '48.2 KB',
     };
 
-    const sample = createSample(samplePayload, 'customer@renu.com');
+    const sample = createSample(samplePayload, 'rgundavelli@gmail.com');
 
     expect(sample).toBeDefined();
     expect(sample.id).toBeDefined();
