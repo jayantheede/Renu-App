@@ -19,7 +19,10 @@ import {
 } from './orderEmailService';
 
 const BASE_URL = process.env.OPTIMOROUTE_BASE_URL || 'https://api.optimoroute.com/v1';
-const API_KEY = process.env.OPTIMOROUTE_API_KEY || '';
+
+export function getOptimoRouteApiKey(): string {
+  return process.env.OPTIMOROUTE_API_KEY || '';
+}
 
 // ---------------------------------------------------------------------------
 // Low-level HTTP helper
@@ -29,14 +32,19 @@ async function orFetch(
   method: 'GET' | 'POST' | 'DELETE' = 'GET',
   body?: object
 ): Promise<any> {
-  const url = `${BASE_URL}${endpoint}`;
+  const apiKey = getOptimoRouteApiKey();
+  const sep = endpoint.includes('?') ? '&' : '?';
+  const url = apiKey
+    ? `${BASE_URL}${endpoint}${sep}key=${encodeURIComponent(apiKey)}`
+    : `${BASE_URL}${endpoint}`;
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
 
   // OptimoRoute supports HTTP Basic Auth; key goes in the Authorization header
-  if (API_KEY) {
-    headers['Authorization'] = `Basic ${Buffer.from(API_KEY + ':').toString('base64')}`;
+  if (apiKey) {
+    headers['Authorization'] = `Basic ${Buffer.from(apiKey + ':').toString('base64')}`;
   }
 
   const opts: RequestInit = { method, headers };
@@ -78,7 +86,7 @@ export interface OptimoRouteOrder {
 // 1. Create / schedule a delivery order in OptimoRoute
 // ---------------------------------------------------------------------------
 export async function createOptimoRouteOrder(order: OrderItem): Promise<OptimoRouteOrder | null> {
-  if (!API_KEY) {
+  if (!getOptimoRouteApiKey()) {
     console.warn('[OptimoRoute] OPTIMOROUTE_API_KEY not set – skipping order push');
     return null;
   }
@@ -134,7 +142,7 @@ export async function createOptimoRouteOrder(order: OrderItem): Promise<OptimoRo
 // 2. Get real-time status of an order from OptimoRoute
 // ---------------------------------------------------------------------------
 export async function getOptimoRouteOrderStatus(optimoRouteOrderId: string): Promise<OptimoRouteOrder | null> {
-  if (!API_KEY) return null;
+  if (!getOptimoRouteApiKey()) return null;
   try {
     const result = await orFetch(`/get_order_completion_details?includeOrderData=true`, 'POST', {
       orders: [{ orderNo: optimoRouteOrderId }],
@@ -161,7 +169,7 @@ export async function getOptimoRouteOrderStatus(optimoRouteOrderId: string): Pro
 // 3. Get all orders for a given date
 // ---------------------------------------------------------------------------
 export async function getOptimoRouteOrdersForDate(date: string): Promise<OptimoRouteOrder[]> {
-  if (!API_KEY) return [];
+  if (!getOptimoRouteApiKey()) return [];
   try {
     const result = await orFetch(`/search_orders?date=${date}`, 'GET');
     const list = result.orders || [];
@@ -184,7 +192,7 @@ export async function getOptimoRouteOrdersForDate(date: string): Promise<OptimoR
 // 4. Delete / cancel an order in OptimoRoute
 // ---------------------------------------------------------------------------
 export async function deleteOptimoRouteOrder(optimoRouteOrderId: string): Promise<boolean> {
-  if (!API_KEY) return false;
+  if (!getOptimoRouteApiKey()) return false;
   try {
     await orFetch(`/delete_order`, 'POST', { orderNo: optimoRouteOrderId });
     console.log(`[OptimoRoute] Order deleted: ${optimoRouteOrderId}`);
@@ -199,7 +207,7 @@ export async function deleteOptimoRouteOrder(optimoRouteOrderId: string): Promis
 // 5. Get list of available drivers / resources
 // ---------------------------------------------------------------------------
 export async function getOptimoRouteDrivers(): Promise<any[]> {
-  if (!API_KEY) return [];
+  if (!getOptimoRouteApiKey()) return [];
   try {
     const result = await orFetch('/get_drivers', 'GET');
     return result.drivers || [];
@@ -213,7 +221,7 @@ export async function getOptimoRouteDrivers(): Promise<any[]> {
 // 6. Trigger route optimization for a given date
 // ---------------------------------------------------------------------------
 export async function optimizeRoutes(date: string): Promise<boolean> {
-  if (!API_KEY) return false;
+  if (!getOptimoRouteApiKey()) return false;
   try {
     await orFetch('/plan_routes', 'POST', { date, algorithm: 'OPTIMIZE' });
     console.log(`[OptimoRoute] Route optimization triggered for ${date}`);
