@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>ReNu-Biome Portal</title>
+    <script type="text/javascript">
+      // Single Page Apps for GitHub Pages & Static Hosts
+      // Redirects 404 paths back to index.html preserving URL path & query
+      var segmentCount = 0;
+      var l = window.location;
+      l.replace(
+        l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+        l.pathname.split('/').slice(0, 1 + segmentCount).join('/') + '/?p=/' +
+        l.pathname.slice(1).split('/').slice(segmentCount).join('/').replace(/&/g, '~and~') +
+        (l.search ? '&q=' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+        l.hash
+      );
+    </script>
+  </head>
+  <body>
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; padding: 40px; color: #0C6054;">
+      <h2>Loading ReNu-Biome Grower Portal...</h2>
+      <p style="color: #64748B;">Restoring your session, please wait.</p>
+    </div>
+  </body>
+</html>

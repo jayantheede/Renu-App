@@ -6,4 +6,6 @@ backend/data_store.json
 .DS_Store
 **/.DS_Store
 dist/
+!mobile/dist/
+!mobile/dist/**
 backend/dist/

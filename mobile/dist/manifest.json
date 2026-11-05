@@ -1,0 +1,25 @@
+{
+  "short_name": "ReNu-Biome",
+  "name": "ReNu-Biome",
+  "description": "Biological plant nutrition delivery tracking, ranch blocks and invoices.",
+  "icons": [
+    {
+      "src": "/brand/renu-biome-app-icon-180.png",
+      "type": "image/png",
+      "sizes": "180x180",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/brand/renu-biome-app-icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#083F38",
+  "theme_color": "#0C6054",
+  "display": "standalone",
+  "orientation": "portrait"
+}
+

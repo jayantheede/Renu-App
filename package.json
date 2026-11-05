@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "description": "ReNu-Biome Full-Stack Web Portal and Backend Service",
   "scripts": {
-    "build": "cd mobile && npm install --include=dev && EXPO_NO_TELEMETRY=1 npx expo export -p web && cd ../backend && npm install --include=dev && npx prisma generate && npm run build",
+    "build": "cd backend && npm install && npx prisma generate && npm run build",
+    "build:all": "cd mobile && npm install --include=dev && EXPO_NO_TELEMETRY=1 npx expo export -p web && cd ../backend && npm install --include=dev && npx prisma generate && npm run build",
     "start": "cd backend && node dist/index.js"
   }
 }
