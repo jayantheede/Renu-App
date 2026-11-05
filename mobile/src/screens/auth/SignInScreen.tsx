@@ -352,8 +352,38 @@ export const SignInScreen = ({ navigation }: any) => {
                         compact
                         labelStyle={styles.demoButtonLabel}
                       >
-                        Grower
+                        Grower (Radhika)
                       </Button>
+                    </View>
+
+                    <View style={[styles.demoButtonsRow, { marginTop: 8 }]}>
+                      <Button
+                        mode="outlined"
+                        onPress={() => handleSignIn('sravangaaismartsolutions@gmail.com', 'customer')}
+                        textColor={BRAND_COLORS.primaryTeal}
+                        style={styles.demoButton}
+                        compact
+                        labelStyle={styles.demoButtonLabel}
+                      >
+                        Grower (Sravanga)
+                      </Button>
+                      <Button
+                        mode="outlined"
+                        onPress={() => handleSignIn('eede.jayanth@sravangaai.in', 'customer')}
+                        textColor={BRAND_COLORS.primaryTeal}
+                        style={styles.demoButton}
+                        compact
+                        labelStyle={styles.demoButtonLabel}
+                      >
+                        Grower (Jayanth)
+                      </Button>
+                    </View>
+
+                    <View style={styles.demoCredentialsBox}>
+                      <Text style={styles.demoCredentialsText}>
+                        <Text style={{ fontWeight: '700' }}>Admin:</Text> support@renu-biome.com (pw: admin){'\n'}
+                        <Text style={{ fontWeight: '700' }}>Growers:</Text> rgundavelli@gmail.com / sravangaaismartsolutions@gmail.com / eede.jayanth@sravangaai.in (pw: customer)
+                      </Text>
                     </View>
                   </View>
                 )}
@@ -592,6 +622,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginHorizontal: 0,
     letterSpacing: 0,
+  },
+  demoCredentialsBox: {
+    marginTop: 10,
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+  },
+  demoCredentialsText: {
+    fontSize: 10.5,
+    color: '#475569',
+    lineHeight: 15,
+    textAlign: 'center',
   },
   mfaBanner: {
     backgroundColor: '#F0FDFA',

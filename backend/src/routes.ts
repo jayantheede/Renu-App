@@ -197,13 +197,20 @@ router.get('/grower/dashboard', async (req: AuthenticatedRequest, res) => {
   const ranches = getRanchesForCustomer(user.email, user.role);
   const totalAcres = ranches.reduce((s, r) => s + (r.ac || 0), 0);
   const normEmail = user.email.toLowerCase().trim();
-  const isCust = user.id === 'mock-cust-1' || normEmail === 'rgundavelli@gmail.com' || normEmail === 'sravangaaismartsolutions.com' || normEmail === 'sravangaaismartsolutions@gmail.com' || normEmail === 'customer@renu.com';
+  const isCust = user.id === 'mock-cust-1' || 
+    user.id === 'mock-cust-sravanga' || 
+    user.id === 'mock-cust-jayanth' || 
+    normEmail === 'rgundavelli@gmail.com' || 
+    normEmail === 'sravangaaismartsolutions@gmail.com' || 
+    normEmail === 'eede.jayanth@sravangaai.in' || 
+    normEmail === 'sravangaaismartsolutions.com' || 
+    normEmail === 'customer@renu.com';
   const userDeliveries = mockOrdersList.filter(
-    d => (isCust && (d.customerId === 'mock-cust-1' || d.customerEmail?.toLowerCase() === 'customer@renu.com' || d.customerEmail?.toLowerCase() === 'rgundavelli@gmail.com' || d.customerEmail?.toLowerCase() === 'sravangaaismartsolutions.com' || d.customerEmail?.toLowerCase() === 'sravangaaismartsolutions@gmail.com')) ||
+    d => (isCust && (d.customerId === 'mock-cust-1' || d.customerId === 'mock-cust-sravanga' || d.customerId === 'mock-cust-jayanth' || d.customerEmail?.toLowerCase() === 'customer@renu.com' || d.customerEmail?.toLowerCase() === 'rgundavelli@gmail.com' || d.customerEmail?.toLowerCase() === 'sravangaaismartsolutions@gmail.com' || d.customerEmail?.toLowerCase() === 'eede.jayanth@sravangaai.in' || d.customerEmail?.toLowerCase() === 'sravangaaismartsolutions.com')) ||
          d.customerId === user.id || d.customerEmail?.toLowerCase() === normEmail
   );
   const userInvoices = mockInvoices.filter(
-    i => (isCust && (i.customerId === 'mock-cust-1' || i.customerEmail?.toLowerCase() === 'customer@renu.com' || i.customerEmail?.toLowerCase() === 'rgundavelli@gmail.com' || i.customerEmail?.toLowerCase() === 'sravangaaismartsolutions.com' || i.customerEmail?.toLowerCase() === 'sravangaaismartsolutions@gmail.com')) ||
+    i => (isCust && (i.customerId === 'mock-cust-1' || i.customerId === 'mock-cust-sravanga' || i.customerId === 'mock-cust-jayanth' || i.customerEmail?.toLowerCase() === 'customer@renu.com' || i.customerEmail?.toLowerCase() === 'rgundavelli@gmail.com' || i.customerEmail?.toLowerCase() === 'sravangaaismartsolutions@gmail.com' || i.customerEmail?.toLowerCase() === 'eede.jayanth@sravangaai.in' || i.customerEmail?.toLowerCase() === 'sravangaaismartsolutions.com')) ||
          i.customerId === user.id || i.customerEmail?.toLowerCase() === normEmail
   );
 
@@ -500,9 +507,16 @@ router.get(['/deliveries', '/orders'], async (req: AuthenticatedRequest, res) =>
   }
   const norm = user.email.toLowerCase().trim();
   const userId = user.id ? user.id.toLowerCase().trim() : '';
-  const isCust = userId === 'mock-cust-1' || norm === 'rgundavelli@gmail.com' || norm === 'sravangaaismartsolutions.com' || norm === 'sravangaaismartsolutions@gmail.com' || norm === 'customer@renu.com';
+  const isCust = userId === 'mock-cust-1' || 
+    userId === 'mock-cust-sravanga' || 
+    userId === 'mock-cust-jayanth' || 
+    norm === 'rgundavelli@gmail.com' || 
+    norm === 'sravangaaismartsolutions@gmail.com' || 
+    norm === 'eede.jayanth@sravangaai.in' || 
+    norm === 'sravangaaismartsolutions.com' || 
+    norm === 'customer@renu.com';
   const userDeliveries = mockOrdersList.filter(
-    d => (isCust && (d.customerId === 'mock-cust-1' || d.customerEmail?.toLowerCase() === 'customer@renu.com' || d.customerEmail?.toLowerCase() === 'rgundavelli@gmail.com' || d.customerEmail?.toLowerCase() === 'sravangaaismartsolutions.com' || d.customerEmail?.toLowerCase() === 'sravangaaismartsolutions@gmail.com')) ||
+    d => (isCust && (d.customerId === 'mock-cust-1' || d.customerId === 'mock-cust-sravanga' || d.customerId === 'mock-cust-jayanth' || d.customerEmail?.toLowerCase() === 'customer@renu.com' || d.customerEmail?.toLowerCase() === 'rgundavelli@gmail.com' || d.customerEmail?.toLowerCase() === 'sravangaaismartsolutions@gmail.com' || d.customerEmail?.toLowerCase() === 'eede.jayanth@sravangaai.in' || d.customerEmail?.toLowerCase() === 'sravangaaismartsolutions.com')) ||
          (d.customerId && (d.customerId.toLowerCase() === norm || d.customerId.toLowerCase() === userId)) ||
          (d.customerEmail && d.customerEmail.toLowerCase() === norm)
   );

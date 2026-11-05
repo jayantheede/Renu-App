@@ -184,10 +184,15 @@ describe('Comprehensive System Integration Tests (SMTP, OptimoRoute, Otodata, Cu
     });
 
     it('should identify tanks below reorder threshold (<=25%) and set status to Needs a delivery', async () => {
-      await syncAllTanksTelemetry();
       const allTanks = mockRanches.flatMap(r => r.tanks || []);
-      const lowTank = allTanks.find(t => (t.levelPercent || 100) <= 25);
+      if (allTanks.length > 0) {
+        allTanks[0].serial = '94003252';
+        allTanks[0].reorderThresholdPercent = 25;
+      }
 
+      await syncAllTanksTelemetry();
+
+      const lowTank = allTanks.find(t => (t.levelPercent || 100) <= 25);
       expect(lowTank).toBeDefined();
       expect(lowTank!.levelPercent).toBeLessThanOrEqual(25);
       expect(lowTank!.status).toContain('Needs a delivery');
