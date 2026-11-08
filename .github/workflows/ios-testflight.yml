@@ -1,0 +1,173 @@
+name: iOS TestFlight Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'EAS Build Profile (production or preview)'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - preview
+      auto_submit:
+        description: 'Automatically submit build to Apple TestFlight'
+        required: true
+        type: boolean
+        default: true
+      build_number:
+        description: 'Optional manual iOS Build Number (leave blank for auto-increment)'
+        required: false
+        type: string
+  push:
+    tags:
+      - 'v*.*.*'
+    branches:
+      - 'release/**'
+
+concurrency:
+  group: ios-testflight-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate-and-test:
+    name: Validate Code & Run Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./mobile
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: TypeScript Typecheck
+        run: npx tsc --noEmit
+
+      - name: Run Jest Test Suite
+        run: npm test
+
+  build-and-submit-eas:
+    name: EAS Build & Submit to TestFlight
+    needs: validate-and-test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./mobile
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Setup Expo & EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Set Custom Build Number (if specified)
+        if: ${{ github.event.inputs.build_number != '' }}
+        run: |
+          echo "Setting custom iOS build number to ${{ github.event.inputs.build_number }}"
+          sed -i 's/"buildNumber": "[^"]*"/"buildNumber": "${{ github.event.inputs.build_number }}"/' app.json
+
+      - name: Build iOS IPA and Submit to Apple TestFlight
+        if: ${{ github.event_name == 'push' || github.event.inputs.auto_submit == true }}
+        run: |
+          npx eas-cli build \
+            --platform ios \
+            --profile ${{ github.event.inputs.profile || 'production' }} \
+            --non-interactive \
+            --auto-submit
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+
+      - name: Build iOS IPA only (No auto-submit)
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.auto_submit == false }}
+        run: |
+          npx eas-cli build \
+            --platform ios \
+            --profile ${{ github.event.inputs.profile || 'production' }} \
+            --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+  macos-native-xcode-testflight:
+    name: Native macOS Xcode Build & Upload (Alternative Runner)
+    needs: validate-and-test
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.profile == 'native-macos' }}
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: ./mobile
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Select Xcode Version
+        run: sudo xcode-select -switch /Applications/Xcode_15.4.app/Contents/Developer
+
+      - name: Install CocoaPods
+        run: |
+          cd ios
+          pod install
+
+      - name: Install Apple App Store Connect API Key
+        env:
+          API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "$API_KEY_BASE64" | base64 --decode > ~/.appstoreconnect/private_keys/AuthKey_${KEY_ID}.p8
+
+      - name: Archive and Export iOS IPA
+        run: |
+          cd ios
+          xcodebuild -workspace ReNuBiome.xcworkspace \
+            -scheme ReNuBiome \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath $PWD/build/ReNuBiome.xcarchive \
+            archive \
+            -allowProvisioningUpdates
+
+      - name: Upload to Apple TestFlight via altool
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        run: |
+          xcrun altool --upload-app \
+            -f mobile/ios/build/ReNuBiome.ipa \
+            -t ios \
+            --apiKey "$KEY_ID" \
+            --apiIssuer "$ISSUER_ID"
