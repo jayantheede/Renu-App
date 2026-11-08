@@ -365,3 +365,4 @@ class AccountProfileView extends StatelessWidget {
     );
   }
 }
+

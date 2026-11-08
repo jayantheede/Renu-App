@@ -260,7 +260,7 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.renubiome.portal";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.renubiome.app";
 				PRODUCT_NAME = "ReNuBiome";
 				SWIFT_OBJC_BRIDGING_HEADER = "ReNuBiome/ReNuBiome-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -290,7 +290,7 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.renubiome.portal";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.renubiome.app";
 				PRODUCT_NAME = "ReNuBiome";
 				SWIFT_OBJC_BRIDGING_HEADER = "ReNuBiome/ReNuBiome-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;

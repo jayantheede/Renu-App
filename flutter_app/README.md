@@ -22,3 +22,4 @@ flutter pub get
 flutter build appbundle --release
 ```
 The resulting `.aab` in `build/app/outputs/bundle/release/app-release.aab` can be uploaded to Google Play Console.
+
