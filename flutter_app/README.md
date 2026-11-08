@@ -3,8 +3,9 @@
 This directory contains the Flutter companion implementation for the ReNu-Biome Grower Portal, configured to match the production React Native (Native JS) application.
 
 ## Bundle Identifier & Package Name
-- **iOS Bundle Identifier**: `com.renubiome.portal`
-- **Android Package Name**: `com.renubiome.portal`
+- **iOS Bundle Identifier**: `com.renubiome.app`
+- **Android Package Name**: `com.renubiome.app`
+- **Apple Developer Team ID**: `63D9SK6N3M` (Radhika Gundavelli)
 - **Version**: `1.0.0`
 - **Build Number / VersionCode**: `1`
 

@@ -133,26 +133,60 @@ cd mobile && npm test
 
 ---
 
-## 🚢 Production Deployment
+## 📱 Mobile App Store & Google Play Deployment
 
-- **Frontend Static App**: Deployed via Netlify or Render Static Site (`buildCommand: cd mobile && npm install && npm run build`, `publish: mobile/dist`).
+The mobile application is powered by **React Native (Native JS)** with native iOS and Android build environments pre-configured:
+
+| Parameter | iOS App Store / TestFlight | Google Play Store |
+| :--- | :--- | :--- |
+| **Identifier / Package** | `com.renubiome.app` | `com.renubiome.app` |
+| **Apple Developer Team** | `Radhika Gundavelli (63D9SK6N3M)` | — |
+| **Version / Build** | `1.0.0` (Build 1) | `1.0.0` (VersionCode 1) |
+| **Native Project** | [`mobile/ios/ReNuBiome.xcworkspace`](mobile/ios) | [`mobile/android/`](mobile/android) |
+| **CI/CD Workflow** | [`.github/workflows/ios-testflight.yml`](.github/workflows/ios-testflight.yml) | [`.github/workflows/android-playstore.yml`](.github/workflows/android-playstore.yml) |
+
+### Quick Build & Release Commands:
+```bash
+cd mobile
+
+# 1. iOS TestFlight / App Store Build & Submission
+npx eas-cli build --platform ios --profile production --auto-submit
+
+# 2. Android Google Play Bundle (.aab) Build & Submission
+npx eas-cli build --platform android --profile production --auto-submit
+
+# 3. Native local Xcode Archive
+open ios/ReNuBiome.xcworkspace
+# In Xcode: Select Team Radhika Gundavelli -> Product -> Archive -> Distribute App
+```
+
+*A companion Flutter implementation is also available in [`flutter_app/`](flutter_app) for clients requiring Flutter architecture.*
+
+---
+
+## 🚢 Web & Backend Cloud Deployment
+
+- **Frontend Static Web Portal**: Deployed via Netlify or Render Static Site (`buildCommand: cd mobile && npm install && npm run build`, `publish: mobile/dist`).
 - **Backend API Service**: Deployed on Render Web Service or AWS App Runner (`buildCommand: cd backend && npm install && npx prisma generate && npm run build`, `startCommand: cd backend && node dist/index.js`).
 - **Environment Variables**:
   - `DATABASE_URL`: MongoDB Atlas connection string.
   - `JWT_SECRET`: Cryptographic token secret.
   - `PORT`: HTTP port (defaults to `3000`).
+  - `OPTIMOROUTE_API_KEY`: OptimoRoute dispatch API key.
   - `EXPO_PUBLIC_API_URL`: Public API URL for web/mobile requests.
 
 ---
 
-## 🔄 Dual Repository Sync
+## 🔄 Multi-Repository Synchronization
 
-This project maintains synchronized branches across two Git remotes:
+This project maintains synchronized branches across **three** Git remotes:
+- **`renu-biome`**: `https://github.com/renu-biome/renu-biome-grower-portal-app.git` (Official ReNu-Biome Organization)
 - **`origin`**: `https://github.com/SRavanga-AI-Smart-Solutions/Biome-App1.git`
 - **`renu-app`**: `https://github.com/jayantheede/Renu-App.git`
 
-To ensure parity, changes committed to `main` must be merged into `dev` and pushed to both remotes:
+To ensure parity, all changes committed to `main` must be merged into `dev` and pushed to all three remotes:
 ```bash
+git push renu-biome main dev
 git push origin main dev
 git push renu-app main dev
 ```
