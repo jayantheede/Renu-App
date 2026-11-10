@@ -260,6 +260,8 @@
 					"-ObjC",
 					"-lc++",
 				);
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 63D9SK6N3M;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.renubiome.app";
 				PRODUCT_NAME = "ReNuBiome";
 				SWIFT_OBJC_BRIDGING_HEADER = "ReNuBiome/ReNuBiome-Bridging-Header.h";
@@ -290,6 +292,8 @@
 					"-ObjC",
 					"-lc++",
 				);
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 63D9SK6N3M;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.renubiome.app";
 				PRODUCT_NAME = "ReNuBiome";
 				SWIFT_OBJC_BRIDGING_HEADER = "ReNuBiome/ReNuBiome-Bridging-Header.h";
