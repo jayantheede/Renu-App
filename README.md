@@ -78,15 +78,13 @@ The user interface is engineered for both desktop control centers and field-read
 
 ---
 
-## 🔐 Staging & Demo Credentials
+## 🔐 Production Authentication & Staging Credentials
 
-For testing and local development, one-tap demo logins are available on the Sign In screen:
-
-| Role | Email | Password | Access Level |
-| :--- | :--- | :--- | :--- |
-| **Admin** | `support@renu-biome.com` | `admin` | Full Administrative Console & QuickBooks Hub |
-| **Grower** | `customer@renu.com` | `customer` | Sierra Agri Group Grower Operations Portal |
-| **Staff** | `employee@renu.com` | `employee` | Field Employee Delivery & Tasks Portal |
+- **Production (`main` branch)**: Staging demo buttons and credentials are removed from the client application for Apple App Store and Google Play compliance. Users log in with their registered organization credentials.
+- **Development (`dev` branch)**: Staging demo credentials and quick-login helpers are maintained on the `dev` branch for local development and QA testing:
+  - **Admin**: `support@renu-biome.com`
+  - **Grower**: `customer@renu.com`
+  - **Staff**: `employee@renu.com`
 
 ---
 

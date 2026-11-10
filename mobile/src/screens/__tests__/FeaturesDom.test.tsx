@@ -88,14 +88,10 @@ describe('DOM & UI Component Tree Testing (ReNu-Biome Requirements)', () => {
       expect(stringified).toContain('Need an account?');
     });
 
-    it('renders staging demo buttons including Grower button with sravangaaismartsolutions.com', () => {
+    it('does not render staging demo buttons on main branch for store release', () => {
       const tree = renderer.toJSON();
       const stringified = JSON.stringify(tree);
-      expect(stringified).toContain('DEMO LOGINS (STAGING)');
-      expect(stringified).toContain('Admin');
-      expect(stringified).toContain('Grower');
-      // Staff demo button was removed per Developer Handover Nov 2 (Item 16)
-      expect(stringified).not.toContain('Staff');
+      expect(stringified).not.toContain('DEMO LOGINS (STAGING)');
     });
   });
 
