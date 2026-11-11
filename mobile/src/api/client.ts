@@ -1,15 +1,37 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
+
+export const PRIMARY_PRODUCTION_BACKEND_URL = 'https://renu-app-backend.onrender.com';
+export const FALLBACK_PRODUCTION_BACKEND_URL = 'https://biome-app1.onrender.com';
+
+const REQUEST_TIMEOUT_MS = 65000;
+let pinnedNativeApiBaseUrl: string | null = null;
+
+function normalizeApiBaseUrl(rawUrl: string): string {
+  const clean = rawUrl.trim().replace(/\/+$/, '');
+  return clean.endsWith('/api') ? clean : `${clean}/api`;
+}
+
+function isLocalhostUrl(url: string): boolean {
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(url.trim());
+}
+
+function isProductionRuntime(): boolean {
+  if (typeof __DEV__ !== 'undefined') {
+    return !__DEV__;
+  }
+  return process.env.NODE_ENV === 'production';
+}
 
 export const getApiBaseUrl = async (): Promise<string> => {
   try {
     const custom = await AsyncStorage.getItem('@custom_api_url');
     if (custom && custom.trim()) {
-      const clean = custom.trim().replace(/\/+$/, '');
-      return clean.endsWith('/api') ? clean : `${clean}/api`;
+      return normalizeApiBaseUrl(custom);
     }
   } catch (e) {}
 
-  if (typeof window !== 'undefined' && window.location) {
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
     const hostname = window.location.hostname;
     // Local dev on Metro bundler (port 8081 / 19006)
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
@@ -23,23 +45,77 @@ export const getApiBaseUrl = async (): Promise<string> => {
     return `${window.location.origin}/api`;
   }
 
-  // Native mobile app fallback (iOS / Android)
-  const ENV_URL = (
-    process.env.EXPO_PUBLIC_API_URL ||
-    process.env.EXPO_PUBLIC_BACKEND_URL ||
-    process.env.EXPO_PUBLIC_RENDER_BACKEND_URL ||
-    'https://renu-app.onrender.com'
-  ).replace(/\/+$/, '');
-  return ENV_URL.endsWith('/api') ? ENV_URL : `${ENV_URL}/api`;
+  if (pinnedNativeApiBaseUrl) {
+    return pinnedNativeApiBaseUrl;
+  }
+
+  // Native mobile app resolution (iOS / Android)
+  const candidates = [
+    process.env.EXPO_PUBLIC_API_URL,
+    process.env.EXPO_PUBLIC_BACKEND_URL,
+    process.env.EXPO_PUBLIC_RENDER_BACKEND_URL,
+  ];
+  const isProd = isProductionRuntime();
+  const resolvedEnv = candidates.find((url) => {
+    if (!url || !url.trim()) return false;
+    // Never allow accidental localhost env overrides inside TestFlight/App Store/Play Store builds
+    if (isProd && isLocalhostUrl(url)) return false;
+    return true;
+  });
+
+  return normalizeApiBaseUrl(resolvedEnv || PRIMARY_PRODUCTION_BACKEND_URL);
 };
 
 export const setCustomApiUrl = async (url: string) => {
+  pinnedNativeApiBaseUrl = null;
   if (!url || !url.trim()) {
     await AsyncStorage.removeItem('@custom_api_url');
   } else {
     await AsyncStorage.setItem('@custom_api_url', url.trim());
   }
 };
+
+export const resetPinnedApiBaseUrl = () => {
+  pinnedNativeApiBaseUrl = null;
+};
+
+/** Pre-warm the active backend server on native launch to absorb free-tier cold starts early. */
+export const warmUpBackend = async () => {
+  if (Platform.OS === 'web' || typeof fetch !== 'function') return;
+  try {
+    const baseUrl = await getApiBaseUrl();
+    const healthUrl = `${baseUrl.replace(/\/api$/, '')}/health`;
+    await fetchWithTimeout(healthUrl, { method: 'GET' }, 15000);
+  } catch {
+    // Non-blocking warm-up ping; ignore errors
+  }
+};
+
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = REQUEST_TIMEOUT_MS): Promise<Response> {
+  if (typeof AbortController === 'undefined') {
+    return fetch(url, options);
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function parseResponseSafe(response: Response): Promise<any> {
+  if (typeof (response as any).text === 'function') {
+    const raw = await response.text();
+    if (!raw) return {};
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return { message: raw };
+    }
+  }
+  return await response.json();
+}
 
 export const apiClient = async (endpoint: string, options: RequestInit = {}) => {
   const token = await AsyncStorage.getItem('@auth_token');
@@ -54,25 +130,52 @@ export const apiClient = async (endpoint: string, options: RequestInit = {}) => 
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  let response;
+  const requestInit: RequestInit = { ...options, headers };
+  const primaryNorm = normalizeApiBaseUrl(PRIMARY_PRODUCTION_BACKEND_URL);
+  const fallbackNorm = normalizeApiBaseUrl(FALLBACK_PRODUCTION_BACKEND_URL);
+  const canFailoverOnNative =
+    Platform.OS !== 'web' && !pinnedNativeApiBaseUrl && baseUrl === primaryNorm;
+
+  let activeBaseUrl = baseUrl;
+  let response: Response;
+
   try {
-    response = await fetch(`${baseUrl}${endpoint}`, {
-      ...options,
-      headers,
-    });
+    response = await fetchWithTimeout(`${activeBaseUrl}${endpoint}`, requestInit);
+    if (canFailoverOnNative && [502, 503, 504].includes(response.status)) {
+      console.warn(`[API Failover] ${activeBaseUrl} returned HTTP ${response.status}; trying ${fallbackNorm}`);
+      activeBaseUrl = fallbackNorm;
+      response = await fetchWithTimeout(`${activeBaseUrl}${endpoint}`, requestInit);
+    }
   } catch (error: any) {
-    console.warn(`[Network Offline / Error] ${endpoint}:`, error.message);
-    throw error;
+    if (canFailoverOnNative) {
+      console.warn(`[Network Failover] ${activeBaseUrl}${endpoint} failed (${error?.message || error}); trying ${fallbackNorm}`);
+      try {
+        activeBaseUrl = fallbackNorm;
+        response = await fetchWithTimeout(`${activeBaseUrl}${endpoint}`, requestInit);
+      } catch (fallbackError: any) {
+        console.warn(`[Network Offline / Error] ${endpoint}:`, fallbackError?.message || fallbackError);
+        throw fallbackError;
+      }
+    } else {
+      console.warn(`[Network Offline / Error] ${endpoint}:`, error?.message || error);
+      throw error;
+    }
+  }
+
+  // Pin whichever live backend answered so auth/MFA stays sticky on one instance
+  if (Platform.OS !== 'web' && ![502, 503, 504].includes(response.status)) {
+    pinnedNativeApiBaseUrl = activeBaseUrl;
   }
 
   if (response.status === 401) {
     await AsyncStorage.removeItem('@auth_token');
-    throw new Error('Unauthorized');
+    const errData = await parseResponseSafe(response).catch(() => ({}));
+    throw new Error(errData?.error || errData?.message || 'Unauthorized');
   }
 
-  const data = await response.json();
+  const data = await parseResponseSafe(response);
   if (!response.ok) {
-    throw new Error(data.error || data.message || 'API Request Failed');
+    throw new Error(data?.error || data?.message || `API Request Failed (${response.status})`);
   }
 
   return data;

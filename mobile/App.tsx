@@ -6,6 +6,7 @@ import { RootNavigator } from './src/navigation/RootNavigator';
 import { lightTheme, darkTheme } from './src/theme/theme';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAuthStore } from './src/store/useAuthStore';
+import { warmUpBackend } from './src/api/client';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import './src/utils/alertPolyfill';
@@ -17,6 +18,7 @@ export default function App() {
 
   useEffect(() => {
     initialize();
+    warmUpBackend().catch(() => {});
 
     // Register Web App Manifest, Service Worker & Font Fallbacks for Offline PWA
     if (Platform.OS === 'web' && typeof document !== 'undefined') {

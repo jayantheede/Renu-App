@@ -73,13 +73,22 @@ export const SignInScreen = ({ navigation }: any) => {
       setSession(data.user, data.token);
     } catch (error: any) {
       const raw = error.message || '';
+      const lower = raw.toLowerCase();
       let friendly = 'Could not sign in. Please verify your email and password.';
-      if (raw.toLowerCase().includes('password')) {
+      if (lower.includes('password')) {
         friendly = "That password doesn't match.";
-      } else if (raw.toLowerCase().includes('user') || raw.toLowerCase().includes('not found') || raw.toLowerCase().includes('account')) {
+      } else if (lower.includes('user') || lower.includes('not found') || lower.includes('account')) {
         friendly = 'No account found with that email address.';
-      } else if (raw.toLowerCase().includes('failed to fetch') || raw.toLowerCase().includes('network')) {
-        friendly = 'Network connection issue. Please check your internet connection.';
+      } else if (
+        lower.includes('failed to fetch') ||
+        lower.includes('fetch failed') ||
+        lower.includes('could not connect') ||
+        lower.includes('network') ||
+        lower.includes('timed out') ||
+        lower.includes('aborted') ||
+        lower.includes('unexpectedexception')
+      ) {
+        friendly = 'Unable to connect to the ReNu-Biome server. Please check your internet connection and try again.';
       } else if (raw) {
         friendly = raw;
       }
