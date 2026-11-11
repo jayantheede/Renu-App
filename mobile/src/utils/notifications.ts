@@ -1,214 +1,261 @@
-import { Platform } from 'react-native';
+import { NativeModules, Platform } from 'react-native';
+import * as apiModule from '../api/client';
+
+export type NotificationPermissionState = 'granted' | 'denied' | 'default' | 'unsupported';
 
 export interface MobileNotificationOptions {
-  title: string;
-  body: string;
-  url?: string;
+  body?: string;
   tag?: string;
-  delayMs?: number;
+  url?: string;
+  delaySeconds?: number;
 }
 
-/**
- * Check if the current browser / mobile environment supports system push notifications
- */
-export const areNotificationsSupported = (): boolean => {
-  if (Platform.OS !== 'web' || typeof window === 'undefined') {
-    return false;
-  }
-  return 'Notification' in window && 'serviceWorker' in navigator;
-};
+interface NativeAppAlertsBridge {
+  getPermissionStatus?: () => Promise<string>;
+  requestPermission?: () => Promise<boolean>;
+  scheduleLocalAlert?: (
+    title: string,
+    body: string,
+    identifier: string,
+    delaySeconds: number,
+    url: string | null
+  ) => Promise<boolean>;
+  setBadgeCount?: (count: number) => Promise<boolean>;
+}
 
-/**
- * Returns current permission status: 'default' | 'granted' | 'denied'
- */
-export const getNotificationPermission = (): NotificationPermission => {
-  if (!areNotificationsSupported()) {
-    return 'denied';
-  }
-  return Notification.permission;
-};
+let cachedNativePermission: NotificationPermissionState = 'default';
 
-/**
- * Request system notification permission from the user on their mobile device
- */
-export const requestNotificationPermission = async (): Promise<boolean> => {
-  if (!areNotificationsSupported()) {
-    return false;
-  }
+function getNativeBridge(): NativeAppAlertsBridge | null {
+  if (Platform.OS === 'web') return null;
+  const bridge = (NativeModules as { NativeAppAlerts?: NativeAppAlertsBridge } | undefined)?.NativeAppAlerts;
+  return bridge || null;
+}
 
+function normalizePermission(raw: unknown): NotificationPermissionState {
+  if (raw === 'granted' || raw === 'denied' || raw === 'default') {
+    return raw;
+  }
+  return 'unsupported';
+}
+
+function hasWebNotifications(): boolean {
+  return (
+    Platform.OS === 'web' &&
+    typeof window !== 'undefined' &&
+    'Notification' in window &&
+    typeof window.Notification === 'function'
+  );
+}
+
+async function syncPushSubscription(enabled: boolean): Promise<void> {
+  if (!enabled || typeof apiModule.apiClient !== 'function') return;
   try {
-    const permission = await Notification.requestPermission();
-    if (permission === 'granted') {
-      // Also register push subscription with backend if available
-      registerPushSubscription().catch(console.warn);
+    await apiModule.apiClient('/app/push/subscribe', {
+      method: 'POST',
+      body: JSON.stringify({
+        subscription: {
+          endpoint: `native://${Platform.OS}/local-alerts`,
+          platform: Platform.OS,
+          enabled: true,
+          updatedAt: new Date().toISOString(),
+        },
+      }),
+    });
+  } catch {
+    // Non-fatal: local OS alerts still operate without backend push registration
+  }
+}
+
+export function areNotificationsSupported(): boolean {
+  if (Platform.OS === 'web') {
+    return hasWebNotifications();
+  }
+  const bridge = getNativeBridge();
+  return Boolean(bridge && typeof bridge.scheduleLocalAlert === 'function');
+}
+
+export function getNotificationPermission(): NotificationPermissionState {
+  if (Platform.OS === 'web') {
+    if (!hasWebNotifications()) return 'unsupported';
+    return normalizePermission(window.Notification.permission);
+  }
+  if (!getNativeBridge()) return 'unsupported';
+  return cachedNativePermission;
+}
+
+export async function getNotificationPermissionAsync(): Promise<NotificationPermissionState> {
+  if (Platform.OS === 'web') {
+    return getNotificationPermission();
+  }
+  const bridge = getNativeBridge();
+  if (!bridge || typeof bridge.getPermissionStatus !== 'function') {
+    cachedNativePermission = 'unsupported';
+    return 'unsupported';
+  }
+  try {
+    const status = await bridge.getPermissionStatus();
+    cachedNativePermission = normalizePermission(status);
+    return cachedNativePermission;
+  } catch {
+    return cachedNativePermission;
+  }
+}
+
+export async function requestNotificationPermission(): Promise<boolean> {
+  if (Platform.OS === 'web') {
+    if (!hasWebNotifications()) return false;
+    if (window.Notification.permission === 'granted') {
+      await syncPushSubscription(true);
       return true;
     }
-    return false;
-  } catch (error) {
-    console.warn('Notification permission request error:', error);
-    return false;
-  }
-};
-
-/**
- * Dispatches a native mobile notification via Service Worker
- * This pops up in the mobile status bar / lock screen even when app is minimized / in background
- */
-export const sendMobileNotification = async (options: MobileNotificationOptions): Promise<boolean> => {
-  if (Platform.OS !== 'web' || typeof window === 'undefined') {
-    return false;
+    if (window.Notification.permission === 'denied') {
+      return false;
+    }
+    try {
+      const result = await window.Notification.requestPermission();
+      const granted = result === 'granted';
+      if (granted) await syncPushSubscription(true);
+      return granted;
+    } catch {
+      return false;
+    }
   }
 
-  if (!areNotificationsSupported()) {
+  const bridge = getNativeBridge();
+  if (!bridge || typeof bridge.requestPermission !== 'function') {
+    cachedNativePermission = 'unsupported';
     return false;
-  }
-
-  if (Notification.permission !== 'granted') {
-    const granted = await requestNotificationPermission();
-    if (!granted) return false;
   }
 
   try {
-    // 1. Try sending via active Service Worker registration (works when backgrounded)
-    if ('serviceWorker' in navigator) {
-      const registration = await navigator.serviceWorker.ready;
-      if (registration && registration.showNotification) {
-        if (options.delayMs && options.delayMs > 0) {
-          setTimeout(() => {
-            registration.showNotification(options.title, {
-              body: options.body,
-              icon: '/icon.png',
-              badge: '/favicon.png',
-              vibrate: [200, 100, 200, 100, 200],
-              tag: options.tag || `renu-${Date.now()}`,
-              requireInteraction: true,
-              data: { url: options.url || '/' },
-              actions: [
-                { action: 'view', title: 'Open ReNu-Biome' },
-                { action: 'dismiss', title: 'Dismiss' }
-              ]
-            } as any);
-          }, options.delayMs);
-          return true;
-        }
+    const granted = Boolean(await bridge.requestPermission());
+    cachedNativePermission = granted ? 'granted' : 'denied';
+    if (granted) {
+      await syncPushSubscription(true);
+    }
+    return granted;
+  } catch {
+    return false;
+  }
+}
 
-        await registration.showNotification(options.title, {
-          body: options.body,
-          icon: '/icon.png',
-          badge: '/favicon.png',
-          vibrate: [200, 100, 200, 100, 200],
-          tag: options.tag || `renu-${Date.now()}`,
-          requireInteraction: true,
-          data: { url: options.url || '/' },
-          actions: [
-            { action: 'view', title: 'Open ReNu-Biome' },
-            { action: 'dismiss', title: 'Dismiss' }
-          ]
-        } as any);
+export async function sendMobileNotification(
+  title: string,
+  optionsOrBody?: MobileNotificationOptions | string
+): Promise<boolean> {
+  const opts: MobileNotificationOptions =
+    typeof optionsOrBody === 'string' ? { body: optionsOrBody } : optionsOrBody || {};
+  const body = opts.body || '';
+  const tag = opts.tag || `renu-${Date.now()}`;
+  const url = opts.url || null;
+  const delaySeconds = typeof opts.delaySeconds === 'number' ? Math.max(0, opts.delaySeconds) : 0;
+
+  if (Platform.OS === 'web') {
+    if (!hasWebNotifications() || window.Notification.permission !== 'granted') {
+      return false;
+    }
+    try {
+      const notif = new window.Notification(title, {
+        body,
+        tag,
+        icon: '/icon-192.png',
+      });
+      notif.onclick = () => {
+        try {
+          window.focus();
+          notif.close();
+        } catch {
+          // Ignore focus errors in restricted frames
+        }
+      };
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  const bridge = getNativeBridge();
+  if (!bridge || typeof bridge.scheduleLocalAlert !== 'function') {
+    return false;
+  }
+
+  try {
+    const perm = await getNotificationPermissionAsync();
+    if (perm === 'denied' || perm === 'unsupported') {
+      return false;
+    }
+    const ok = Boolean(
+      await bridge.scheduleLocalAlert(title, body, tag, delaySeconds, url)
+    );
+    if (ok) {
+      cachedNativePermission = 'granted';
+    }
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function syncAppBadgeCount(count: number): Promise<boolean> {
+  const safeCount = Math.max(0, Math.floor(Number.isFinite(count) ? count : 0));
+
+  if (Platform.OS === 'web') {
+    try {
+      const nav = typeof navigator !== 'undefined' ? (navigator as any) : null;
+      if (nav && typeof nav.setAppBadge === 'function') {
+        await nav.setAppBadge(safeCount);
         return true;
       }
-    }
-
-    // 2. Fallback to standard web Notification
-    const notif = new Notification(options.title, {
-      body: options.body,
-      icon: '/icon.png',
-      badge: '/favicon.png',
-      tag: options.tag,
-    });
-
-    notif.onclick = () => {
-      window.focus();
-      if (options.url && typeof window !== 'undefined') {
-        window.location.href = options.url;
+      if (nav && safeCount === 0 && typeof nav.clearAppBadge === 'function') {
+        await nav.clearAppBadge();
+        return true;
       }
-      notif.close();
-    };
-
-    return true;
-  } catch (error) {
-    console.warn('Failed to dispatch mobile notification:', error);
+    } catch {
+      return false;
+    }
     return false;
   }
-};
 
-/**
- * Register push subscription with the backend server
- */
-export const registerPushSubscription = async (): Promise<void> => {
-  if (!areNotificationsSupported()) return;
-
-  try {
-    const registration = await navigator.serviceWorker.ready;
-    if (!registration.pushManager) return;
-
-    let subscription = await registration.pushManager.getSubscription();
-    if (!subscription) {
-      // In production, applicationServerKey is passed here
-      // For standard browser push notifications without VAPID key restriction:
-      try {
-        subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          // Generic public VAPID key placeholder if needed
-        });
-      } catch (e) {
-        // Some browsers require explicit server VAPID key for pushManager,
-        // local Service Worker notifications still work 100%
-      }
-    }
-  } catch (e) {
-    console.warn('Push manager registration notice:', e);
+  const bridge = getNativeBridge();
+  if (!bridge || typeof bridge.setBadgeCount !== 'function') {
+    return false;
   }
-};
+  try {
+    return Boolean(await bridge.setBadgeCount(safeCount));
+  } catch {
+    return false;
+  }
+}
 
-/**
- * Trigger an immediate test notification to verify mobile popups
- */
-export const sendTestNotification = async (): Promise<boolean> => {
-  return sendMobileNotification({
-    title: '🔔 ReNu-Biome Mobile Alert Active',
-    body: 'Driver Dave Miller is en route with your ReNu N-CARE refill. Live ETA: 2:15 PM.',
-    url: '/deliveries',
-    tag: 'renu-test-alert',
+export async function sendTestNotification(): Promise<boolean> {
+  return sendMobileNotification('ReNu-Biome Alerts Active', {
+    body: 'Live alerts enabled for tank telemetry, biological deliveries, lab samples, and invoices.',
+    tag: `renu-test-${Date.now()}`,
+    url: '/home',
   });
-};
+}
 
-/**
- * Automated alert: Low tank telemetry detected
- */
-export const triggerLowTankAlert = async (
-  tankName: string,
-  levelPercent: number,
-  ranchName: string
-): Promise<void> => {
-  await sendMobileNotification({
-    title: `⚠️ Low Tank Alert: ${tankName} (${levelPercent}%)`,
-    body: `${ranchName} tank capacity is critical. Tap to request an immediate fertilizer refill.`,
-    url: '/deliveries',
-    tag: `low-tank-${tankName.toLowerCase().replace(/\s+/g, '-')}`,
+export async function triggerLowTankAlert(
+  ranchName: string,
+  blockName: string,
+  levelPct: number
+): Promise<boolean> {
+  return sendMobileNotification(`Low Tank Alert — ${ranchName}`, {
+    body: `${blockName} is at ${Math.round(levelPct)}% tank capacity. Schedule a refill soon.`,
+    tag: `low-tank-${ranchName}-${blockName}`,
+    url: '/ranches',
   });
-};
+}
 
-/**
- * Automated alert: Delivery status updated
- */
-export const triggerDeliveryUpdate = async (
+export async function triggerDeliveryUpdate(
   orderId: string,
   status: string,
-  driverName?: string,
   eta?: string
-): Promise<void> => {
-  let body = `Delivery #${orderId} status updated to ${status}.`;
-  if (status === 'Out for delivery' && driverName) {
-    body = `Driver ${driverName} is on the way! Estimated arrival: ${eta || 'Today'}.`;
-  } else if (status === 'Delivered') {
-    body = `Delivery #${orderId} has been successfully completed and injected into your ranch tank.`;
-  }
-
-  await sendMobileNotification({
-    title: `🚚 Delivery Update: #${orderId}`,
-    body,
-    url: '/deliveries',
+): Promise<boolean> {
+  const etaSuffix = eta ? ` (ETA: ${eta})` : '';
+  return sendMobileNotification(`Delivery ${status} — #${orderId}`, {
+    body: `Biological shipment #${orderId} is now ${status}${etaSuffix}.`,
     tag: `delivery-${orderId}`,
+    url: '/deliveries',
   });
-};
+}

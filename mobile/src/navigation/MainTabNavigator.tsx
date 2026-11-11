@@ -42,8 +42,12 @@ const CustomTabBar = ({ state, descriptors, navigation }: any) => {
   const isSecondaryScreen = !PRIMARY_TABS.includes(activeRoute);
 
   return (
-    <View style={[styles.tabBarWrapper, { bottom: Math.max(12, insets.bottom + 6) }]}>
-      <View style={styles.tabBar}>
+    <View
+      pointerEvents="box-none"
+      style={[styles.tabBarOuter, { bottom: Math.max(12, insets.bottom + 6) }]}
+    >
+      <View style={styles.tabBarWrapper}>
+        <View style={styles.tabBar}>
         {state.routes
           .filter((route: any) => PRIMARY_TABS.includes(route.name))
           .map((route: any) => {
@@ -86,6 +90,7 @@ const CustomTabBar = ({ state, descriptors, navigation }: any) => {
           })}
       </View>
     </View>
+  </View>
   );
 };
 
@@ -111,14 +116,17 @@ export const MainTabNavigator = () => {
 };
 
 const styles = StyleSheet.create({
-  tabBarWrapper: {
+  tabBarOuter: {
     position: 'absolute',
-    bottom: 14,
-    left: Platform.OS === 'web' ? 0 : 12,
-    right: Platform.OS === 'web' ? 0 : 12,
-    maxWidth: 440,
-    alignSelf: 'center',
-    marginHorizontal: 'auto',
+    left: 0,
+    right: 0,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    zIndex: 999,
+  },
+  tabBarWrapper: {
+    width: '100%',
+    maxWidth: 460,
     borderRadius: 24,
     backgroundColor: '#FFFFFF',
     shadowColor: '#000',

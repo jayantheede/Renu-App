@@ -270,7 +270,7 @@ export const DeliveriesScreen = ({ route }: any) => {
           </Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <NotificationBellButton color={BRAND_COLORS.primaryTeal} badgeCount={2} />
+          <NotificationBellButton color={BRAND_COLORS.primaryTeal} />
           {orderingEnabled && (
             <TouchableOpacity
               style={styles.requestOrderBtn}

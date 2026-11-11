@@ -1,45 +1,75 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { TouchableOpacity, View, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { NotificationCenterModal } from './NotificationCenterModal';
-import { useNavigation } from '@react-navigation/native';
+import { useNotificationStore } from '../store/useNotificationStore';
 
 interface Props {
   color?: string;
   tintColor?: string;
   badgeCount?: number;
+  size?: number;
+  style?: StyleProp<ViewStyle>;
+}
+
+function isLightHex(hex: string): boolean {
+  const normalized = hex.trim().toLowerCase();
+  return (
+    normalized === '#fff' ||
+    normalized === '#ffffff' ||
+    normalized === 'white' ||
+    normalized.startsWith('rgba(255,255,255')
+  );
 }
 
 export const NotificationBellButton: React.FC<Props> = ({
   color,
   tintColor,
-  badgeCount = 2,
+  badgeCount,
+  size = 24,
+  style,
 }) => {
-  const iconColor = color || tintColor || '#FFFFFF';
   const [modalVisible, setModalVisible] = useState(false);
-  const navigation = useNavigation<any>();
+  const storeUnreadCount = useNotificationStore((state) => state.unreadCount);
+  const refreshAlerts = useNotificationStore((state) => state.refreshAlerts);
 
-  const handleNavigate = (screen: string) => {
-    try {
-      navigation.navigate(screen);
-    } catch (e) {
-      console.warn('Navigation error:', e);
-    }
+  const iconColor = tintColor || color || '#0F172A';
+  const effectiveBadgeCount = badgeCount !== undefined ? badgeCount : storeUnreadCount;
+  const lightHeader = isLightHex(iconColor);
+
+  const handleOpen = () => {
+    setModalVisible(true);
+    void refreshAlerts({ notifyNew: false });
   };
 
   return (
     <>
       <TouchableOpacity
-        style={styles.bellBtn}
-        onPress={() => setModalVisible(true)}
-        activeOpacity={0.8}
-        accessibilityLabel="Notifications"
+        onPress={handleOpen}
+        style={[
+          styles.btn,
+          lightHeader ? styles.btnOnDarkHeader : styles.btnOnLightHeader,
+          style,
+        ]}
+        activeOpacity={0.75}
+        accessibilityRole="button"
+        accessibilityLabel={
+          effectiveBadgeCount > 0
+            ? `App Alerts and Notifications, ${effectiveBadgeCount} unread`
+            : 'App Alerts and Notifications'
+        }
       >
-        <MaterialCommunityIcons name="bell-outline" size={20} color={iconColor} />
-        {badgeCount > 0 && (
-          <View style={styles.badgeContainer}>
-            <Text style={styles.badgeText}>{badgeCount > 9 ? '9+' : badgeCount}</Text>
+        <MaterialCommunityIcons
+          name={effectiveBadgeCount > 0 ? 'bell-ring-outline' : 'bell-outline'}
+          size={size}
+          color={iconColor}
+        />
+        {effectiveBadgeCount > 0 && (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>
+              {effectiveBadgeCount > 99 ? '99+' : String(effectiveBadgeCount)}
+            </Text>
           </View>
         )}
       </TouchableOpacity>
@@ -47,40 +77,47 @@ export const NotificationBellButton: React.FC<Props> = ({
       <NotificationCenterModal
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
-        onNavigate={handleNavigate}
       />
     </>
   );
 };
 
 const styles = StyleSheet.create({
-  bellBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  btn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
+    borderWidth: 1,
   },
-  badgeContainer: {
+  btnOnDarkHeader: {
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+    borderColor: 'rgba(255, 255, 255, 0.28)',
+  },
+  btnOnLightHeader: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
+  },
+  badge: {
     position: 'absolute',
-    top: 2,
-    right: 2,
-    backgroundColor: '#F97316',
+    top: 3,
+    right: 3,
+    minWidth: 18,
+    height: 18,
     borderRadius: 9,
-    minWidth: 16,
-    height: 16,
-    paddingHorizontal: 3,
+    backgroundColor: '#DC2626',
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 4,
     borderWidth: 1.5,
-    borderColor: '#0C6054',
+    borderColor: '#FFFFFF',
   },
   badgeText: {
     color: '#FFFFFF',
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '800',
-    lineHeight: 11,
+    lineHeight: 12,
   },
 });

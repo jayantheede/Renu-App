@@ -64,8 +64,12 @@ const ADMIN_PRIMARY_TABS = [
 const CustomTabBar = ({ state, descriptors, navigation }: any) => {
   const insets = useSafeAreaInsets();
   return (
-    <View style={[styles.tabBarWrapper, { bottom: Math.max(12, insets.bottom + 6) }]}>
-      <View style={styles.glassTabBar}>
+    <View
+      pointerEvents="box-none"
+      style={[styles.tabBarOuter, { bottom: Math.max(12, insets.bottom + 6) }]}
+    >
+      <View style={styles.tabBarWrapper}>
+        <View style={styles.glassTabBar}>
         {state.routes
           .filter((route: any) => ADMIN_PRIMARY_TABS.includes(route.name))
           .map((route: any, index: number) => {
@@ -106,6 +110,7 @@ const CustomTabBar = ({ state, descriptors, navigation }: any) => {
         })}
       </View>
     </View>
+  </View>
   );
 };
 
@@ -134,17 +139,19 @@ export const AdminTabNavigator = () => {
 };
 
 const styles = StyleSheet.create({
-  tabBarWrapper: {
+  tabBarOuter: {
     position: 'absolute',
-    bottom: 12,
-    left: Platform.OS === 'web' ? 0 : 12,
-    right: Platform.OS === 'web' ? 0 : 12,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    zIndex: 999,
+  },
+  tabBarWrapper: {
+    width: '100%',
     maxWidth: 480,
-    alignSelf: 'center',
-    marginHorizontal: 'auto',
     borderRadius: 24,
     overflow: 'hidden',
-    zIndex: 999,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.25,

@@ -23,6 +23,7 @@ import {
   fetchQuickBooksStatus
 } from '../api/client';
 import { BRAND_COLORS } from '../theme/theme';
+import { NotificationBellButton } from '../components/NotificationBellButton';
 import { printInvoiceDocument, printYearEndSummaryDocument } from '../utils/printInvoice';
 
 export const InvoicesScreen = () => {
@@ -255,13 +256,16 @@ export const InvoicesScreen = () => {
           <Text style={styles.pageTitle}>Invoices</Text>
           <Text style={styles.subtitle}>QuickBooks billing records, linked deliveries & statements</Text>
         </View>
-        <TouchableOpacity
-          style={styles.yearEndBtn}
-          onPress={() => setSummaryModalVisible(true)}
-        >
-          <MaterialCommunityIcons name="file-chart" size={16} color="#FFFFFF" />
-          <Text style={styles.yearEndBtnText}>Year-End Summary</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <NotificationBellButton color={BRAND_COLORS.primaryTeal} />
+          <TouchableOpacity
+            style={styles.yearEndBtn}
+            onPress={() => setSummaryModalVisible(true)}
+          >
+            <MaterialCommunityIcons name="file-chart" size={16} color="#FFFFFF" />
+            <Text style={styles.yearEndBtnText}>Year-End Summary</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* QuickBooks Online 2-Way Sync Status Banner (Deferred Capability: quickbooks) */}

@@ -602,6 +602,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
     padding: 20,
+    width: '100%',
+    maxWidth: 560,
+    alignSelf: 'center',
     maxHeight: '88%',
   },
   modalHeader: {

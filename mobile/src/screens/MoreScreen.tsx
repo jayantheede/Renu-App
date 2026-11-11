@@ -10,8 +10,10 @@ import {
   requestNotificationPermission,
   sendTestNotification,
   getNotificationPermission,
+  getNotificationPermissionAsync,
   areNotificationsSupported
 } from '../utils/notifications';
+import { useNotificationStore } from '../store/useNotificationStore';
 import {
   updateProfile,
   fetchYearEndSummary,
@@ -407,18 +409,33 @@ export const MoreScreen = () => {
 
   const [testingNotification, setTestingNotification] = useState(false);
 
+  useEffect(() => {
+    if (!notificationsModalVisible) return;
+    void (async () => {
+      const perm = await getNotificationPermissionAsync();
+      await useNotificationStore.getState().refreshPermissionStatus();
+      if (perm === 'granted') {
+        setPushEnabled(true);
+      } else if (perm === 'denied') {
+        setPushEnabled(false);
+      }
+    })();
+  }, [notificationsModalVisible]);
+
   const handleTogglePush = async (val: boolean) => {
     setPushEnabled(val);
     if (val) {
       const granted = await requestNotificationPermission();
+      await useNotificationStore.getState().refreshPermissionStatus();
       if (!granted) {
         Alert.alert(
           'Notifications Notice',
-          'Please allow notifications in your mobile browser or device settings to receive alerts when the app is closed.'
+          'Please allow notifications in System Settings / Notification Center (or browser settings) to receive delivery and tank alerts.'
         );
       } else {
+        await useNotificationStore.getState().sendTestAlert();
         Alert.alert(
-          'Mobile Notifications Enabled',
+          'App Alerts Enabled',
           'You will now receive delivery status, low tank warnings, and order dispatch alerts on your mobile lock screen.'
         );
       }
@@ -428,19 +445,28 @@ export const MoreScreen = () => {
   const handleSendTestAlert = async () => {
     setTestingNotification(true);
     try {
-      const success = await sendTestNotification();
+      const perm = await getNotificationPermissionAsync();
+      if (perm !== 'granted' && perm !== 'unsupported') {
+        await requestNotificationPermission();
+      }
+      const success = await useNotificationStore.getState().sendTestAlert();
       if (success) {
         Alert.alert(
-          'Mobile Alert Sent!',
-          'A test notification has been dispatched to your device lock screen / status bar.\n\nTip: You can now lock your phone or switch apps to verify alerts pop up even when not in use.'
+          'App Alert Sent!',
+          'A live alert notification has been dispatched to your device notification center and alert bell inbox.'
         );
       } else {
-        const granted = await requestNotificationPermission();
-        if (granted) {
-          await sendTestNotification();
-          Alert.alert('Mobile Alert Sent!', 'A test notification has been dispatched to your device.');
+        const permAfter = await getNotificationPermissionAsync();
+        if (permAfter === 'denied') {
+          Alert.alert(
+            'Permission Needed',
+            'Please allow notifications in System Settings / Notification Center (or browser settings) to receive OS alert banners.'
+          );
         } else {
-          Alert.alert('Permission Needed', 'Please allow notifications in your browser or device prompt to receive alerts.');
+          Alert.alert(
+            'Alert Added to Inbox',
+            'A test alert was added to your App Alerts bell inbox.'
+          );
         }
       }
     } catch (e: any) {
@@ -1714,6 +1740,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
     padding: 24,
+    width: '100%',
+    maxWidth: 560,
+    alignSelf: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.1,

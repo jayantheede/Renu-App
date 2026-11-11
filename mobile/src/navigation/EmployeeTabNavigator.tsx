@@ -32,8 +32,12 @@ const TabBarIcon = ({ name, isFocused, label }: { name: string, isFocused: boole
 const CustomTabBar = ({ state, descriptors, navigation }: any) => {
   const insets = useSafeAreaInsets();
   return (
-    <View style={[styles.tabBarWrapper, { bottom: Math.max(12, insets.bottom + 6) }]}>
-      <View style={styles.tabBar}>
+    <View
+      pointerEvents="box-none"
+      style={[styles.tabBarOuter, { bottom: Math.max(12, insets.bottom + 6) }]}
+    >
+      <View style={styles.tabBarWrapper}>
+        <View style={styles.tabBar}>
         {state.routes.map((route: any, index: number) => {
           const { options } = descriptors[route.key];
           const label = options.title !== undefined ? options.title : route.name;
@@ -72,6 +76,7 @@ const CustomTabBar = ({ state, descriptors, navigation }: any) => {
         })}
       </View>
     </View>
+  </View>
   );
 };
 
@@ -99,11 +104,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#F4F7F4',
   },
-  tabBarWrapper: {
+  tabBarOuter: {
     position: 'absolute',
-    bottom: 20,
-    left: 16,
-    right: 16,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    zIndex: 999,
+  },
+  tabBarWrapper: {
+    width: '100%',
+    maxWidth: 480,
     borderRadius: 30,
     backgroundColor: '#FFFFFF',
     shadowColor: '#000',

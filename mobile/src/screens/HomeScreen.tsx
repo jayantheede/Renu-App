@@ -19,6 +19,7 @@ import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../store/useAuthStore';
 import { fetchRanches, fetchDeliveries, fetchInvoices, fetchGrowerDashboard } from '../api/client';
 import { BRAND_COLORS } from '../theme/theme';
+import { NotificationBellButton } from '../components/NotificationBellButton';
 
 const STAGES = ['Bloom', 'Soil blends', 'Potassium', 'Hull split', 'Post-harvest'];
 const CURRENT_STAGE_IDX = 4; // Post-harvest
@@ -140,14 +141,17 @@ export const HomeScreen = () => {
                   style={styles.headerLogo}
                   resizeMode="contain"
                 />
-                <TouchableOpacity
-                  onPress={handleSignOut}
-                  style={styles.signOutBtn}
-                  accessibilityLabel="Sign out"
-                >
-                  <MaterialCommunityIcons name="logout" size={16} color="#FFFFFF" />
-                  <Text style={styles.signOutBtnText}>Sign Out</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <NotificationBellButton color="#FFFFFF" />
+                  <TouchableOpacity
+                    onPress={handleSignOut}
+                    style={styles.signOutBtn}
+                    accessibilityLabel="Sign out"
+                  >
+                    <MaterialCommunityIcons name="logout" size={16} color="#FFFFFF" />
+                    <Text style={styles.signOutBtnText}>Sign Out</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
               {/* Greeting & Entity Name */}

@@ -7,6 +7,7 @@ import { AuthNavigator } from './AuthNavigator';
 import { MainTabNavigator } from './MainTabNavigator';
 import { AdminTabNavigator } from './AdminTabNavigator';
 import { EmployeeTabNavigator } from './EmployeeTabNavigator';
+import { AppAlertsLifecycle } from '../components/AppAlertsLifecycle';
 
 export const RootNavigator = () => {
   const { isLoggedIn, role, isInitialized } = useAuthStore();
@@ -104,6 +105,7 @@ export const RootNavigator = () => {
       ) : (
         <MainTabNavigator />
       )}
+      {isLoggedIn && <AppAlertsLifecycle />}
     </NavigationContainer>
   );
 };

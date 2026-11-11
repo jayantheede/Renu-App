@@ -1,324 +1,357 @@
-import React, { useState, useEffect } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import {
+  Modal,
   View,
   StyleSheet,
-  Modal,
-  TouchableOpacity,
   ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
   Platform,
+  useWindowDimensions,
+  Alert,
 } from 'react-native';
-import { Text, Chip, Divider, Switch } from 'react-native-paper';
+import { Text, Divider } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { BRAND_COLORS } from '../theme/theme';
+import { NavigationContext } from '@react-navigation/native';
+import { useAuthStore } from '../store/useAuthStore';
+import {
+  useNotificationStore,
+  resolveAlertRoute,
+  AppAlertCategory,
+  AppAlertItem,
+} from '../store/useNotificationStore';
 import {
   areNotificationsSupported,
-  getNotificationPermission,
+  getNotificationPermissionAsync,
   requestNotificationPermission,
-  sendTestNotification,
-  triggerLowTankAlert,
-  triggerDeliveryUpdate,
 } from '../utils/notifications';
-
-export interface InAppNotification {
-  id: string;
-  title: string;
-  body: string;
-  category: 'delivery' | 'tank' | 'invoice' | 'lab' | 'system';
-  timestamp: string;
-  read: boolean;
-  actionUrl?: string;
-}
-
-const DEFAULT_NOTIFICATIONS: InAppNotification[] = [
-  {
-    id: 'notif-1',
-    title: '🚚 Delivery En Route: DEL-101',
-    body: 'Driver Carlos V. has departed Fresno Hub with 3,500 gal ReNu N-CARE 32-0-0. ETA: 10:45 AM.',
-    category: 'delivery',
-    timestamp: '15 mins ago',
-    read: false,
-    actionUrl: '/deliveries',
-  },
-  {
-    id: 'notif-2',
-    title: '⚠️ Low Tank Level: North Station 5K',
-    body: 'Cellular telemetry reports level dropped to 22% (1,100 Gal). Auto re-order threshold reached.',
-    category: 'tank',
-    timestamp: '1 hour ago',
-    read: false,
-    actionUrl: '/ranches',
-  },
-  {
-    id: 'notif-3',
-    title: '📄 Invoice Ready: INV-2026-004',
-    body: 'Your biological fertigation program invoice for $13,440.00 is now available for review and payment.',
-    category: 'invoice',
-    timestamp: 'Yesterday',
-    read: true,
-    actionUrl: '/invoices',
-  },
-  {
-    id: 'notif-4',
-    title: '🔬 Lab Tissue Assay Completed',
-    body: 'Dellavalle Laboratory uploaded Block-1 Nonpareil Almond tissue results (3.2% N · Optimal).',
-    category: 'lab',
-    timestamp: '2 days ago',
-    read: true,
-    actionUrl: '/ranches',
-  },
-];
 
 interface Props {
   visible: boolean;
   onClose: () => void;
-  onNavigate?: (screen: string) => void;
 }
 
-export const NotificationCenterModal: React.FC<Props> = ({
-  visible,
-  onClose,
-  onNavigate,
-}) => {
-  const [notifications, setNotifications] = useState<InAppNotification[]>(DEFAULT_NOTIFICATIONS);
-  const [filter, setFilter] = useState<'all' | 'unread'>('all');
-  const [permissionStatus, setPermissionStatus] = useState<string>('default');
-  const [pushEnabled, setPushEnabled] = useState(false);
-  const [sendingTest, setSendingTest] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<string>('');
+function getAlertVisuals(type: AppAlertCategory): {
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  color: string;
+  bg: string;
+} {
+  switch (type) {
+    case 'delivery':
+      return { icon: 'truck-delivery-outline', color: '#0284C7', bg: '#E0F2FE' };
+    case 'telemetry':
+      return { icon: 'water-alert-outline', color: '#D97706', bg: '#FEF3C7' };
+    case 'lab':
+      return { icon: 'flask-outline', color: '#7C3AED', bg: '#EDE9FE' };
+    case 'invoice':
+      return { icon: 'file-document-alert-outline', color: '#DC2626', bg: '#FEE2E2' };
+    case 'system':
+    default:
+      return { icon: 'bell-check-outline', color: '#1E5631', bg: '#DCFCE7' };
+  }
+}
+
+const FALLBACK_NAV_CONTEXT = createContext<any>(null);
+const SafeNavigationContext = (NavigationContext as React.Context<any> | undefined) || FALLBACK_NAV_CONTEXT;
+
+export const NotificationCenterModal: React.FC<Props> = ({ visible, onClose }) => {
+  const { width, height } = useWindowDimensions();
+  const isWideViewport = width >= 640;
+  const navigation = useContext(SafeNavigationContext);
+  const role = useAuthStore((s) => s.role);
+
+  const alerts = useNotificationStore((s) => s.alerts);
+  const unreadCount = useNotificationStore((s) => s.unreadCount);
+  const isLoading = useNotificationStore((s) => s.isLoading);
+  const permissionStatus = useNotificationStore((s) => s.permissionStatus);
+  const refreshPermissionStatus = useNotificationStore((s) => s.refreshPermissionStatus);
+  const refreshAlerts = useNotificationStore((s) => s.refreshAlerts);
+  const markAsRead = useNotificationStore((s) => s.markAsRead);
+  const markAllAsRead = useNotificationStore((s) => s.markAllAsRead);
+  const clearAllAlerts = useNotificationStore((s) => s.clearAllAlerts);
+  const sendTestAlert = useNotificationStore((s) => s.sendTestAlert);
+
+  const [statusNote, setStatusNote] = useState<string | null>(null);
+  const [testingAlert, setTestingAlert] = useState(false);
 
   useEffect(() => {
-    if (visible) {
-      if (typeof window !== 'undefined' && 'Notification' in window) {
-        const perm = getNotificationPermission();
-        setPermissionStatus(perm);
-        setPushEnabled(perm === 'granted');
-      }
-    }
-  }, [visible]);
+    if (!visible) return;
+    setStatusNote(null);
+    void (async () => {
+      await refreshPermissionStatus();
+      await refreshAlerts({ notifyNew: false });
+    })();
+  }, [visible, refreshPermissionStatus, refreshAlerts]);
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
-
-  const handleTogglePush = async () => {
-    setStatusMessage('');
-    if (pushEnabled) {
-      setPushEnabled(false);
-      setStatusMessage('Push notifications turned off in app.');
-      return;
-    }
-
+  const handleEnableNotifications = async () => {
     const granted = await requestNotificationPermission();
-    if (granted) {
-      setPushEnabled(true);
-      setPermissionStatus('granted');
-      setStatusMessage('Mobile notifications enabled! Alerts will pop up on your device.');
-      await sendTestNotification();
+    const updated = await getNotificationPermissionAsync();
+    await refreshPermissionStatus();
+
+    if (granted || updated === 'granted') {
+      const ok = await sendTestAlert();
+      setStatusNote(
+        ok
+          ? 'Native app alerts enabled — test alert dispatched.'
+          : 'Alert permission enabled.'
+      );
+    } else if (updated === 'denied') {
+      const settingsLabel =
+        Platform.OS === 'web'
+          ? 'your browser site settings'
+          : 'System Settings / iOS Notification Center for ReNu-Biome';
+      Alert.alert(
+        'App Alerts Blocked',
+        `Notification access is currently turned off. Enable alerts in ${settingsLabel} to receive tank warnings and delivery updates.`
+      );
     } else {
-      setPushEnabled(false);
-      setPermissionStatus(getNotificationPermission());
-      setStatusMessage('Permission not granted. Please allow notifications in your browser settings.');
+      setStatusNote('App alert prompt was dismissed.');
     }
   };
 
-  const handleTestNow = async () => {
-    setSendingTest(true);
-    setStatusMessage('');
+  const handleSendTest = async () => {
+    setTestingAlert(true);
     try {
-      const ok = await sendTestNotification();
-      if (ok) {
-        setStatusMessage('Test notification sent! Check your phone notification tray or status bar.');
-      } else {
-        setStatusMessage('Could not show notification. Tap Enable Notifications first.');
+      const perm = await getNotificationPermissionAsync();
+      if (perm !== 'granted' && perm !== 'unsupported') {
+        await requestNotificationPermission();
+        await refreshPermissionStatus();
       }
-    } catch (e: any) {
-      setStatusMessage('Notification test error: ' + (e.message || 'Unknown'));
+      const deliveredOs = await sendTestAlert();
+      setStatusNote(
+        deliveredOs
+          ? 'Test alert sent to your notification center and inbox.'
+          : 'Test alert added to in-app alert center.'
+      );
     } finally {
-      setSendingTest(false);
+      setTestingAlert(false);
     }
   };
 
-  const handleMarkAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  };
-
-  const handleClearAll = () => {
-    setNotifications([]);
-  };
-
-  const handleItemPress = (item: InAppNotification) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === item.id ? { ...n, read: true } : n))
-    );
+  const handleAlertPress = async (item: AppAlertItem) => {
+    await markAsRead(item.id);
     onClose();
-    if (onNavigate && item.actionUrl) {
-      const screenName = item.actionUrl.replace(/^\//, '');
-      const capitalized = screenName.charAt(0).toUpperCase() + screenName.slice(1);
-      onNavigate(capitalized);
+    if (navigation && item.actionRoute) {
+      const targetScreen = resolveAlertRoute(item.actionRoute, role);
+      try {
+        (navigation as any).navigate(targetScreen);
+      } catch {
+        // Screen not present in current stack
+      }
     }
   };
 
-  const filteredItems = filter === 'unread' ? notifications.filter((n) => !n.read) : notifications;
-
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case 'delivery':
-        return { name: 'truck-fast', color: '#0C6054', bg: '#F0FDFA' };
-      case 'tank':
-        return { name: 'water-pump', color: '#DC2626', bg: '#FEF2F2' };
-      case 'invoice':
-        return { name: 'file-document-outline', color: '#D97706', bg: '#FFFBEB' };
-      case 'lab':
-        return { name: 'flask-round-bottom', color: '#2563EB', bg: '#EFF6FF' };
-      default:
-        return { name: 'bell-outline', color: '#64748B', bg: '#F8FAFC' };
-    }
-  };
+  const supported = areNotificationsSupported();
+  const permissionBadgeText =
+    permissionStatus === 'granted'
+      ? 'Active'
+      : permissionStatus === 'denied'
+        ? 'Blocked'
+        : supported
+          ? 'Off'
+          : 'In-App Only';
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalCard}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType={isWideViewport ? 'fade' : 'slide'}
+      onRequestClose={onClose}
+    >
+      <View style={[styles.overlay, isWideViewport && styles.overlayCentered]}>
+        <TouchableOpacity
+          style={StyleSheet.absoluteFill}
+          activeOpacity={1}
+          onPress={onClose}
+        />
+
+        <View
+          style={[
+            styles.sheet,
+            isWideViewport
+              ? [styles.sheetWide, { maxHeight: Math.min(720, Math.round(height * 0.85)) }]
+              : [styles.sheetCompact, { maxHeight: Math.round(height * 0.88) }],
+          ]}
+        >
           {/* Header */}
           <View style={styles.header}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <View style={styles.headerIconBox}>
-                <MaterialCommunityIcons name="bell-ring" size={20} color={BRAND_COLORS.primaryTeal} />
-                {unreadCount > 0 && <View style={styles.headerBadgeDot} />}
+            <View style={styles.headerLeft}>
+              <View style={styles.headerIcon}>
+                <MaterialCommunityIcons name="bell-badge-outline" size={20} color="#1E5631" />
               </View>
               <View>
-                <Text style={styles.headerTitle}>Notifications & Alerts</Text>
+                <Text style={styles.headerTitle}>App Alerts & Updates</Text>
                 <Text style={styles.headerSubtitle}>
-                  {unreadCount > 0 ? `${unreadCount} unread operational alerts` : 'All caught up'}
+                  {unreadCount > 0 ? `${unreadCount} unread operational alert${unreadCount === 1 ? '' : 's'}` : 'All caught up'}
                 </Text>
               </View>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close notifications">
-              <MaterialCommunityIcons name="close" size={22} color="#64748B" />
+            <TouchableOpacity
+              onPress={onClose}
+              style={styles.closeBtn}
+              accessibilityLabel="Close alerts"
+            >
+              <MaterialCommunityIcons name="close" size={20} color="#475569" />
             </TouchableOpacity>
           </View>
 
-          {/* Quick Push Notification Enable Strip */}
-          <View style={styles.pushStatusCard}>
-            <View style={{ flex: 1, marginRight: 12 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                <MaterialCommunityIcons
-                  name={pushEnabled ? 'check-circle' : 'alert-circle'}
-                  size={15}
-                  color={pushEnabled ? '#15803D' : '#D97706'}
-                />
-                <Text style={styles.pushStatusTitle}>
-                  {pushEnabled ? 'Mobile Push Alerts: ACTIVE' : 'Enable Mobile Push Alerts'}
+          {/* OS Notification Status & Controls */}
+          <View style={styles.statusBanner}>
+            <View style={styles.statusTopRow}>
+              <View style={styles.statusTextCol}>
+                <View style={styles.statusTitleRow}>
+                  <Text style={styles.statusTitle}>System Banner & Sound Alerts</Text>
+                  <View
+                    style={[
+                      styles.permPill,
+                      permissionStatus === 'granted'
+                        ? styles.permPillOn
+                        : permissionStatus === 'denied'
+                          ? styles.permPillBlocked
+                          : styles.permPillOff,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.permPillText,
+                        permissionStatus === 'granted'
+                          ? styles.permPillTextOn
+                          : permissionStatus === 'denied'
+                            ? styles.permPillTextBlocked
+                            : styles.permPillTextOff,
+                      ]}
+                    >
+                      {permissionBadgeText}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.statusDesc}>
+                  Receive real-time alerts for low tank telemetry, deliveries, lab samples, and overdue billing across iPhone, iPad, Mac, and Web.
                 </Text>
               </View>
-              <Text style={styles.pushStatusDesc}>
-                {pushEnabled
-                  ? 'Alerts will pop up on your mobile lock screen even when app is closed.'
-                  : 'Get instant alerts when deliveries depart, arrive, or tanks run low.'}
-              </Text>
             </View>
-            <Switch
-              value={pushEnabled}
-              onValueChange={handleTogglePush}
-              color={BRAND_COLORS.primaryTeal}
-            />
+
+            <View style={styles.bannerActions}>
+              {permissionStatus !== 'granted' && supported && (
+                <TouchableOpacity
+                  onPress={handleEnableNotifications}
+                  style={styles.enableBtn}
+                  activeOpacity={0.8}
+                >
+                  <MaterialCommunityIcons name="bell-ring-outline" size={16} color="#FFFFFF" />
+                  <Text style={styles.enableBtnText}>Enable Native Alerts</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                onPress={handleSendTest}
+                style={styles.testBtn}
+                disabled={testingAlert}
+                activeOpacity={0.75}
+              >
+                {testingAlert ? (
+                  <ActivityIndicator size="small" color="#1E5631" />
+                ) : (
+                  <MaterialCommunityIcons name="bell-plus-outline" size={16} color="#1E5631" />
+                )}
+                <Text style={styles.testBtnText}>Send Test Alert</Text>
+              </TouchableOpacity>
+            </View>
+
+            {statusNote && <Text style={styles.statusFeedback}>{statusNote}</Text>}
           </View>
 
-          {statusMessage ? (
-            <View style={styles.statusMessageBox}>
-              <MaterialCommunityIcons name="information-outline" size={16} color={BRAND_COLORS.primaryTeal} />
-              <Text style={styles.statusMessageText}>{statusMessage}</Text>
-            </View>
-          ) : null}
+          {/* Toolbar */}
+          <View style={styles.toolbar}>
+            <TouchableOpacity
+              onPress={() => void refreshAlerts({ notifyNew: false })}
+              style={styles.toolbarBtn}
+              disabled={isLoading}
+            >
+              <MaterialCommunityIcons name="refresh" size={15} color="#334155" />
+              <Text style={styles.toolbarBtnText}>Refresh</Text>
+            </TouchableOpacity>
 
-          {/* Filter Pills & Actions Row */}
-          <View style={styles.filterRow}>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <TouchableOpacity
-                style={[styles.filterPill, filter === 'all' && styles.filterPillActive]}
-                onPress={() => setFilter('all')}
-              >
-                <Text style={[styles.filterPillText, filter === 'all' && styles.filterPillTextActive]}>
-                  All ({notifications.length})
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.filterPill, filter === 'unread' && styles.filterPillActive]}
-                onPress={() => setFilter('unread')}
-              >
-                <Text style={[styles.filterPillText, filter === 'unread' && styles.filterPillTextActive]}>
-                  Unread ({unreadCount})
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={{ flexDirection: 'row', gap: 8 }}>
+            <View style={styles.toolbarRight}>
               {unreadCount > 0 && (
-                <TouchableOpacity onPress={handleMarkAllRead} style={styles.textActionBtn}>
-                  <Text style={styles.textActionText}>Mark all read</Text>
+                <TouchableOpacity
+                  onPress={() => void markAllAsRead()}
+                  style={styles.toolbarLink}
+                >
+                  <Text style={styles.toolbarLinkText}>Mark all read</Text>
                 </TouchableOpacity>
               )}
-              {notifications.length > 0 && (
-                <TouchableOpacity onPress={handleClearAll} style={styles.textActionBtn}>
-                  <Text style={[styles.textActionText, { color: '#94A3B8' }]}>Clear</Text>
+              {alerts.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => void clearAllAlerts()}
+                  style={styles.toolbarLink}
+                >
+                  <Text style={[styles.toolbarLinkText, { color: '#DC2626' }]}>Clear</Text>
                 </TouchableOpacity>
               )}
             </View>
           </View>
 
-          {/* Notifications Scroll List */}
-          <ScrollView style={styles.listScroll} showsVerticalScrollIndicator={false}>
-            {filteredItems.length === 0 ? (
+          <Divider />
+
+          {/* Alert List */}
+          <ScrollView
+            style={styles.listScroll}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {isLoading && alerts.length === 0 ? (
               <View style={styles.emptyBox}>
-                <MaterialCommunityIcons name="bell-sleep-outline" size={42} color="#94A3B8" />
-                <Text style={styles.emptyTitle}>No Notifications</Text>
+                <ActivityIndicator size="small" color="#1E5631" />
+                <Text style={styles.emptySubtitle}>Loading live operational alerts...</Text>
+              </View>
+            ) : alerts.length === 0 ? (
+              <View style={styles.emptyBox}>
+                <MaterialCommunityIcons name="check-decagram-outline" size={38} color="#94A3B8" />
+                <Text style={styles.emptyTitle}>No Active Alerts</Text>
                 <Text style={styles.emptySubtitle}>
-                  You have no {filter === 'unread' ? 'unread ' : ''}operational alerts at this time.
+                  All tank levels, deliveries, and account monitors look good right now.
                 </Text>
               </View>
             ) : (
-              filteredItems.map((item) => {
-                const iconInfo = getCategoryIcon(item.category);
+              alerts.map((item) => {
+                const visuals = getAlertVisuals(item.type);
                 return (
                   <TouchableOpacity
                     key={item.id}
-                    style={[styles.notifItem, !item.read && styles.notifItemUnread]}
-                    onPress={() => handleItemPress(item)}
-                    activeOpacity={0.7}
+                    onPress={() => void handleAlertPress(item)}
+                    activeOpacity={0.75}
+                    style={[styles.alertCard, !item.read && styles.alertCardUnread]}
                   >
-                    <View style={[styles.itemIconBox, { backgroundColor: iconInfo.bg }]}>
-                      <MaterialCommunityIcons name={iconInfo.name as any} size={20} color={iconInfo.color} />
+                    <View style={[styles.iconBox, { backgroundColor: visuals.bg }]}>
+                      <MaterialCommunityIcons
+                        name={visuals.icon}
+                        size={20}
+                        color={visuals.color}
+                      />
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Text style={[styles.itemTitle, !item.read && styles.itemTitleUnread]} numberOfLines={1}>
+
+                    <View style={styles.alertBody}>
+                      <View style={styles.alertTitleRow}>
+                        <Text style={styles.alertTitle} numberOfLines={1}>
                           {item.title}
                         </Text>
-                        <Text style={styles.itemTime}>{item.timestamp}</Text>
+                        {!item.read && <View style={styles.unreadDot} />}
                       </View>
-                      <Text style={styles.itemBody} numberOfLines={2}>
-                        {item.body}
-                      </Text>
+
+                      <Text style={styles.alertMessage}>{item.message}</Text>
+
+                      <View style={styles.alertMetaRow}>
+                        <Text style={styles.alertTimestamp}>{item.timestamp}</Text>
+                        {item.actionLabel && (
+                          <Text style={styles.alertActionText}>{item.actionLabel} →</Text>
+                        )}
+                      </View>
                     </View>
-                    {!item.read && <View style={styles.unreadDot} />}
                   </TouchableOpacity>
                 );
               })
             )}
           </ScrollView>
-
-          {/* Footer with Test Button */}
-          <View style={styles.footerRow}>
-            <TouchableOpacity
-              style={styles.testBtn}
-              onPress={handleTestNow}
-              disabled={sendingTest}
-              activeOpacity={0.8}
-            >
-              <MaterialCommunityIcons name="send" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
-              <Text style={styles.testBtnText}>
-                {sendingTest ? 'Sending...' : 'Send Test Notification'}
-              </Text>
-            </TouchableOpacity>
-          </View>
         </View>
       </View>
     </Modal>
@@ -326,228 +359,289 @@ export const NotificationCenterModal: React.FC<Props> = ({
 };
 
 const styles = StyleSheet.create({
-  modalOverlay: {
+  overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
     justifyContent: 'flex-end',
   },
-  modalCard: {
+  overlayCentered: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  sheet: {
     backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 16,
+  },
+  sheetCompact: {
+    width: '100%',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: '90%',
-    paddingTop: 20,
-    paddingHorizontal: 16,
-    paddingBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 10,
+  },
+  sheetWide: {
+    width: '100%',
+    maxWidth: 560,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
-  headerIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F0FDFA',
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  headerIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#DCFCE7',
     justifyContent: 'center',
     alignItems: 'center',
-    position: 'relative',
-  },
-  headerBadgeDot: {
-    width: 9,
-    height: 9,
-    borderRadius: 4.5,
-    backgroundColor: '#F97316',
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    borderWidth: 1.5,
-    borderColor: '#FFFFFF',
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
     color: '#0F172A',
   },
   headerSubtitle: {
     fontSize: 12,
     color: '#64748B',
-    marginTop: 2,
+    marginTop: 1,
   },
   closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: '#F1F5F9',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  pushStatusCard: {
+  statusBanner: {
+    margin: 14,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 10,
+  },
+  statusTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  statusTextCol: {
+    flex: 1,
+  },
+  statusTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 12,
+    gap: 8,
   },
-  pushStatusTitle: {
-    fontSize: 12,
+  statusTitle: {
+    fontSize: 13,
     fontWeight: '700',
     color: '#0F172A',
-  },
-  pushStatusDesc: {
-    fontSize: 11,
-    color: '#64748B',
-    lineHeight: 15,
-    marginTop: 2,
-  },
-  statusMessageBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#F0FDFA',
-    borderRadius: 10,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#99F6E4',
-    marginBottom: 12,
-  },
-  statusMessageText: {
-    fontSize: 12,
-    color: '#0C6054',
-    fontWeight: '600',
     flex: 1,
   },
-  filterRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+  permPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
   },
-  filterPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#F1F5F9',
-  },
-  filterPillActive: {
-    backgroundColor: BRAND_COLORS.primaryTeal,
-  },
-  filterPillText: {
+  permPillOn: { backgroundColor: '#DCFCE7' },
+  permPillBlocked: { backgroundColor: '#FEE2E2' },
+  permPillOff: { backgroundColor: '#E2E8F0' },
+  permPillText: { fontSize: 11, fontWeight: '700' },
+  permPillTextOn: { color: '#166534' },
+  permPillTextBlocked: { color: '#991B1B' },
+  permPillTextOff: { color: '#334155' },
+  statusDesc: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
+    color: '#475569',
+    lineHeight: 17,
+    marginTop: 4,
   },
-  filterPillTextActive: {
+  bannerActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  enableBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#1E5631',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 10,
+  },
+  enableBtnText: {
     color: '#FFFFFF',
-  },
-  textActionBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-  },
-  textActionText: {
     fontSize: 12,
-    color: BRAND_COLORS.primaryTeal,
-    fontWeight: '600',
+    fontWeight: '700',
   },
-  listScroll: {
-    maxHeight: 380,
-    marginBottom: 16,
-  },
-  notifItem: {
+  testBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 12,
+    gap: 6,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#F1F5F9',
-    marginBottom: 8,
-    gap: 12,
-  },
-  notifItemUnread: {
-    backgroundColor: '#F8FAFC',
-    borderColor: '#E2E8F0',
-  },
-  itemIconBox: {
-    width: 38,
-    height: 38,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
     borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
-  itemTitle: {
-    fontSize: 13,
+  testBtnText: {
+    color: '#1E5631',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  statusFeedback: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#1E5631',
+  },
+  toolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+  },
+  toolbarBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+  },
+  toolbarBtnText: {
+    fontSize: 12,
     fontWeight: '600',
     color: '#334155',
-    flex: 1,
-    marginRight: 6,
   },
-  itemTitleUnread: {
-    fontWeight: '800',
+  toolbarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  toolbarLink: {
+    paddingVertical: 4,
+  },
+  toolbarLinkText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1E5631',
+  },
+  listScroll: {
+    flexGrow: 0,
+  },
+  listContent: {
+    padding: 14,
+    gap: 10,
+    paddingBottom: 24,
+  },
+  emptyBox: {
+    alignItems: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 20,
+    gap: 8,
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: '700',
     color: '#0F172A',
+    marginTop: 4,
   },
-  itemTime: {
-    fontSize: 10,
-    color: '#94A3B8',
-  },
-  itemBody: {
+  emptySubtitle: {
     fontSize: 12,
     color: '#64748B',
-    lineHeight: 16,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  alertCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  alertCardUnread: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#BBF7D0',
+  },
+  iconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginTop: 2,
+  },
+  alertBody: {
+    flex: 1,
+  },
+  alertTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  alertTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+    flex: 1,
   },
   unreadDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#F97316',
+    backgroundColor: '#16A34A',
   },
-  emptyBox: {
-    paddingVertical: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#64748B',
-    marginTop: 10,
-  },
-  emptySubtitle: {
+  alertMessage: {
     fontSize: 12,
-    color: '#94A3B8',
-    textAlign: 'center',
-    marginTop: 4,
-    paddingHorizontal: 24,
+    color: '#475569',
+    lineHeight: 17,
+    marginTop: 3,
   },
-  footerRow: {
+  alertMetaRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  testBtn: {
-    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: BRAND_COLORS.primaryTeal,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    width: '100%',
+    marginTop: 8,
   },
-  testBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
+  alertTimestamp: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '600',
+  },
+  alertActionText: {
+    fontSize: 11,
     fontWeight: '700',
+    color: '#1E5631',
   },
 });

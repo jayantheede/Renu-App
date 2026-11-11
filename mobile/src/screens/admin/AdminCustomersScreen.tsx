@@ -1056,12 +1056,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.6)',
     justifyContent: 'center',
+    alignItems: 'center',
     padding: 20,
   },
   modalContent: {
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
     padding: 20,
+    width: '100%',
+    maxWidth: 560,
+    alignSelf: 'center',
   },
   modalHeader: {
     flexDirection: 'row',

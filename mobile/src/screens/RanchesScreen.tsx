@@ -685,7 +685,7 @@ const RanchesScreenContent = ({ route }: any) => {
                 Planted field inventory, nutrition programs & Otodata tank telemetry
               </Text>
             </View>
-            <NotificationBellButton color={BRAND_COLORS.primaryTeal} badgeCount={2} />
+            <NotificationBellButton color={BRAND_COLORS.primaryTeal} />
           </View>
 
           <View style={styles.headerActionRow}>

@@ -13,11 +13,14 @@ import { useAuthStore } from '../../store/useAuthStore';
 import { BRAND_COLORS } from '../../theme/theme';
 import { InvoiceLogo } from '../../components/InvoiceLogo';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { NotificationBellButton } from '../../components/NotificationBellButton';
+import { NotificationCenterModal } from '../../components/NotificationCenterModal';
 
 export const AdminMoreScreen = ({ navigation }: any) => {
   const insets = useSafeAreaInsets();
   const logout = useAuthStore((state) => state.logout);
   const user = useAuthStore((state) => state.user);
+  const [alertsModalVisible, setAlertsModalVisible] = useState(false);
 
   const handleSignOut = () => {
     if (Platform.OS === 'web') {
@@ -31,6 +34,13 @@ export const AdminMoreScreen = ({ navigation }: any) => {
   };
 
   const menuItems = [
+    {
+      id: 'alerts',
+      title: 'App Alerts & Notifications',
+      subtitle: 'Live low tank alerts, delivery tracking, lab results & system banners',
+      iconType: 'bell-badge-outline',
+      action: () => setAlertsModalVisible(true),
+    },
     {
       id: 'invoices',
       title: 'Invoices',
@@ -82,9 +92,12 @@ export const AdminMoreScreen = ({ navigation }: any) => {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>More</Text>
-          <Text style={styles.subtitle}>Owner & Office Administration</Text>
+        <View style={styles.headerRow}>
+          <View style={styles.header}>
+            <Text style={styles.title}>More</Text>
+            <Text style={styles.subtitle}>Owner & Office Administration</Text>
+          </View>
+          <NotificationBellButton tintColor="#0F172A" />
         </View>
 
         {/* Menu Cards List */}
@@ -97,7 +110,9 @@ export const AdminMoreScreen = ({ navigation }: any) => {
                 index === menuItems.length - 1 && { borderBottomWidth: 0 },
               ]}
               onPress={() => {
-                if (item.screen) {
+                if ((item as any).action) {
+                  (item as any).action();
+                } else if (item.screen) {
                   navigation?.navigate(item.screen);
                 }
               }}
@@ -144,6 +159,11 @@ export const AdminMoreScreen = ({ navigation }: any) => {
           <Text style={styles.signOutBtnText}>Sign Out of Admin Console</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <NotificationCenterModal
+        visible={alertsModalVisible}
+        onClose={() => setAlertsModalVisible(false)}
+      />
     </View>
   );
 };
@@ -157,8 +177,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 54,
   },
-  header: {
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 20,
+  },
+  header: {
+    flex: 1,
+    paddingRight: 12,
   },
   title: {
     fontSize: 26,

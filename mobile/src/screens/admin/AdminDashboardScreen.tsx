@@ -13,6 +13,7 @@ import {
 } from '../../api/client';
 import { BRAND_COLORS } from '../../theme/theme';
 import { CreateOrderModal } from '../../components/CreateOrderModal';
+import { NotificationBellButton } from '../../components/NotificationBellButton';
 
 export const AdminDashboardScreen = ({ navigation }: any) => {
   const user = useAuthStore(state => state.user);
@@ -211,6 +212,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
             <Text style={styles.title}>Today</Text>
           </View>
           <View style={styles.headerButtonsRow}>
+            <NotificationBellButton tintColor="#0F172A" />
             <TouchableOpacity 
               onPress={handleOpenReports}
               style={[styles.newOrderBtn, { backgroundColor: BRAND_COLORS.primaryTeal }]}
@@ -1179,6 +1181,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
     padding: 24,
+    width: '100%',
+    maxWidth: 560,
+    alignSelf: 'center',
   },
   modalHeader: {
     flexDirection: 'row',
