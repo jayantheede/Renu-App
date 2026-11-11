@@ -150,6 +150,7 @@ app.get('/install', (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Install ReNu-Biome Grower Portal</title>
   <link rel="icon" type="image/png" href="/brand/renu-biome-app-icon-64.png">
+  <link rel="apple-touch-icon" href="/brand/renu-biome-app-icon-180.png">
   <link rel="manifest" href="/manifest.json">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }

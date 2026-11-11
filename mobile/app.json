@@ -13,7 +13,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.renubiome.app",
-      "buildNumber": "4",
+      "buildNumber": "5",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "UIApplicationSceneManifest": {
@@ -33,8 +33,8 @@
       "package": "com.renubiome.portal",
       "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#0C6054",
-        "foregroundImage": "./assets/brand/renu-biome-app-icon-512.png"
+        "backgroundColor": "#14233F",
+        "foregroundImage": "./assets/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": false
     },
