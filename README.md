@@ -138,7 +138,7 @@ The mobile application is powered by **React Native (Native JS)** with native iO
 | Parameter | iOS App Store / TestFlight | Google Play Store |
 | :--- | :--- | :--- |
 | **Identifier / Package** | `com.renubiome.app` | `com.renubiome.app` |
-| **Apple Developer Team** | `Radhika Gundavelli (63D9SK6N3M)` | — |
+| **Apple Developer Team** | `Radhika Gundavelli (63D9SK8N3M)` | — |
 | **Version / Build** | `1.0.0` (Build 1) | `1.0.0` (VersionCode 1) |
 | **Native Project** | [`mobile/ios/ReNuBiome.xcworkspace`](mobile/ios) | [`mobile/android/`](mobile/android) |
 | **CI/CD Workflow** | [`.github/workflows/ios-testflight.yml`](.github/workflows/ios-testflight.yml) | [`.github/workflows/android-playstore.yml`](.github/workflows/android-playstore.yml) |

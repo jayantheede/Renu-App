@@ -10,7 +10,7 @@ The official cross-platform mobile client for the **ReNu-Biome Agricultural Oper
 | :--- | :--- | :--- | :--- |
 | **iOS** | `com.renubiome.app` | `1.0.0` | `1` |
 | **Android** | `com.renubiome.app` | `1.0.0` | `1` |
-| **Apple Developer Team** | `Radhika Gundavelli (63D9SK6N3M)` | — | — |
+| **Apple Developer Team** | `Radhika Gundavelli (63D9SK8N3M)` | — | — |
 
 ---
 

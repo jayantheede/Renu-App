@@ -41,3 +41,4 @@ yarn-error.*
 # native folders (tracked for direct Xcode / Android Studio builds)
 # /ios
 # /android
+ios/build/

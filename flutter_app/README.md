@@ -5,7 +5,7 @@ This directory contains the Flutter companion implementation for the ReNu-Biome 
 ## Bundle Identifier & Package Name
 - **iOS Bundle Identifier**: `com.renubiome.app`
 - **Android Package Name**: `com.renubiome.app`
-- **Apple Developer Team ID**: `63D9SK6N3M` (Radhika Gundavelli)
+- **Apple Developer Team ID**: `63D9SK8N3M` (Radhika Gundavelli)
 - **Version**: `1.0.0`
 - **Build Number / VersionCode**: `1`
 
