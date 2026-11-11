@@ -13,8 +13,17 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 
 import { useNavigation } from '@react-navigation/native';
+import { useResponsiveLayout } from '../../utils/responsive';
 
 export const AdminProfileScreen = () => {
+  const {
+    insets,
+    safeHorizontalPadding,
+    centeredContainerStyle,
+    tabBarBottomClearance,
+    modalMaxHeight,
+    modalScrollMaxHeight,
+  } = useResponsiveLayout(840);
   const theme = useTheme();
   const navigation = useNavigation<any>();
   const user = useAuthStore(state => state.user);
@@ -166,17 +175,31 @@ export const AdminProfileScreen = () => {
     : auditLogs.filter(item => item.category === auditFilter);
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={{ paddingBottom: tabBarBottomClearance }}
+      showsVerticalScrollIndicator={false}
+    >
       
       {/* Premium Header */}
-      <View style={styles.header}>
+      <View
+        style={[
+          styles.header,
+          safeHorizontalPadding,
+          { paddingTop: Math.max(18, insets.top + 10) },
+        ]}
+      >
+        <View style={centeredContainerStyle}>
         <Text style={styles.title}>
           {isEmployee ? 'Field Staff Profile' : 'Admin Settings'}
         </Text>
         <Text style={styles.subtitle}>
           {isEmployee ? 'Manage your credentials and field operations' : 'Manage your account and platform configurations'}
         </Text>
+        </View>
       </View>
+
+      <View style={[safeHorizontalPadding, centeredContainerStyle]}>
 
       {/* Profile Details */}
       <View style={styles.profileSection}>
@@ -315,13 +338,24 @@ export const AdminProfileScreen = () => {
           </Text>
         </View>
       )}
+      </View>
 
       {/* ---------------- PLATFORM SETTINGS MODAL ---------------- */}
       <Modal visible={settingsModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingLeft: Math.max(16, insets.left),
+              paddingRight: Math.max(16, insets.right),
+              paddingTop: Math.max(16, insets.top),
+              paddingBottom: Math.max(16, insets.bottom),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             <View style={styles.modalHeader}>
-              <View>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                 <Text style={styles.modalTitle}>Platform Settings</Text>
                 <Text style={styles.modalSubtitle}>Manage global platform configuration</Text>
               </View>
@@ -330,7 +364,7 @@ export const AdminProfileScreen = () => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 500 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: modalScrollMaxHeight }}>
               {loadingSettings && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, gap: 8 }}>
                   <ActivityIndicator size="small" color="#0C6054" />
@@ -434,10 +468,20 @@ export const AdminProfileScreen = () => {
 
       {/* ---------------- SECURITY & AUDIT LOGS MODAL ---------------- */}
       <Modal visible={auditModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingLeft: Math.max(16, insets.left),
+              paddingRight: Math.max(16, insets.right),
+              paddingTop: Math.max(16, insets.top),
+              paddingBottom: Math.max(16, insets.bottom),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             <View style={styles.modalHeader}>
-              <View>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                 <Text style={styles.modalTitle}>Security & Audit Logs</Text>
                 <Text style={styles.modalSubtitle}>Immutable event trail for regulatory compliance</Text>
               </View>
@@ -462,7 +506,7 @@ export const AdminProfileScreen = () => {
             </ScrollView>
 
             {/* Audit Log Stream */}
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: modalScrollMaxHeight }}>
               {loadingAudits && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, gap: 8 }}>
                   <ActivityIndicator size="small" color="#0C6054" />
@@ -518,9 +562,9 @@ export const AdminProfileScreen = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
   header: {
-    paddingHorizontal: 24,
-    paddingTop: 60,
-    paddingBottom: 24,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 22,
     backgroundColor: '#FFFFFF',
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
@@ -529,7 +573,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 10,
     elevation: 2,
-    marginBottom: 24,
+    marginBottom: 20,
   },
   title: {
     fontSize: 28,
@@ -541,14 +585,14 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#6B7280',
   },
-  profileSection: { backgroundColor: '#FFFFFF', marginHorizontal: 16, borderRadius: 24, padding: 24, marginBottom: 24, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 3 },
+  profileSection: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 24, marginBottom: 20, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 3 },
   avatarContainer: { alignItems: 'center', marginBottom: 16 },
   avatar: { backgroundColor: '#1F4E34' },
   profileInfo: { alignItems: 'center' },
   editForm: { marginTop: 8 },
   input: { marginBottom: 12, backgroundColor: '#FFF' },
-  actionRow: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8, gap: 8 },
-  listSection: { backgroundColor: '#FFFFFF', marginHorizontal: 16, borderRadius: 24, padding: 20, marginBottom: 120, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 3 },
+  actionRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', marginTop: 8, gap: 8 },
+  listSection: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 3 },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 12 },
   clickableItem: { borderRadius: 12, paddingVertical: 4 },
   divider: { marginVertical: 6, backgroundColor: '#F1F5F9' },
@@ -605,6 +649,8 @@ const styles = StyleSheet.create({
   },
   statusRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     justifyContent: 'space-between',
     alignItems: 'center',
   },
@@ -612,11 +658,15 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#64748B',
     fontWeight: '500',
+    flexShrink: 0,
   },
   statusValue: {
     fontSize: 13,
     color: '#0F172A',
     fontWeight: '600',
+    flex: 1,
+    flexShrink: 1,
+    textAlign: 'right',
   },
   chipSuccess: {
     backgroundColor: '#DCFCE7',

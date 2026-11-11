@@ -12,12 +12,12 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store/useAuthStore';
 import { BRAND_COLORS } from '../../theme/theme';
 import { InvoiceLogo } from '../../components/InvoiceLogo';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NotificationBellButton } from '../../components/NotificationBellButton';
 import { NotificationCenterModal } from '../../components/NotificationCenterModal';
+import { useResponsiveLayout } from '../../utils/responsive';
 
 export const AdminMoreScreen = ({ navigation }: any) => {
-  const insets = useSafeAreaInsets();
+  const { insets, safeHorizontalPadding, centeredContainerStyle, tabBarBottomClearance } = useResponsiveLayout(840);
   const logout = useAuthStore((state) => state.logout);
   const user = useAuthStore((state) => state.user);
   const [alertsModalVisible, setAlertsModalVisible] = useState(false);
@@ -88,7 +88,12 @@ export const AdminMoreScreen = ({ navigation }: any) => {
   return (
     <View style={styles.container}>
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 160 + insets.bottom }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          safeHorizontalPadding,
+          centeredContainerStyle,
+          { paddingTop: Math.max(16, insets.top + 8), paddingBottom: tabBarBottomClearance },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
@@ -175,16 +180,18 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 54,
   },
   headerRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 20,
   },
   header: {
     flex: 1,
+    minWidth: 0,
     paddingRight: 12,
   },
   title: {
@@ -230,6 +237,7 @@ const styles = StyleSheet.create({
   },
   rowTextWrap: {
     flex: 1,
+    minWidth: 0,
     marginRight: 8,
   },
   rowTitle: {
@@ -260,6 +268,8 @@ const styles = StyleSheet.create({
   adminStatusText: {
     fontSize: 13,
     color: '#334155',
+    flex: 1,
+    flexShrink: 1,
   },
   adminRoleNote: {
     fontSize: 12,

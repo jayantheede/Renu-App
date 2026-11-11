@@ -13,12 +13,19 @@ import {
   createAdminCustomer,
   resetCustomerPassword,
 } from '../../api/client';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useResponsiveLayout } from '../../utils/responsive';
 import { NotificationBellButton } from '../../components/NotificationBellButton';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 
 const AdminCustomersScreenInner = () => {
-  const insets = useSafeAreaInsets();
+  const {
+    insets,
+    safeHorizontalPadding,
+    centeredContainerStyle,
+    tabBarBottomClearance,
+    modalMaxHeight,
+    modalScrollMaxHeight,
+  } = useResponsiveLayout();
   const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -343,9 +350,11 @@ const AdminCustomersScreenInner = () => {
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
+          centeredContainerStyle,
+          safeHorizontalPadding,
           {
             paddingTop: Math.max(16, insets.top + 8),
-            paddingBottom: Math.max(140, 140 + insets.bottom),
+            paddingBottom: Math.max(tabBarBottomClearance, insets.bottom + tabBarBottomClearance),
           },
         ]}
         showsVerticalScrollIndicator={false}
@@ -412,8 +421,8 @@ const AdminCustomersScreenInner = () => {
           /* Customer Cards List */
           customers.map((c: any) => (
             <View key={c.id} style={styles.customerCard}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <View style={{ flex: 1, paddingRight: 8 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
+                <View style={{ flex: 1, minWidth: 160, paddingRight: 8 }}>
                   <Text style={styles.customerName}>{c.name || 'Unnamed Grower'}</Text>
                   <Text style={styles.customerContact}>{c.email} {c.phone ? `• ${c.phone}` : ''}</Text>
                 </View>
@@ -489,10 +498,20 @@ const AdminCustomersScreenInner = () => {
 
       {/* ================= CREATE CUSTOMER MODAL ================= */}
       <Modal visible={createCustomerModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingTop: Math.max(16, insets.top + 8),
+              paddingBottom: Math.max(16, insets.bottom + 8),
+              paddingLeft: Math.max(16, insets.left + 8),
+              paddingRight: Math.max(16, insets.right + 8),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             <View style={styles.modalHeader}>
-              <View>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                 <Text style={styles.modalTitle}>Create Customer Login</Text>
                 <Text style={styles.modalSubtitle}>Create single login; give password by phone</Text>
               </View>
@@ -501,40 +520,42 @@ const AdminCustomersScreenInner = () => {
               </TouchableOpacity>
             </View>
 
-            <TextInput
-              label="Company / Farm Name"
-              value={newName}
-              onChangeText={setNewName}
-              mode="outlined"
-              placeholder="e.g. Central Valley Orchards"
-              style={styles.modalInput}
-            />
-            <TextInput
-              label="Email (Login ID)"
-              value={newEmail}
-              onChangeText={setNewEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              mode="outlined"
-              style={styles.modalInput}
-            />
-            <TextInput
-              label="Mobile Number"
-              value={newPhone}
-              onChangeText={setNewPhone}
-              keyboardType="phone-pad"
-              mode="outlined"
-              placeholder="e.g. (559) 555-0100"
-              style={styles.modalInput}
-            />
-            <TextInput
-              label="Password (Admin Types)"
-              value={newPassword}
-              onChangeText={setNewPassword}
-              mode="outlined"
-              placeholder="Type initial password"
-              style={styles.modalInput}
-            />
+            <ScrollView style={{ maxHeight: modalScrollMaxHeight }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <TextInput
+                label="Company / Farm Name"
+                value={newName}
+                onChangeText={setNewName}
+                mode="outlined"
+                placeholder="e.g. Central Valley Orchards"
+                style={styles.modalInput}
+              />
+              <TextInput
+                label="Email (Login ID)"
+                value={newEmail}
+                onChangeText={setNewEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                mode="outlined"
+                style={styles.modalInput}
+              />
+              <TextInput
+                label="Mobile Number"
+                value={newPhone}
+                onChangeText={setNewPhone}
+                keyboardType="phone-pad"
+                mode="outlined"
+                placeholder="e.g. (559) 555-0100"
+                style={styles.modalInput}
+              />
+              <TextInput
+                label="Password (Admin Types)"
+                value={newPassword}
+                onChangeText={setNewPassword}
+                mode="outlined"
+                placeholder="Type initial password"
+                style={styles.modalInput}
+              />
+            </ScrollView>
 
             <View style={styles.modalActions}>
               <Button 
@@ -561,10 +582,20 @@ const AdminCustomersScreenInner = () => {
 
       {/* ================= RESET PASSWORD MODAL ================= */}
       <Modal visible={resetPasswordModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingTop: Math.max(16, insets.top + 8),
+              paddingBottom: Math.max(16, insets.bottom + 8),
+              paddingLeft: Math.max(16, insets.left + 8),
+              paddingRight: Math.max(16, insets.right + 8),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             <View style={styles.modalHeader}>
-              <View>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                 <Text style={styles.modalTitle}>Reset Customer Password</Text>
                 <Text style={styles.modalSubtitle}>
                   {selectedCustomerForPassword?.name} ({selectedCustomerForPassword?.email})
@@ -575,14 +606,16 @@ const AdminCustomersScreenInner = () => {
               </TouchableOpacity>
             </View>
 
-            <TextInput
-              label="New Password"
-              value={resetPasswordValue}
-              onChangeText={setResetPasswordValue}
-              mode="outlined"
-              placeholder="Type new password"
-              style={styles.modalInput}
-            />
+            <ScrollView style={{ maxHeight: modalScrollMaxHeight }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <TextInput
+                label="New Password"
+                value={resetPasswordValue}
+                onChangeText={setResetPasswordValue}
+                mode="outlined"
+                placeholder="Type new password"
+                style={styles.modalInput}
+              />
+            </ScrollView>
 
             <View style={styles.modalActions}>
               <Button 
@@ -608,11 +641,22 @@ const AdminCustomersScreenInner = () => {
       </Modal>
 
       {/* ================= DRILLDOWN: RANCHES, BLOCKS & TANKS ================= */}
+      {/* ================= DRILLDOWN MODAL: RANCHES, COMPUTED ACRES, BLOCKS & TANKS ================= */}
       <Modal visible={drilldownModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '92%' }]}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingTop: Math.max(16, insets.top + 8),
+              paddingBottom: Math.max(16, insets.bottom + 8),
+              paddingLeft: Math.max(16, insets.left + 8),
+              paddingRight: Math.max(16, insets.right + 8),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             <View style={styles.modalHeader}>
-              <View>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                 <Text style={styles.modalTitle}>{activeCustomer?.name} - Ranches</Text>
                 <Text style={styles.modalSubtitle}>Computed acreage, block table & tanks</Text>
               </View>
@@ -621,7 +665,7 @@ const AdminCustomersScreenInner = () => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ maxHeight: modalScrollMaxHeight }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>
                   Ranches ({customerRanches.length})
@@ -649,8 +693,8 @@ const AdminCustomersScreenInner = () => {
 
                   return (
                     <View key={r.id} style={styles.drilldownRanchCard}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <View>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                        <View style={{ flex: 1, minWidth: 140 }}>
                           <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>{r.name}</Text>
                           <Text style={{ fontSize: 12, color: '#64748B' }}>{r.location}</Text>
                         </View>
@@ -737,61 +781,73 @@ const AdminCustomersScreenInner = () => {
 
       {/* ================= SUBMODAL: ADD RANCH ================= */}
       <Modal visible={addRanchModalVisible} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingTop: Math.max(16, insets.top + 8),
+              paddingBottom: Math.max(16, insets.bottom + 8),
+              paddingLeft: Math.max(16, insets.left + 8),
+              paddingRight: Math.max(16, insets.right + 8),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             <Text style={styles.modalTitle}>Add Ranch</Text>
-            <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 12 }}>
-              Assign to: <Text style={{ fontWeight: '700', color: '#1E293B' }}>{activeCustomer?.name || activeCustomer?.email || 'Select Customer'}</Text>
-            </Text>
+            <ScrollView style={{ maxHeight: modalScrollMaxHeight }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 12 }}>
+                Assign to: <Text style={{ fontWeight: '700', color: '#1E293B' }}>{activeCustomer?.name || activeCustomer?.email || 'Select Customer'}</Text>
+              </Text>
 
-            {customers.length > 1 && (
-              <View style={{ marginBottom: 12 }}>
-                <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569', marginBottom: 6 }}>
-                  Choose Customer / Grower:
-                </Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row', marginBottom: 4 }}>
-                  {customers.map((c: any) => {
-                    const isSelected = activeCustomer?.id === c.id;
-                    return (
-                      <TouchableOpacity
-                        key={c.id}
-                        onPress={() => setActiveCustomer(c)}
-                        style={{
-                          paddingHorizontal: 12,
-                          paddingVertical: 6,
-                          borderRadius: 20,
-                          backgroundColor: isSelected ? '#0C6054' : '#F1F5F9',
-                          marginRight: 8,
-                          borderWidth: 1,
-                          borderColor: isSelected ? '#0C6054' : '#CBD5E1'
-                        }}
-                      >
-                        <Text style={{ color: isSelected ? '#FFFFFF' : '#334155', fontSize: 12, fontWeight: isSelected ? '700' : '500' }}>
-                          {c.name || c.email}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-            )}
+              {customers.length > 1 && (
+                <View style={{ marginBottom: 12 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569', marginBottom: 6 }}>
+                    Choose Customer / Grower:
+                  </Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row', marginBottom: 4 }}>
+                    {customers.map((c: any) => {
+                      const isSelected = activeCustomer?.id === c.id;
+                      return (
+                        <TouchableOpacity
+                          key={c.id}
+                          onPress={() => setActiveCustomer(c)}
+                          style={{
+                            paddingHorizontal: 12,
+                            paddingVertical: 6,
+                            borderRadius: 20,
+                            backgroundColor: isSelected ? '#0C6054' : '#F1F5F9',
+                            marginRight: 8,
+                            borderWidth: 1,
+                            borderColor: isSelected ? '#0C6054' : '#CBD5E1'
+                          }}
+                        >
+                          <Text style={{ color: isSelected ? '#FFFFFF' : '#334155', fontSize: 12, fontWeight: isSelected ? '700' : '500' }}>
+                            {c.name || c.email}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              )}
 
-            <TextInput
-              label="Ranch Name *"
-              value={ranchName}
-              onChangeText={setRanchName}
-              mode="outlined"
-              placeholder="e.g. Bear Creek Ranch"
-              style={styles.modalInput}
-            />
-            <TextInput
-              label="Location / County *"
-              value={ranchLocation}
-              onChangeText={setRanchLocation}
-              mode="outlined"
-              placeholder="e.g. Fresno County, CA"
-              style={styles.modalInput}
-            />
+              <TextInput
+                label="Ranch Name *"
+                value={ranchName}
+                onChangeText={setRanchName}
+                mode="outlined"
+                placeholder="e.g. Bear Creek Ranch"
+                style={styles.modalInput}
+              />
+              <TextInput
+                label="Location / County *"
+                value={ranchLocation}
+                onChangeText={setRanchLocation}
+                mode="outlined"
+                placeholder="e.g. Fresno County, CA"
+                style={styles.modalInput}
+              />
+            </ScrollView>
             <View style={styles.modalActions}>
               <Button mode="outlined" onPress={() => setAddRanchModalVisible(false)} textColor="#64748B" style={{ flex: 1, marginRight: 8, minHeight: 48, justifyContent: 'center' }}>Cancel</Button>
               <Button mode="contained" onPress={handleAddRanch} loading={savingRanch} buttonColor="#0C6054" style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}>Save Ranch</Button>
@@ -802,10 +858,20 @@ const AdminCustomersScreenInner = () => {
 
       {/* ================= SUBMODAL: ADD BLOCK ================= */}
       <Modal visible={addBlockModalVisible} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '85%' }]}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingTop: Math.max(16, insets.top + 8),
+              paddingBottom: Math.max(16, insets.bottom + 8),
+              paddingLeft: Math.max(16, insets.left + 8),
+              paddingRight: Math.max(16, insets.right + 8),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             <Text style={styles.modalTitle}>Add Block to {targetRanchForBlock?.name}</Text>
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ maxHeight: modalScrollMaxHeight }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <TextInput label="Block ID (e.g. N-4)" value={blockIdInput} onChangeText={setBlockIdInput} mode="outlined" style={styles.modalInput} />
               <TextInput label="Crop (almond, pistachio, grape)" value={blockCrop} onChangeText={setBlockCrop} mode="outlined" style={styles.modalInput} />
               <TextInput label="Variety" value={blockVariety} onChangeText={setBlockVariety} mode="outlined" placeholder="e.g. Nonpareil" style={styles.modalInput} />
@@ -827,12 +893,24 @@ const AdminCustomersScreenInner = () => {
 
       {/* ================= SUBMODAL: ADD TANK (NO MAP) ================= */}
       <Modal visible={addTankModalVisible} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingTop: Math.max(16, insets.top + 8),
+              paddingBottom: Math.max(16, insets.bottom + 8),
+              paddingLeft: Math.max(16, insets.left + 8),
+              paddingRight: Math.max(16, insets.right + 8),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             <Text style={styles.modalTitle}>Add Tank to {targetRanchForTank?.name}</Text>
-            <TextInput label="Tank Name" value={tankNameInput} onChangeText={setTankNameInput} mode="outlined" placeholder="e.g. North Ag Tank #1" style={styles.modalInput} />
-            <TextInput label="Capacity (Gallons)" value={tankCapacityInput} onChangeText={setTankCapacityInput} keyboardType="numeric" mode="outlined" placeholder="e.g. 6500" style={styles.modalInput} />
-            <TextInput label="Location / Description" value={tankLocationInput} onChangeText={setTankLocationInput} mode="outlined" placeholder="e.g. Well #3 Pad" style={styles.modalInput} />
+            <ScrollView style={{ maxHeight: modalScrollMaxHeight }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <TextInput label="Tank Name" value={tankNameInput} onChangeText={setTankNameInput} mode="outlined" placeholder="e.g. North Ag Tank #1" style={styles.modalInput} />
+              <TextInput label="Capacity (Gallons)" value={tankCapacityInput} onChangeText={setTankCapacityInput} keyboardType="numeric" mode="outlined" placeholder="e.g. 6500" style={styles.modalInput} />
+              <TextInput label="Location / Description" value={tankLocationInput} onChangeText={setTankLocationInput} mode="outlined" placeholder="e.g. Well #3 Pad" style={styles.modalInput} />
+            </ScrollView>
             <View style={styles.modalActions}>
               <Button mode="outlined" onPress={() => setAddTankModalVisible(false)} textColor="#64748B" style={{ flex: 1, marginRight: 8, minHeight: 48, justifyContent: 'center' }}>Cancel</Button>
               <Button mode="contained" onPress={handleAddTank} loading={savingTank} buttonColor="#0C6054" style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}>Save Tank</Button>
@@ -843,10 +921,20 @@ const AdminCustomersScreenInner = () => {
 
       {/* ================= CREATE ORDER MODAL ================= */}
       <Modal visible={createOrderModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingTop: Math.max(16, insets.top + 8),
+              paddingBottom: Math.max(16, insets.bottom + 8),
+              paddingLeft: Math.max(16, insets.left + 8),
+              paddingRight: Math.max(16, insets.right + 8),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             <View style={styles.modalHeader}>
-              <View>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                 <Text style={styles.modalTitle}>Create Delivery Order</Text>
                 <Text style={styles.modalSubtitle}>For {orderCustomer?.name}</Text>
               </View>
@@ -855,7 +943,7 @@ const AdminCustomersScreenInner = () => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ maxHeight: modalScrollMaxHeight }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <Text style={styles.fieldSectionHeading}>Product & Volume</Text>
               {productsList.map((p) => (
                 <TouchableOpacity
@@ -971,6 +1059,7 @@ const styles = StyleSheet.create({
   },
   headerTitleContainer: {
     flex: 1,
+    minWidth: 0,
     paddingRight: 8,
   },
   headerActionRow: {
@@ -1043,13 +1132,15 @@ const styles = StyleSheet.create({
   customerContact: { fontSize: 12, color: '#64748B', marginTop: 2 },
   customerMetricsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
+    gap: 8,
     backgroundColor: '#F8FAFC',
     borderRadius: 12,
     padding: 10,
     marginTop: 12,
   },
-  metricItem: { alignItems: 'center', flex: 1 },
+  metricItem: { alignItems: 'center', flex: 1, minWidth: 70 },
   metricVal: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
   metricLbl: { fontSize: 11, color: '#64748B', marginTop: 2 },
   modalOverlay: {
@@ -1076,7 +1167,7 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 19, fontWeight: '800', color: '#0F172A' },
   modalSubtitle: { fontSize: 12, color: '#64748B', marginTop: 2 },
   modalInput: { marginBottom: 10, backgroundColor: '#FFFFFF' },
-  modalActions: { flexDirection: 'row', marginTop: 12 },
+  modalActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 12 },
   drilldownRanchCard: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,

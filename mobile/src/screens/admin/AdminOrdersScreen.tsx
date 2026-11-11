@@ -11,13 +11,20 @@ import {
   fetchProducts,
   fetchRanches
 } from '../../api/client';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useResponsiveLayout } from '../../utils/responsive';
 import { NotificationBellButton } from '../../components/NotificationBellButton';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { CreateOrderModal } from '../../components/CreateOrderModal';
 
 const AdminOrdersScreenInner = ({ route }: any) => {
-  const insets = useSafeAreaInsets();
+  const {
+    insets,
+    safeHorizontalPadding,
+    centeredContainerStyle,
+    tabBarBottomClearance,
+    modalMaxHeight,
+    modalScrollMaxHeight,
+  } = useResponsiveLayout();
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -288,9 +295,11 @@ const AdminOrdersScreenInner = ({ route }: any) => {
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
+          centeredContainerStyle,
+          safeHorizontalPadding,
           {
             paddingTop: Math.max(16, insets.top + 8),
-            paddingBottom: Math.max(140, 140 + insets.bottom),
+            paddingBottom: Math.max(tabBarBottomClearance, insets.bottom + tabBarBottomClearance),
           },
         ]}
         showsVerticalScrollIndicator={false}
@@ -373,7 +382,7 @@ const AdminOrdersScreenInner = ({ route }: any) => {
             return (
               <View key={del.id || del.orderId} style={styles.card}>
                 <View style={styles.cardHeader}>
-                  <View style={{ flex: 1 }}>
+                  <View style={{ flex: 1, minWidth: 160, paddingRight: 8 }}>
                     <Text style={styles.orderId}>{del.orderId || del.id} • {del.date}</Text>
                     <Text style={styles.customerName}>{del.customerName || 'Customer'}</Text>
                   </View>
@@ -535,12 +544,24 @@ const AdminOrdersScreenInner = ({ route }: any) => {
 
       {/* ================= RESCHEDULE MODAL ================= */}
       <Modal visible={rescheduleModalVisible} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingTop: Math.max(16, insets.top + 8),
+              paddingBottom: Math.max(16, insets.bottom + 8),
+              paddingLeft: Math.max(16, insets.left + 8),
+              paddingRight: Math.max(16, insets.right + 8),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             <Text style={styles.modalTitle}>Reschedule Delivery</Text>
             <Text style={styles.modalSubtitle}>{deliveryToReschedule?.orderId} • {deliveryToReschedule?.customerName}</Text>
-            <TextInput label="New Delivery Date" value={rescheduleDate} onChangeText={setRescheduleDate} mode="outlined" placeholder="YYYY-MM-DD" style={styles.modalInput} />
-            <TextInput label="New Delivery Window" value={rescheduleWindow} onChangeText={setRescheduleWindow} mode="outlined" placeholder="Morning / Afternoon" style={styles.modalInput} />
+            <ScrollView style={{ maxHeight: modalScrollMaxHeight, marginTop: 8 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <TextInput label="New Delivery Date" value={rescheduleDate} onChangeText={setRescheduleDate} mode="outlined" placeholder="YYYY-MM-DD" style={styles.modalInput} />
+              <TextInput label="New Delivery Window" value={rescheduleWindow} onChangeText={setRescheduleWindow} mode="outlined" placeholder="Morning / Afternoon" style={styles.modalInput} />
+            </ScrollView>
             <View style={styles.modalActions}>
               <Button mode="outlined" onPress={() => setRescheduleModalVisible(false)} textColor="#64748B" style={{ flex: 1, marginRight: 8, minHeight: 48, justifyContent: 'center' }}>Cancel</Button>
               <Button mode="contained" onPress={handleReschedule} loading={rescheduling} buttonColor="#2E5D36" style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}>Save Date</Button>
@@ -551,20 +572,32 @@ const AdminOrdersScreenInner = ({ route }: any) => {
 
       {/* ================= CANCEL MODAL WITH REASON ================= */}
       <Modal visible={cancelModalVisible} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingTop: Math.max(16, insets.top + 8),
+              paddingBottom: Math.max(16, insets.bottom + 8),
+              paddingLeft: Math.max(16, insets.left + 8),
+              paddingRight: Math.max(16, insets.right + 8),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             <Text style={styles.modalTitle}>Cancel Delivery (Admin)</Text>
             <Text style={styles.modalSubtitle}>Customers cannot cancel; enter reason for office audit.</Text>
-            <TextInput
-              label="Cancellation Reason"
-              value={cancelReasonInput}
-              onChangeText={setCancelReasonInput}
-              mode="outlined"
-              multiline
-              numberOfLines={3}
-              placeholder="e.g. Grower irrigation scheduled maintenance; rescheduled for next week"
-              style={styles.modalInput}
-            />
+            <ScrollView style={{ maxHeight: modalScrollMaxHeight, marginTop: 8 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <TextInput
+                label="Cancellation Reason"
+                value={cancelReasonInput}
+                onChangeText={setCancelReasonInput}
+                mode="outlined"
+                multiline
+                numberOfLines={3}
+                placeholder="e.g. Grower irrigation scheduled maintenance; rescheduled for next week"
+                style={styles.modalInput}
+              />
+            </ScrollView>
             <View style={styles.modalActions}>
               <Button mode="outlined" onPress={() => setCancelModalVisible(false)} textColor="#64748B" style={{ flex: 1, marginRight: 8, minHeight: 48, justifyContent: 'center' }}>Back</Button>
               <Button mode="contained" onPress={handleCancelWithReason} loading={cancelling} buttonColor="#DC2626" style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}>Confirm Cancel</Button>
@@ -575,10 +608,20 @@ const AdminOrdersScreenInner = ({ route }: any) => {
 
       {/* ================= MARK DELIVERED & INVOICE MODAL ================= */}
       <Modal visible={deliveredModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingTop: Math.max(16, insets.top + 8),
+              paddingBottom: Math.max(16, insets.bottom + 8),
+              paddingLeft: Math.max(16, insets.left + 8),
+              paddingRight: Math.max(16, insets.right + 8),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             <View style={styles.modalHeader}>
-              <View>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                 <Text style={styles.modalTitle}>Mark Delivered</Text>
                 <Text style={styles.modalSubtitle}>{deliveryToMark?.orderId} • {deliveryToMark?.customerName}</Text>
               </View>
@@ -587,7 +630,7 @@ const AdminOrdersScreenInner = ({ route }: any) => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ maxHeight: modalScrollMaxHeight }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <TextInput label="Actual Delivered Gallons" value={actualGallons} onChangeText={setActualGallons} keyboardType="numeric" mode="outlined" style={styles.modalInput} />
               
               <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A', marginTop: 12, marginBottom: 4 }}>
@@ -595,9 +638,9 @@ const AdminOrdersScreenInner = ({ route }: any) => {
               </Text>
               <TextInput label="Invoice Number" value={invoiceNumber} onChangeText={setInvoiceNumber} mode="outlined" style={styles.modalInput} />
               <TextInput label="Invoice Amount ($)" value={invoiceAmount} onChangeText={setInvoiceAmount} keyboardType="decimal-pad" mode="outlined" placeholder="e.g. 6250.00" style={styles.modalInput} />
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <TextInput label="Invoice Date" value={invoiceDate} onChangeText={setInvoiceDate} mode="outlined" style={[styles.modalInput, { flex: 1 }]} />
-                <TextInput label="Due Date" value={invoiceDueDate} onChangeText={setInvoiceDueDate} mode="outlined" style={[styles.modalInput, { flex: 1 }]} />
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                <TextInput label="Invoice Date" value={invoiceDate} onChangeText={setInvoiceDate} mode="outlined" style={[styles.modalInput, { flex: 1, minWidth: 130 }]} />
+                <TextInput label="Due Date" value={invoiceDueDate} onChangeText={setInvoiceDueDate} mode="outlined" style={[styles.modalInput, { flex: 1, minWidth: 130 }]} />
               </View>
             </ScrollView>
 
@@ -631,10 +674,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 8,
     marginBottom: 10,
   },
   headerTitleContainer: {
     flex: 1,
+    minWidth: 0,
     paddingRight: 8,
   },
   headerActionRow: {
@@ -708,18 +753,21 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  cardHeader: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
   orderId: { fontSize: 12, color: '#64748B', fontWeight: '600' },
   customerName: { fontSize: 16, fontWeight: '800', color: '#0F172A', marginTop: 2 },
   productBanner: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
     backgroundColor: '#F8FAFC',
     padding: 10,
     borderRadius: 10,
     marginTop: 10,
   },
-  productName: { fontWeight: '700', color: '#0F172A', fontSize: 14 },
+  productName: { fontWeight: '700', color: '#0F172A', fontSize: 14, flex: 1, flexShrink: 1 },
   volumeText: { fontWeight: '800', color: '#2E5D36', fontSize: 14 },
   destBox: { marginTop: 10, gap: 4 },
   destText: { fontSize: 12, color: '#475569' },
@@ -727,7 +775,9 @@ const styles = StyleSheet.create({
   deliveredBox: { backgroundColor: '#F0FDF4', padding: 8, borderRadius: 8, marginTop: 8 },
   timelineRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
+    gap: 4,
     marginTop: 14,
     marginBottom: 8,
     paddingHorizontal: 4,
@@ -741,7 +791,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   timelineDotDone: { backgroundColor: '#16A34A' },
-  timelineLine: { flex: 1, height: 2, backgroundColor: '#CBD5E1', marginHorizontal: 4 },
+  timelineLine: { flex: 1, minWidth: 12, height: 2, backgroundColor: '#CBD5E1', marginHorizontal: 4 },
   timelineLineDone: { backgroundColor: '#16A34A' },
   timelineLbl: { fontSize: 10, color: '#64748B', fontWeight: '600', marginLeft: 4 },
   actionRow: {
@@ -772,7 +822,7 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 19, fontWeight: '800', color: '#0F172A' },
   modalSubtitle: { fontSize: 12, color: '#64748B', marginTop: 2 },
   modalInput: { marginBottom: 10, backgroundColor: '#FFFFFF' },
-  modalActions: { flexDirection: 'row', marginTop: 10 },
+  modalActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 10 },
   pickerItem: {
     padding: 10,
     borderRadius: 10,

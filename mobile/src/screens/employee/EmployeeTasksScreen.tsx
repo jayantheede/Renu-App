@@ -4,8 +4,17 @@ import { Text, Chip, Searchbar, Button, Card, Divider, TextInput, ActivityIndica
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { fetchTasks, updateTaskStatus, submitLabResult, exportData, importData } from '../../api/client';
 import { useAuthStore } from '../../store/useAuthStore';
+import { useResponsiveLayout } from '../../utils/responsive';
 
 export const EmployeeTasksScreen = () => {
+  const {
+    insets,
+    safeHorizontalPadding,
+    centeredContainerStyle,
+    tabBarBottomClearance,
+    modalMaxHeight,
+    modalScrollMaxHeight,
+  } = useResponsiveLayout();
   const user = useAuthStore(state => state.user);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'IN_PROGRESS' | 'COMPLETED'>('ALL');
@@ -142,173 +151,192 @@ export const EmployeeTasksScreen = () => {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>My Tasks & Field Ops</Text>
-          <Text style={styles.subtitle}>Track 3 statuses, submit lab results & sync with Admin</Text>
-        </View>
-        <View style={styles.topActionsRow}>
-          <Button
-            mode="outlined"
-            icon="download"
-            onPress={handleExportTasks}
-            style={styles.actionBtn}
-            textColor="#2E5D36"
-          >
-            Export
-          </Button>
-          <Button
-            mode="contained"
-            icon="upload"
-            onPress={() => {
-              setImportJsonText(JSON.stringify([{
-                id: `task-${Date.now()}`,
-                title: 'Check Tank Telemetry',
-                description: 'Verify 500 Gal tank pressure and level sensor.',
-                status: 'PENDING',
-                priority: 'HIGH'
-              }], null, 2));
-              setImportModalVisible(true);
-            }}
-            style={[styles.actionBtn, { backgroundColor: '#2E5D36' }]}
-            textColor="#FFFFFF"
-          >
-            Import
-          </Button>
-        </View>
-      </View>
+      <FlatList
+        data={loading ? [] : filteredTasks}
+        keyExtractor={item => item.id}
+        contentContainerStyle={[
+          styles.listContent,
+          centeredContainerStyle,
+          safeHorizontalPadding,
+          {
+            paddingTop: Math.max(16, insets.top + 8),
+            paddingBottom: Math.max(tabBarBottomClearance, insets.bottom + tabBarBottomClearance),
+          },
+        ]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        ListHeaderComponent={
+          <View>
+            {/* Header */}
+            <View style={styles.header}>
+              <View>
+                <Text style={styles.title}>My Tasks & Field Ops</Text>
+                <Text style={styles.subtitle}>Track 3 statuses, submit lab results & sync with Admin</Text>
+              </View>
+              <View style={styles.topActionsRow}>
+                <Button
+                  mode="outlined"
+                  icon="download"
+                  onPress={handleExportTasks}
+                  style={styles.actionBtn}
+                  textColor="#2E5D36"
+                >
+                  Export
+                </Button>
+                <Button
+                  mode="contained"
+                  icon="upload"
+                  onPress={() => {
+                    setImportJsonText(JSON.stringify([{
+                      id: `task-${Date.now()}`,
+                      title: 'Check Tank Telemetry',
+                      description: 'Verify 500 Gal tank pressure and level sensor.',
+                      status: 'PENDING',
+                      priority: 'HIGH'
+                    }], null, 2));
+                    setImportModalVisible(true);
+                  }}
+                  style={[styles.actionBtn, { backgroundColor: '#2E5D36' }]}
+                  textColor="#FFFFFF"
+                >
+                  Import
+                </Button>
+              </View>
+            </View>
 
-      <Searchbar
-        placeholder="Search tasks, ranches, growers..."
-        onChangeText={setSearchQuery}
-        value={searchQuery}
-        style={styles.searchbar}
-        iconColor="#2E5D36"
-        inputStyle={{ color: '#0F172A' }}
+            <Searchbar
+              placeholder="Search tasks, ranches, growers..."
+              onChangeText={setSearchQuery}
+              value={searchQuery}
+              style={styles.searchbar}
+              iconColor="#2E5D36"
+              inputStyle={{ color: '#0F172A' }}
+            />
+
+            {/* 3 Status Filter Chips */}
+            <View style={styles.filterRow}>
+              <Chip
+                selected={statusFilter === 'ALL'}
+                onPress={() => setStatusFilter('ALL')}
+                style={[styles.chip, statusFilter === 'ALL' && styles.chipActive]}
+                textStyle={{ fontWeight: 'bold', color: statusFilter === 'ALL' ? '#FFFFFF' : '#334155' }}
+              >
+                All
+              </Chip>
+              <Chip
+                selected={statusFilter === 'PENDING'}
+                onPress={() => setStatusFilter('PENDING')}
+                style={[styles.chip, statusFilter === 'PENDING' && styles.chipActive]}
+                textStyle={{ fontWeight: 'bold', color: statusFilter === 'PENDING' ? '#FFFFFF' : '#B45309' }}
+              >
+                Pending
+              </Chip>
+              <Chip
+                selected={statusFilter === 'IN_PROGRESS'}
+                onPress={() => setStatusFilter('IN_PROGRESS')}
+                style={[styles.chip, statusFilter === 'IN_PROGRESS' && styles.chipActive]}
+                textStyle={{ fontWeight: 'bold', color: statusFilter === 'IN_PROGRESS' ? '#FFFFFF' : '#1D4ED8' }}
+              >
+                In Progress
+              </Chip>
+              <Chip
+                selected={statusFilter === 'COMPLETED'}
+                onPress={() => setStatusFilter('COMPLETED')}
+                style={[styles.chip, statusFilter === 'COMPLETED' && styles.chipActive]}
+                textStyle={{ fontWeight: 'bold', color: statusFilter === 'COMPLETED' ? '#FFFFFF' : '#15803D' }}
+              >
+                Completed
+              </Chip>
+            </View>
+          </View>
+        }
+        ListEmptyComponent={
+          loading ? (
+            <ActivityIndicator style={{ marginTop: 40 }} color="#2E5D36" size="large" />
+          ) : (
+            <View style={styles.emptyContainer}>
+              <MaterialCommunityIcons name="clipboard-check-outline" size={56} color="#94A3B8" />
+              <Text style={styles.emptyText}>No tasks found matching filter.</Text>
+            </View>
+          )
+        }
+        renderItem={({ item }) => {
+          const badge = getStatusBadge(item.status);
+          const isCompleted = item.status?.toUpperCase() === 'COMPLETED';
+          const isInProgress = item.status?.toUpperCase() === 'IN_PROGRESS';
+
+          return (
+            <Card style={[styles.taskCard, isCompleted && { opacity: 0.85 }]}>
+              <Card.Content>
+                <View style={styles.cardHeader}>
+                  <View style={{ flex: 1, minWidth: 160, paddingRight: 8 }}>
+                    <Text style={[styles.taskTitle, isCompleted && { textDecorationLine: 'line-through', color: '#64748B' }]}>
+                      {item.title}
+                    </Text>
+                    <Text style={styles.taskSub}>
+                      {item.growerName || 'Assigned Grower'} • {item.ranchName || 'Field Site'}
+                    </Text>
+                  </View>
+                  <Chip style={{ backgroundColor: badge.bg, height: 28 }} textStyle={{ color: badge.color, fontWeight: 'bold', fontSize: 11 }}>
+                    {badge.label}
+                  </Chip>
+                </View>
+
+                <Text style={styles.taskDesc}>{item.description}</Text>
+
+                <Divider style={{ marginVertical: 12 }} />
+
+                {/* 3 Status Action Transition Buttons */}
+                <View style={styles.statusButtonsRow}>
+                  <Button
+                    mode={isInProgress ? 'contained' : 'outlined'}
+                    buttonColor={isInProgress ? '#1D4ED8' : undefined}
+                    textColor={isInProgress ? '#FFFFFF' : '#1D4ED8'}
+                    onPress={() => handleUpdateStatus(item.id, 'IN_PROGRESS')}
+                    style={{ flex: 1, minWidth: 105, borderRadius: 8, borderColor: '#1D4ED8' }}
+                    labelStyle={{ fontSize: 11 }}
+                  >
+                    In Progress
+                  </Button>
+                  <Button
+                    mode={isCompleted ? 'contained' : 'outlined'}
+                    buttonColor={isCompleted ? '#15803D' : undefined}
+                    textColor={isCompleted ? '#FFFFFF' : '#15803D'}
+                    onPress={() => handleUpdateStatus(item.id, 'COMPLETED')}
+                    style={{ flex: 1, minWidth: 105, borderRadius: 8, borderColor: '#15803D' }}
+                    labelStyle={{ fontSize: 11 }}
+                  >
+                    Completed
+                  </Button>
+                  <Button
+                    mode="contained"
+                    buttonColor="#2E5D36"
+                    icon="flask-outline"
+                    onPress={() => openLabModal(item)}
+                    style={{ flex: 1.2, minWidth: 115, borderRadius: 8 }}
+                    labelStyle={{ fontSize: 11 }}
+                  >
+                    Lab Results
+                  </Button>
+                </View>
+              </Card.Content>
+            </Card>
+          );
+        }}
       />
-
-      {/* 3 Status Filter Chips */}
-      <View style={styles.filterRow}>
-        <Chip
-          selected={statusFilter === 'ALL'}
-          onPress={() => setStatusFilter('ALL')}
-          style={[styles.chip, statusFilter === 'ALL' && styles.chipActive]}
-          textStyle={{ fontWeight: 'bold', color: statusFilter === 'ALL' ? '#FFFFFF' : '#334155' }}
-        >
-          All
-        </Chip>
-        <Chip
-          selected={statusFilter === 'PENDING'}
-          onPress={() => setStatusFilter('PENDING')}
-          style={[styles.chip, statusFilter === 'PENDING' && styles.chipActive]}
-          textStyle={{ fontWeight: 'bold', color: statusFilter === 'PENDING' ? '#FFFFFF' : '#B45309' }}
-        >
-          Pending
-        </Chip>
-        <Chip
-          selected={statusFilter === 'IN_PROGRESS'}
-          onPress={() => setStatusFilter('IN_PROGRESS')}
-          style={[styles.chip, statusFilter === 'IN_PROGRESS' && styles.chipActive]}
-          textStyle={{ fontWeight: 'bold', color: statusFilter === 'IN_PROGRESS' ? '#FFFFFF' : '#1D4ED8' }}
-        >
-          In Progress
-        </Chip>
-        <Chip
-          selected={statusFilter === 'COMPLETED'}
-          onPress={() => setStatusFilter('COMPLETED')}
-          style={[styles.chip, statusFilter === 'COMPLETED' && styles.chipActive]}
-          textStyle={{ fontWeight: 'bold', color: statusFilter === 'COMPLETED' ? '#FFFFFF' : '#15803D' }}
-        >
-          Completed
-        </Chip>
-      </View>
-
-      {loading ? (
-        <ActivityIndicator style={{ marginTop: 40 }} color="#2E5D36" size="large" />
-      ) : filteredTasks.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <MaterialCommunityIcons name="clipboard-check-outline" size={56} color="#94A3B8" />
-          <Text style={styles.emptyText}>No tasks found matching filter.</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={filteredTasks}
-          keyExtractor={item => item.id}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          renderItem={({ item }) => {
-            const badge = getStatusBadge(item.status);
-            const isCompleted = item.status?.toUpperCase() === 'COMPLETED';
-            const isInProgress = item.status?.toUpperCase() === 'IN_PROGRESS';
-
-            return (
-              <Card style={[styles.taskCard, isCompleted && { opacity: 0.85 }]}>
-                <Card.Content>
-                  <View style={styles.cardHeader}>
-                    <View style={{ flex: 1, paddingRight: 8 }}>
-                      <Text style={[styles.taskTitle, isCompleted && { textDecorationLine: 'line-through', color: '#64748B' }]}>
-                        {item.title}
-                      </Text>
-                      <Text style={styles.taskSub}>
-                        {item.growerName || 'Assigned Grower'} • {item.ranchName || 'Field Site'}
-                      </Text>
-                    </View>
-                    <Chip style={{ backgroundColor: badge.bg, height: 28 }} textStyle={{ color: badge.color, fontWeight: 'bold', fontSize: 11 }}>
-                      {badge.label}
-                    </Chip>
-                  </View>
-
-                  <Text style={styles.taskDesc}>{item.description}</Text>
-
-                  <Divider style={{ marginVertical: 12 }} />
-
-                  {/* 3 Status Action Transition Buttons */}
-                  <View style={styles.statusButtonsRow}>
-                    <Button
-                      mode={isInProgress ? 'contained' : 'outlined'}
-                      buttonColor={isInProgress ? '#1D4ED8' : undefined}
-                      textColor={isInProgress ? '#FFFFFF' : '#1D4ED8'}
-                      onPress={() => handleUpdateStatus(item.id, 'IN_PROGRESS')}
-                      style={{ flex: 1, borderRadius: 8, borderColor: '#1D4ED8' }}
-                      labelStyle={{ fontSize: 11 }}
-                    >
-                      In Progress
-                    </Button>
-                    <Button
-                      mode={isCompleted ? 'contained' : 'outlined'}
-                      buttonColor={isCompleted ? '#15803D' : undefined}
-                      textColor={isCompleted ? '#FFFFFF' : '#15803D'}
-                      onPress={() => handleUpdateStatus(item.id, 'COMPLETED')}
-                      style={{ flex: 1, borderRadius: 8, borderColor: '#15803D' }}
-                      labelStyle={{ fontSize: 11 }}
-                    >
-                      Completed
-                    </Button>
-                    <Button
-                      mode="contained"
-                      buttonColor="#2E5D36"
-                      icon="flask-outline"
-                      onPress={() => openLabModal(item)}
-                      style={{ flex: 1.2, borderRadius: 8 }}
-                      labelStyle={{ fontSize: 11 }}
-                    >
-                      Lab Results
-                    </Button>
-                  </View>
-                </Card.Content>
-              </Card>
-            );
-          }}
-        />
-      )}
 
       {/* Lab Results Entry Modal */}
       <Modal visible={labModalVisible} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
+          <View
+            style={[
+              styles.modalSheet,
+              centeredContainerStyle,
+              { maxHeight: modalMaxHeight, paddingBottom: Math.max(20, insets.bottom + 12) },
+            ]}
+          >
             <View style={styles.modalHeader}>
-              <View>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                 <Text style={styles.modalTitle}>Record Soil & Lab Assay</Text>
                 <Text style={styles.modalSubtitle}>{selectedTaskForLab?.ranchName || 'Field Site'}</Text>
               </View>
@@ -317,7 +345,7 @@ export const EmployeeTasksScreen = () => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ maxHeight: modalScrollMaxHeight }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <View style={styles.gridRow}>
                 <TextInput
                   label="Soil pH (e.g. 6.8)"
@@ -394,28 +422,38 @@ export const EmployeeTasksScreen = () => {
       {/* JSON Import Modal */}
       <Modal visible={importModalVisible} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
+          <View
+            style={[
+              styles.modalSheet,
+              centeredContainerStyle,
+              { maxHeight: modalMaxHeight, paddingBottom: Math.max(20, insets.bottom + 12) },
+            ]}
+          >
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Import Tasks</Text>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
+                <Text style={styles.modalTitle}>Import Tasks</Text>
+              </View>
               <TouchableOpacity onPress={() => setImportModalVisible(false)}>
                 <MaterialCommunityIcons name="close-circle" size={28} color="#64748B" />
               </TouchableOpacity>
             </View>
-            <TextInput
-              mode="outlined"
-              multiline
-              numberOfLines={8}
-              value={importJsonText}
-              onChangeText={setImportJsonText}
-              style={{ backgroundColor: '#F8FAFC', fontSize: 12, marginBottom: 16 }}
-              outlineColor="#CBD5E1"
-              activeOutlineColor="#2E5D36"
-            />
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <Button mode="outlined" onPress={() => setImportModalVisible(false)} style={{ flex: 1 }} textColor="#64748B">
+            <ScrollView style={{ maxHeight: modalScrollMaxHeight }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <TextInput
+                mode="outlined"
+                multiline
+                numberOfLines={8}
+                value={importJsonText}
+                onChangeText={setImportJsonText}
+                style={{ backgroundColor: '#F8FAFC', fontSize: 12, marginBottom: 16 }}
+                outlineColor="#CBD5E1"
+                activeOutlineColor="#2E5D36"
+              />
+            </ScrollView>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
+              <Button mode="outlined" onPress={() => setImportModalVisible(false)} style={{ flex: 1, minWidth: 120 }} textColor="#64748B">
                 Cancel
               </Button>
-              <Button mode="contained" onPress={handleImportTasks} style={{ flex: 1, backgroundColor: '#2E5D36' }}>
+              <Button mode="contained" onPress={handleImportTasks} style={{ flex: 1, minWidth: 120, backgroundColor: '#2E5D36' }}>
                 Import
               </Button>
             </View>
@@ -430,10 +468,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',
-    paddingHorizontal: 20,
   },
   header: {
-    paddingTop: 60,
     paddingBottom: 16,
   },
   title: {
@@ -448,6 +484,7 @@ const styles = StyleSheet.create({
   },
   topActionsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 10,
     marginTop: 12,
   },
@@ -465,6 +502,7 @@ const styles = StyleSheet.create({
   },
   filterRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
     marginBottom: 16,
   },
@@ -477,7 +515,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#2E5D36',
   },
   listContent: {
-    paddingBottom: 120,
+    paddingBottom: 24,
   },
   taskCard: {
     backgroundColor: '#FFFFFF',
@@ -493,8 +531,10 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    gap: 8,
   },
   taskTitle: {
     fontSize: 16,
@@ -513,7 +553,8 @@ const styles = StyleSheet.create({
   },
   statusButtonsRow: {
     flexDirection: 'row',
-    gap: 6,
+    flexWrap: 'wrap',
+    gap: 8,
   },
   emptyContainer: {
     alignItems: 'center',
@@ -554,11 +595,13 @@ const styles = StyleSheet.create({
   },
   gridRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
     marginBottom: 10,
   },
   gridInput: {
     flex: 1,
+    minWidth: 130,
     backgroundColor: '#FFF',
   },
   input: {

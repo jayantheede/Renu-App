@@ -412,7 +412,7 @@ export const printInvoiceDocument = (inv: InvoicePrintData) => {
       <div style="flex: 1;">
         <div class="qr-text-title">ReNu-Biome Grower Portal — Mobile Access</div>
         <div class="qr-text-body">
-          Scan this QR code with your smartphone camera to install the Grower Portal on iOS or Android, or navigate to <strong>https://app.renu-biome.com/install</strong> to review historical delivery records, live Otodata telemetry, and agronomist recommendations.
+          Scan this QR code with your smartphone camera to download the ReNu-Biome app from the App Store, or visit <a href="https://apps.apple.com/app/id6832246515" style="color: #0C6054; font-weight: 700; text-decoration: none;">https://apps.apple.com/app/id6832246515</a> to review historical delivery records, live Otodata telemetry, and agronomist recommendations.
         </div>
       </div>
     </div>
@@ -584,7 +584,7 @@ export const printYearEndSummaryDocument = (data: YearEndPrintData) => {
     <div>
       <div class="qr-title">ReNu-Biome Grower Portal — Mobile Access</div>
       <div class="qr-text">
-        Scan this QR code with your smartphone camera to access the portal at <strong>https://app.renu-biome.com/install</strong> to review historical delivery records, tank telemetry, and season nutrition programs.
+        Scan this QR code with your smartphone camera to download the ReNu-Biome app from the App Store (<a href="https://apps.apple.com/app/id6832246515" style="color: #0C6054; font-weight: 700; text-decoration: none;">https://apps.apple.com/app/id6832246515</a>) to review historical delivery records, tank telemetry, and season nutrition programs.
       </div>
     </div>
   </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Dimensions, TouchableOpacity, Modal, RefreshControl, Alert, Platform, Linking } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Modal, RefreshControl, Alert, Platform, Linking } from 'react-native';
 import { Text, Avatar, Button, Chip, Divider, TextInput, ActivityIndicator } from 'react-native-paper';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -14,8 +14,17 @@ import {
 import { BRAND_COLORS } from '../../theme/theme';
 import { CreateOrderModal } from '../../components/CreateOrderModal';
 import { NotificationBellButton } from '../../components/NotificationBellButton';
+import { useResponsiveLayout } from '../../utils/responsive';
 
 export const AdminDashboardScreen = ({ navigation }: any) => {
+  const {
+    insets,
+    safeHorizontalPadding,
+    centeredContainerStyle,
+    tabBarBottomClearance,
+    modalMaxHeight,
+    modalScrollMaxHeight,
+  } = useResponsiveLayout();
   const user = useAuthStore(state => state.user);
   const logout = useAuthStore(state => state.logout);
 
@@ -199,14 +208,19 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
   return (
     <View style={styles.container}>
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          safeHorizontalPadding,
+          centeredContainerStyle,
+          { paddingBottom: tabBarBottomClearance },
+        ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor={BRAND_COLORS.primaryTeal} />
         }
       >
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: Math.max(16, insets.top + 8) }]}>
           <View style={{ minWidth: 160, flex: 1 }}>
             <Text style={styles.greeting}>ReNu-Biome Operations</Text>
             <Text style={styles.title}>Today</Text>
@@ -547,10 +561,20 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
 
       {/* ================= REVIEW ASSAY & PRESCRIBE NUTRITION MODAL ================= */}
       <Modal visible={reviewModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '90%', maxWidth: 580, alignSelf: 'center', width: '100%' }]}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingLeft: Math.max(16, insets.left),
+              paddingRight: Math.max(16, insets.right),
+              paddingTop: Math.max(16, insets.top),
+              paddingBottom: Math.max(16, insets.bottom),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight, maxWidth: 580, alignSelf: 'center', width: '100%' }]}>
             <View style={styles.modalHeader}>
-              <View style={{ flex: 1, paddingRight: 8 }}>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <MaterialCommunityIcons name="flask" size={20} color={BRAND_COLORS.primaryTeal} />
                   <Text style={styles.modalTitle}>Prescribe Nutrition</Text>
@@ -564,10 +588,10 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={{ maxHeight: modalScrollMaxHeight }}>
               {/* Sample Metadata Card */}
               <View style={styles.prescriptionMetaCard}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                   <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B' }}>SAMPLE ID</Text>
                   <View style={styles.sampleIdBadge}>
                     <Text style={styles.sampleIdBadgeText}>{selectedSampleReview?.id || 'SMP-2026-223'}</Text>
@@ -694,10 +718,20 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
 
       {/* ================= MARK DELIVERED & INVOICE MODAL ================= */}
       <Modal visible={markDeliveredModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingLeft: Math.max(16, insets.left),
+              paddingRight: Math.max(16, insets.right),
+              paddingTop: Math.max(16, insets.top),
+              paddingBottom: Math.max(16, insets.bottom),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             <View style={styles.modalHeader}>
-              <View>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                 <Text style={styles.modalTitle}>Mark Delivered</Text>
                 <Text style={styles.modalSubtitle}>
                   {selectedDelivery?.customerName} • {selectedDelivery?.orderId}
@@ -708,7 +742,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={{ maxHeight: modalScrollMaxHeight }}>
               <Text style={styles.fieldSectionHeading}>1. Delivered Quantity</Text>
               <TextInput
                 label="Delivered Gallons"
@@ -732,20 +766,20 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
                 style={styles.modalInput}
               />
 
-              <View style={{ flexDirection: 'row', gap: 10 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                 <TextInput
                   label="Invoice Date"
                   value={invoiceDate}
                   onChangeText={setInvoiceDate}
                   mode="outlined"
-                  style={[styles.modalInput, { flex: 1 }]}
+                  style={[styles.modalInput, { flex: 1, minWidth: 135 }]}
                 />
                 <TextInput
                   label="Due Date"
                   value={dueDate}
                   onChangeText={setDueDate}
                   mode="outlined"
-                  style={[styles.modalInput, { flex: 1 }]}
+                  style={[styles.modalInput, { flex: 1, minWidth: 135 }]}
                 />
               </View>
 
@@ -802,10 +836,20 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
 
       {/* ================= MONTHLY REPORTS MODAL (Section A6.7) ================= */}
       <Modal visible={reportsModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '92%' }]}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingLeft: Math.max(16, insets.left),
+              paddingRight: Math.max(16, insets.right),
+              paddingTop: Math.max(16, insets.top),
+              paddingBottom: Math.max(16, insets.bottom),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             <View style={styles.modalHeader}>
-              <View>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                 <Text style={styles.modalTitle}>Monthly & Annual Operations Reports</Text>
                 <Text style={styles.modalSubtitle}>Period: {reportPeriod} Financial & Agronomic Summaries</Text>
               </View>
@@ -840,7 +884,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
                 <Text style={{ marginTop: 10, color: '#64748B' }}>Generating report...</Text>
               </View>
             ) : (
-              <ScrollView showsVerticalScrollIndicator={false} style={{ marginVertical: 10 }}>
+              <ScrollView showsVerticalScrollIndicator={false} style={{ marginVertical: 10, maxHeight: modalScrollMaxHeight }}>
                 {activeReportTab === 'customer' && (
                   <View>
                     <Text style={styles.reportSectionHeader}>Sales by Customer ({reportPeriod})</Text>
@@ -963,7 +1007,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   scrollContent: {
-    paddingBottom: 160,
     paddingHorizontal: 16,
   },
   header: {
@@ -972,7 +1015,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: 12,
-    paddingTop: 54,
     paddingBottom: 16,
   },
   headerButtonsRow: {
@@ -1110,6 +1152,8 @@ const styles = StyleSheet.create({
   },
   deliveryHeaderRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
@@ -1229,6 +1273,8 @@ const styles = StyleSheet.create({
   },
   modalActions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
     marginTop: 8,
   },
   alertCard: {
@@ -1252,6 +1298,7 @@ const styles = StyleSheet.create({
   },
   alertItemRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: 12,
@@ -1322,8 +1369,10 @@ const styles = StyleSheet.create({
   },
   reportItemRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 8,
     backgroundColor: '#F8FAFC',
     borderRadius: 10,
     padding: 12,
@@ -1370,7 +1419,9 @@ const styles = StyleSheet.create({
   },
   prescriptionMetaRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
+    gap: 6,
     paddingVertical: 3,
   },
   prescriptionMetaLabel: {
@@ -1382,6 +1433,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#0F172A',
     fontWeight: '700',
+    flex: 1,
+    flexShrink: 1,
+    textAlign: 'right',
   },
   prescriptionDocBtn: {
     flexDirection: 'row',

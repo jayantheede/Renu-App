@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -9,13 +9,15 @@ import {
   TouchableOpacity,
   Modal,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { Text, TextInput, Button, Divider } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store/useAuthStore';
-import { login, verifyMfa, resendMfa, requestPasswordReset } from '../../api/client';
+import { login, verifyMfa, resendMfa, requestPasswordReset, warmUpBackend } from '../../api/client';
 import { BRAND_COLORS } from '../../theme/theme';
+import { useResponsiveLayout } from '../../utils/responsive';
 
 export const SignInScreen = ({ navigation }: any) => {
   const [email, setEmail] = useState('');
@@ -38,6 +40,11 @@ export const SignInScreen = ({ navigation }: any) => {
   const [forgotSuccess, setForgotSuccess] = useState(false);
 
   const setSession = useAuthStore((state) => state.setSession);
+  const { insets, isCompactHeight, modalMaxHeight } = useResponsiveLayout(460);
+
+  useEffect(() => {
+    warmUpBackend?.().catch(() => {});
+  }, []);
 
   // Staging vs Production detection
   const isProduction =
@@ -50,6 +57,7 @@ export const SignInScreen = ({ navigation }: any) => {
     );
 
   const handleSignIn = async (directEmail?: string, directPassword?: string) => {
+    if (loading) return;
     setErrorMessage('');
     setLoading(true);
 
@@ -99,6 +107,7 @@ export const SignInScreen = ({ navigation }: any) => {
   };
 
   const handleVerifyMfa = async () => {
+    if (loading) return;
     setErrorMessage('');
     if (!mfaCode || mfaCode.trim().length === 0) {
       setErrorMessage('Please enter the 6-digit verification code.');
@@ -155,12 +164,25 @@ export const SignInScreen = ({ navigation }: any) => {
         colors={['rgba(8, 63, 56, 0.92)', 'rgba(12, 96, 84, 0.86)']}
         style={styles.gradientOverlay}
       >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1 }}
+        >
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              paddingLeft: Math.max(20, insets.left),
+              paddingRight: Math.max(20, insets.right),
+              paddingTop: Math.max(isCompactHeight ? 16 : 36, insets.top + 12),
+              paddingBottom: Math.max(isCompactHeight ? 16 : 36, insets.bottom + 12),
+            },
+          ]}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
           {/* Header Branding */}
-          <View style={styles.headerSection}>
+          <View style={[styles.headerSection, isCompactHeight && { marginBottom: 14 }]}>
             <Image
               source={require('../../../assets/brand/renu-biome-logo-white-orange-for-dark-backgrounds.png')}
               style={styles.logoImage}
@@ -341,6 +363,7 @@ export const SignInScreen = ({ navigation }: any) => {
             ReNu-Biome Grower Portal · Version 2.0
           </Text>
         </ScrollView>
+        </KeyboardAvoidingView>
       </LinearGradient>
 
       {/* Forgot Password Modal */}
@@ -350,8 +373,17 @@ export const SignInScreen = ({ navigation }: any) => {
         animationType="fade"
         onRequestClose={() => setForgotModalVisible(false)}
       >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
+        <View
+          style={[
+            styles.modalBackdrop,
+            {
+              paddingLeft: Math.max(20, insets.left),
+              paddingRight: Math.max(20, insets.right),
+            },
+          ]}
+        >
+          <View style={[styles.modalCard, { maxHeight: modalMaxHeight }]}>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <View style={styles.modalHeader}>
               <MaterialCommunityIcons name="lock-reset" size={28} color={BRAND_COLORS.primaryTeal} />
               <Text style={styles.modalTitle}>Reset Password</Text>
@@ -408,6 +440,7 @@ export const SignInScreen = ({ navigation }: any) => {
                 </Button>
               </View>
             )}
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -552,6 +585,7 @@ const styles = StyleSheet.create({
   },
   demoButtonsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'center',
     gap: 8,
   },
@@ -559,6 +593,7 @@ const styles = StyleSheet.create({
     borderColor: BRAND_COLORS.primaryTeal,
     borderRadius: 8,
     flex: 1,
+    minWidth: 100,
     minHeight: 38,
     justifyContent: 'center',
   },

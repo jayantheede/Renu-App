@@ -13,19 +13,20 @@ import {
 } from 'react-native';
 import { Text, Divider } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../store/useAuthStore';
 import { fetchRanches, fetchDeliveries, fetchInvoices, fetchGrowerDashboard } from '../api/client';
 import { BRAND_COLORS } from '../theme/theme';
 import { NotificationBellButton } from '../components/NotificationBellButton';
+import { useResponsiveLayout } from '../utils/responsive';
 
 const STAGES = ['Bloom', 'Soil blends', 'Potassium', 'Hull split', 'Post-harvest'];
 const CURRENT_STAGE_IDX = 4; // Post-harvest
 
 export const HomeScreen = () => {
-  const insets = useSafeAreaInsets();
+  const { insets, safeHorizontalPadding, centeredContainerStyle, tabBarBottomClearance, isCompactHeight } =
+    useResponsiveLayout();
   const navigation = useNavigation<any>();
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
@@ -113,7 +114,7 @@ export const HomeScreen = () => {
   return (
     <View style={styles.container}>
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 160 + insets.bottom }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: tabBarBottomClearance }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -127,13 +128,18 @@ export const HomeScreen = () => {
         <View style={styles.headerWrapper}>
           <ImageBackground
             source={require('../assets/brand/bloom-photo-STOCK-NOT-LICENSED-replace-before-launch.jpg')}
-            style={styles.headerBackground}
+            style={[styles.headerBackground, isCompactHeight && { minHeight: 168 }]}
             resizeMode="cover"
           >
             <LinearGradient
               colors={['rgba(8, 63, 56, 0.92)', 'rgba(12, 96, 84, 0.84)']}
-              style={[styles.headerGradient, { paddingTop: Math.max(40, insets.top + 16) }]}
+              style={[
+                styles.headerGradient,
+                safeHorizontalPadding,
+                { paddingTop: Math.max(isCompactHeight ? 16 : 32, insets.top + 12) },
+              ]}
             >
+              <View style={centeredContainerStyle}>
               {/* Top Navigation Row: Logo + Sign Out */}
               <View style={styles.headerTopRow}>
                 <Image
@@ -167,12 +173,13 @@ export const HomeScreen = () => {
                   <Text style={styles.stageChipText}>Post-harvest, almond</Text>
                 </View>
               </View>
+              </View>
             </LinearGradient>
           </ImageBackground>
         </View>
 
         {/* Container for Overlapping Content */}
-        <View style={styles.bodyWrapper}>
+        <View style={[styles.bodyWrapper, safeHorizontalPadding, centeredContainerStyle]}>
           {/* ================= 2. SEASON CARD (Overlapping Header) ================= */}
           <View style={styles.seasonCard}>
             <View style={styles.seasonTitleRow}>
@@ -455,8 +462,10 @@ const styles = StyleSheet.create({
   },
   seasonTitleRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 6,
     marginBottom: 12,
   },
   seasonTitle: {
@@ -614,11 +623,13 @@ const styles = StyleSheet.create({
   },
   quickActionsGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
     marginBottom: 20,
   },
   actionPillBtn: {
     flex: 1,
+    minWidth: 140,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -628,6 +639,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(12, 96, 84, 0.20)',
     borderRadius: 999,
     paddingVertical: 12,
+    paddingHorizontal: 10,
     minHeight: 48,
   },
   actionPillText: {

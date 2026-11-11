@@ -21,7 +21,7 @@ Tagline
   "Farmer's Pride" under the logo on the sign-in and install pages, with "GROWER PORTAL" as a small bold label beneath it.
 
 QR code (install)
-  renu-biome-install-qr-300dpi.png   print-ready, encodes https://app.renu-biome.com/install
+  renu-biome-install-qr-300dpi.png   print-ready, encodes https://apps.apple.com/app/id6832246515
   renu-biome-install-qr-modules.svg  vector modules, same URL
 
 Photo

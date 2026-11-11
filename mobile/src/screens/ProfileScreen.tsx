@@ -2,19 +2,32 @@ import React from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
 import { Text, Card, Button, useTheme, List, Divider } from 'react-native-paper';
 import { useAuthStore } from '../store/useAuthStore';
+import { useResponsiveLayout } from '../utils/responsive';
 
 export const ProfileScreen = () => {
   const theme = useTheme();
   const { session, logout } = useAuthStore();
+  const { insets, safeHorizontalPadding, centeredContainerStyle, tabBarBottomClearance } = useResponsiveLayout(760);
   const customerName = session?.user?.user_metadata?.full_name || 'Client';
   const email = session?.user?.email || 'N/A';
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: 'transparent' }]}>
-      <View style={styles.header}>
+    <ScrollView
+      style={[styles.container, { backgroundColor: 'transparent' }]}
+      contentContainerStyle={{ paddingBottom: tabBarBottomClearance }}
+    >
+      <View
+        style={[
+          styles.header,
+          safeHorizontalPadding,
+          { paddingTop: Math.max(20, insets.top + 8) },
+        ]}
+      >
         <Text variant="headlineMedium">{customerName}</Text>
         <Text variant="bodyLarge">Agri Assistant Client</Text>
       </View>
+
+      <View style={[safeHorizontalPadding, centeredContainerStyle]}>
 
       <Card style={styles.card}>
         <List.Section>
@@ -42,6 +55,7 @@ export const ProfileScreen = () => {
       <Button mode="outlined" onPress={logout} style={styles.logoutButton} textColor={theme.colors.error}>
         Log Out
       </Button>
+      </View>
     </ScrollView>
   );
 };
@@ -56,15 +70,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
-    marginBottom: 10,
+    marginBottom: 15,
   },
   card: {
-    marginHorizontal: 15,
     marginBottom: 15,
   },
   logoutButton: {
-    margin: 15,
-    marginBottom: 40,
+    marginTop: 8,
+    marginBottom: 16,
     borderColor: '#D32F2F',
   },
 });

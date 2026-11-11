@@ -1,9 +1,11 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { ScrollView, StyleSheet } from 'react-native';
 import { Text, Card, Button, useTheme } from 'react-native-paper';
+import { useResponsiveLayout } from '../utils/responsive';
 
 export const PaymentScreen = () => {
   const theme = useTheme();
+  const { insets, safeHorizontalPadding, centeredContainerStyle, tabBarBottomClearance } = useResponsiveLayout(760);
 
   const handlePayNow = () => {
     // Hands off to Shopify Checkout web-view or native SDK
@@ -11,7 +13,18 @@ export const PaymentScreen = () => {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: 'transparent' }]}>
+    <ScrollView
+      style={[styles.container, { backgroundColor: 'transparent' }]}
+      contentContainerStyle={[
+        styles.content,
+        safeHorizontalPadding,
+        centeredContainerStyle,
+        {
+          paddingTop: Math.max(15, insets.top + 8),
+          paddingBottom: tabBarBottomClearance,
+        },
+      ]}
+    >
       <Card style={styles.card}>
         <Card.Title title="Outstanding Balance" />
         <Card.Content>
@@ -35,14 +48,16 @@ export const PaymentScreen = () => {
           <Text variant="bodyMedium">Aug 02: $340.00 (Paid)</Text>
         </Card.Content>
       </Card>
-    </View>
+    </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 15,
+  },
+  content: {
+    paddingVertical: 15,
   },
   card: {
     marginBottom: 20,

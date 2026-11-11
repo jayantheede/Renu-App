@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, Dimensions, TouchableOpacity, Platform } from 'react-native';
+import { View, StyleSheet, ScrollView } from 'react-native';
 import { Text, Card, TextInput, Button, useTheme, SegmentedButtons } from 'react-native-paper';
 import { LineChart } from 'react-native-chart-kit';
 import { MapView, Polygon, Marker } from '../components/Map';
+import { useResponsiveLayout } from '../utils/responsive';
 
 const MOCK_FIELDS = [
   {
@@ -32,7 +33,11 @@ const MOCK_FIELDS = [
 export const UtilizationScreen = () => {
   const theme = useTheme();
   const [period, setPeriod] = useState('monthly');
-  
+  const { width, insets, safeHorizontalPadding, centeredContainerStyle, tabBarBottomClearance } =
+    useResponsiveLayout();
+  const horizontalMargin = Math.max(16, insets.left) + Math.max(16, insets.right);
+  const chartWidth = Math.max(240, Math.min(width, 960) - horizontalMargin - 32);
+
   // Form state
   const [product, setProduct] = useState('');
   const [field, setField] = useState('');
@@ -44,7 +49,18 @@ export const UtilizationScreen = () => {
   };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <ScrollView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      contentContainerStyle={[
+        safeHorizontalPadding,
+        centeredContainerStyle,
+        {
+          paddingTop: Math.max(16, insets.top + 8),
+          paddingBottom: tabBarBottomClearance,
+        },
+      ]}
+      showsVerticalScrollIndicator={false}
+    >
       
       {/* Field Level Map View */}
       <Card style={styles.mapCard}>
@@ -103,7 +119,7 @@ export const UtilizationScreen = () => {
                 labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
                 datasets: [{ data: [20, 45, 28, 80, 99, 43] }],
               }}
-              width={Dimensions.get('window').width - 64}
+              width={chartWidth}
               height={200}
               yAxisSuffix=" gal"
               chartConfig={{
@@ -139,7 +155,7 @@ export const UtilizationScreen = () => {
       </Card>
 
       {/* Log Application Form */}
-      <Card style={[styles.card, { marginBottom: 40 }]}>
+      <Card style={[styles.card, { marginBottom: 16 }]}>
         <Card.Title title="Log Application" />
         <Card.Content>
           <TextInput
@@ -179,11 +195,11 @@ export const UtilizationScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  mapCard: { margin: 16, borderRadius: 12, overflow: 'hidden' },
+  mapCard: { marginBottom: 16, borderRadius: 12, overflow: 'hidden' },
   mapContainer: { height: 200, width: '100%' },
   map: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
-  card: { marginHorizontal: 16, marginBottom: 16, borderRadius: 12 },
-  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  card: { marginBottom: 16, borderRadius: 12 },
+  rowBetween: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
   statsRow: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#eee' },
   input: { marginBottom: 12, backgroundColor: '#fff' },
   button: { marginTop: 8, borderRadius: 8, paddingVertical: 4 },

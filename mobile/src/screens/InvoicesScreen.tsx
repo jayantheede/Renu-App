@@ -9,11 +9,12 @@ import {
   Platform,
   Image,
   Alert,
+  Linking,
 } from 'react-native';
 import { Text, Card, Chip, Button, Divider, ActivityIndicator, TextInput } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { InvoiceLogo } from '../components/InvoiceLogo';
+import { useResponsiveLayout } from '../utils/responsive';
 import {
   fetchInvoices,
   fetchDeliveries,
@@ -27,7 +28,14 @@ import { NotificationBellButton } from '../components/NotificationBellButton';
 import { printInvoiceDocument, printYearEndSummaryDocument } from '../utils/printInvoice';
 
 export const InvoicesScreen = () => {
-  const insets = useSafeAreaInsets();
+  const {
+    insets,
+    safeHorizontalPadding,
+    centeredContainerStyle,
+    tabBarBottomClearance,
+    modalMaxHeight,
+    modalScrollMaxHeight,
+  } = useResponsiveLayout();
   const [invoices, setInvoices] = useState<any[]>([]);
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -251,26 +259,28 @@ export const InvoicesScreen = () => {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={[styles.header, { paddingTop: Math.max(16, insets.top + 8) }]}>
-        <View style={{ flex: 1, paddingRight: 8 }}>
-          <Text style={styles.pageTitle}>Invoices</Text>
-          <Text style={styles.subtitle}>QuickBooks billing records, linked deliveries & statements</Text>
-        </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <NotificationBellButton color={BRAND_COLORS.primaryTeal} />
-          <TouchableOpacity
-            style={styles.yearEndBtn}
-            onPress={() => setSummaryModalVisible(true)}
-          >
-            <MaterialCommunityIcons name="file-chart" size={16} color="#FFFFFF" />
-            <Text style={styles.yearEndBtnText}>Year-End Summary</Text>
-          </TouchableOpacity>
+      <View style={[styles.header, safeHorizontalPadding, { paddingTop: Math.max(16, insets.top + 8) }]}>
+        <View style={[{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10 }, centeredContainerStyle]}>
+          <View style={{ flex: 1, minWidth: 160, paddingRight: 8 }}>
+            <Text style={styles.pageTitle}>Invoices</Text>
+            <Text style={styles.subtitle}>QuickBooks billing records, linked deliveries & statements</Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <NotificationBellButton color={BRAND_COLORS.primaryTeal} />
+            <TouchableOpacity
+              style={styles.yearEndBtn}
+              onPress={() => setSummaryModalVisible(true)}
+            >
+              <MaterialCommunityIcons name="file-chart" size={16} color="#FFFFFF" />
+              <Text style={styles.yearEndBtnText}>Year-End Summary</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
       {/* QuickBooks Online 2-Way Sync Status Banner (Deferred Capability: quickbooks) */}
       {quickbooksEnabled && (
-        <View style={styles.qbBanner}>
+        <View style={[styles.qbBanner, centeredContainerStyle, { marginLeft: Math.max(16, insets.left), marginRight: Math.max(16, insets.right) }]}>
           <View style={styles.qbBannerLeft}>
             <View style={styles.qbIconCircle}>
               <MaterialCommunityIcons name="cloud-sync" size={18} color="#059669" />
@@ -298,7 +308,7 @@ export const InvoicesScreen = () => {
       )}
 
       {/* Filter Tabs: Open, Paid, All */}
-      <View style={styles.filterTabs}>
+      <View style={[styles.filterTabs, safeHorizontalPadding, centeredContainerStyle]}>
         <TouchableOpacity
           style={[styles.filterTab, statusFilter === 'OPEN' && styles.filterTabActive]}
           onPress={() => setStatusFilter('OPEN')}
@@ -326,7 +336,12 @@ export const InvoicesScreen = () => {
       </View>
 
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 160 + insets.bottom }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          safeHorizontalPadding,
+          centeredContainerStyle,
+          { paddingBottom: tabBarBottomClearance },
+        ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={BRAND_COLORS.primaryTeal} />
@@ -353,11 +368,11 @@ export const InvoicesScreen = () => {
                   <View style={styles.row}>
                     <View style={styles.headerInfo}>
                       <InvoiceLogo size={26} color={BRAND_COLORS.primaryTeal} style={{ marginRight: 10 }} />
-                      <View>
-                        <Text variant="titleMedium" style={{ color: '#0F172A', fontWeight: '800' }}>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text variant="titleMedium" style={{ color: '#0F172A', fontWeight: '800' }} numberOfLines={1}>
                           #{item.invoiceNumber}
                         </Text>
-                        <Text variant="bodySmall" style={{ color: '#64748B' }}>
+                        <Text variant="bodySmall" style={{ color: '#64748B' }} numberOfLines={1}>
                           {item.deliveryId ? `Linked Delivery: #${item.deliveryId}` : 'Direct Field Delivery'}
                         </Text>
                       </View>
@@ -395,14 +410,14 @@ export const InvoicesScreen = () => {
                     </View>
                   </View>
 
-                  <View style={[styles.detailsRow, { marginTop: 14, alignItems: 'center' }]}>
-                    <View>
+                  <View style={[styles.detailsRow, { marginTop: 14, alignItems: 'center', gap: 10 }]}>
+                    <View style={{ minWidth: 110 }}>
                       <Text style={styles.label}>Total Invoiced Amount</Text>
                       <Text style={styles.amountText}>
                         ${amount.toLocaleString()}
                       </Text>
                     </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
                       {paymentsEnabled && item.status !== 'Paid' && (
                         <Button
                           mode="contained"
@@ -435,14 +450,14 @@ export const InvoicesScreen = () => {
 
       {/* Invoice Detail & PDF Modal (Section A3 & 6.5) */}
       <Modal visible={detailModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View style={[styles.modalOverlay, safeHorizontalPadding]}>
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             {selectedInvoice && (
               <>
                 <View style={styles.modalHeader}>
-                  <View>
+                  <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                     <Text style={styles.modalSub}>QuickBooks Online Accounting</Text>
-                    <Text style={styles.modalTitle}>Invoice #{selectedInvoice.invoiceNumber}</Text>
+                    <Text style={styles.modalTitle} numberOfLines={1}>Invoice #{selectedInvoice.invoiceNumber}</Text>
                   </View>
                   <TouchableOpacity
                     onPress={() => setDetailModalVisible(false)}
@@ -452,7 +467,7 @@ export const InvoicesScreen = () => {
                   </TouchableOpacity>
                 </View>
 
-                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 440 }}>
+                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: modalScrollMaxHeight, flexShrink: 1 }}>
                   {/* Clean Printable Invoice Document */}
                   <View style={styles.paperInvoice}>
                     <View style={styles.invoiceHeaderRow}>
@@ -550,9 +565,12 @@ export const InvoicesScreen = () => {
                       <View style={{ flex: 1, marginLeft: 12 }}>
                         <Text style={styles.qrFooterTitle}>ReNu-Biome Grower Portal</Text>
                         <Text style={styles.qrFooterText}>
-                          Scan to install the ReNu-Biome mobile app directly on your phone or visit{' '}
-                          <Text style={{ fontWeight: '700', color: BRAND_COLORS.primaryTeal }}>
-                            app.renu-biome.com/install
+                          Scan to download the ReNu-Biome app from the App Store or visit{' '}
+                          <Text
+                            style={{ fontWeight: '700', color: BRAND_COLORS.primaryTeal }}
+                            onPress={() => Linking.openURL('https://apps.apple.com/app/id6832246515')}
+                          >
+                            apps.apple.com/app/id6832246515
                           </Text>
                         </Text>
                       </View>
@@ -601,14 +619,14 @@ export const InvoicesScreen = () => {
 
       {/* Online ACH & Card Payment Modal (Deferred Capability: payments) */}
       <Modal visible={paymentModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View style={[styles.modalOverlay, safeHorizontalPadding]}>
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             {invoiceToPay && (
               <>
                 <View style={styles.modalHeader}>
-                  <View>
+                  <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                     <Text style={styles.modalSub}>ReNu-Biome Secure Payment</Text>
-                    <Text style={styles.modalTitle}>Pay Invoice #{invoiceToPay.invoiceNumber}</Text>
+                    <Text style={styles.modalTitle} numberOfLines={1}>Pay Invoice #{invoiceToPay.invoiceNumber}</Text>
                   </View>
                   <TouchableOpacity
                     onPress={() => setPaymentModalVisible(false)}
@@ -618,7 +636,7 @@ export const InvoicesScreen = () => {
                   </TouchableOpacity>
                 </View>
 
-                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 460 }}>
+                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: modalScrollMaxHeight, flexShrink: 1 }}>
                   {/* Amount Due Card */}
                   <View style={styles.paymentAmountCard}>
                     <Text style={styles.paymentAmountLabel}>Amount Due:</Text>
@@ -830,12 +848,12 @@ export const InvoicesScreen = () => {
 
       {/* Year-End Purchase Summary Modal (Screen 13 & Prototype scrYearEnd) */}
       <Modal visible={summaryModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxWidth: 540 }]}>
+        <View style={[styles.modalOverlay, safeHorizontalPadding]}>
+          <View style={[styles.modalContent, { maxWidth: 540, maxHeight: modalMaxHeight }]}>
             <View style={styles.modalHeader}>
-              <View>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                 <Text style={styles.modalSub}>Annual Account Statement</Text>
-                <Text style={styles.modalTitle}>{summaryYear} Year-End Purchase Summary</Text>
+                <Text style={styles.modalTitle} numberOfLines={1}>{summaryYear} Year-End Purchase Summary</Text>
               </View>
               <TouchableOpacity
                 onPress={() => setSummaryModalVisible(false)}
@@ -863,7 +881,7 @@ export const InvoicesScreen = () => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: modalScrollMaxHeight, flexShrink: 1 }}>
               {/* Products Delivered Table */}
               <Text style={styles.summarySectionTitle}>Products Delivered ({summaryYear})</Text>
               <View style={styles.summaryTableCard}>
@@ -970,9 +988,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 8,
@@ -986,7 +1001,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748B',
     marginTop: 2,
-    maxWidth: 240,
   },
   yearEndBtn: {
     flexDirection: 'row',
@@ -1064,6 +1078,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerInfo: {
+    flex: 1,
+    minWidth: 0,
+    marginRight: 8,
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -1072,8 +1089,10 @@ const styles = StyleSheet.create({
   },
   detailsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    gap: 8,
   },
   label: {
     fontSize: 11,
@@ -1180,7 +1199,9 @@ const styles = StyleSheet.create({
   },
   docMetaRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
+    gap: 10,
     marginBottom: 12,
   },
   docLabel: {
@@ -1287,6 +1308,7 @@ const styles = StyleSheet.create({
   },
   modalActionRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'flex-end',
     gap: 10,
     marginTop: 14,

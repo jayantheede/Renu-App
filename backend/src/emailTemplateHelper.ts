@@ -1,30 +1,33 @@
 import * as path from 'path';
 import * as fs from 'fs';
 
+let resolvedLogoPath: string | null | undefined;
+
 /**
  * Returns the logo attachment config for Nodemailer with CID embedding.
  * CID embedding displays inline images seamlessly in Gmail, Apple Mail, and Outlook.
  */
 export function getLogoAttachment() {
-  const possiblePaths = [
-    path.join(__dirname, 'assets', 'renu-biome-logo-white-orange-for-dark-backgrounds.png'),
-    path.join(__dirname, '..', 'assets', 'renu-biome-logo-white-orange-for-dark-backgrounds.png'),
-    path.join(process.cwd(), 'backend', 'assets', 'renu-biome-logo-white-orange-for-dark-backgrounds.png'),
-    path.join(process.cwd(), 'assets', 'renu-biome-logo-white-orange-for-dark-backgrounds.png'),
-    path.resolve(__dirname, '..', '..', 'mobile', 'src', 'assets', 'brand', 'renu-biome-logo-white-orange-for-dark-backgrounds.png')
-  ];
-
-  for (const p of possiblePaths) {
-    if (fs.existsSync(p)) {
-      return {
-        filename: 'renu-biome-logo.png',
-        path: p,
-        cid: 'renu-logo-white'
-      };
-    }
+  if (resolvedLogoPath === undefined) {
+    const possiblePaths = [
+      path.join(__dirname, 'assets', 'renu-biome-logo-white-orange-for-dark-backgrounds.png'),
+      path.join(__dirname, '..', 'assets', 'renu-biome-logo-white-orange-for-dark-backgrounds.png'),
+      path.join(process.cwd(), 'backend', 'assets', 'renu-biome-logo-white-orange-for-dark-backgrounds.png'),
+      path.join(process.cwd(), 'assets', 'renu-biome-logo-white-orange-for-dark-backgrounds.png'),
+      path.resolve(__dirname, '..', '..', 'mobile', 'src', 'assets', 'brand', 'renu-biome-logo-white-orange-for-dark-backgrounds.png')
+    ];
+    resolvedLogoPath = possiblePaths.find((p) => fs.existsSync(p)) ?? null;
   }
 
-  return null;
+  if (!resolvedLogoPath) {
+    return null;
+  }
+
+  return {
+    filename: 'renu-biome-logo.png',
+    path: resolvedLogoPath,
+    cid: 'renu-logo-white'
+  };
 }
 
 /**

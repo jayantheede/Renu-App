@@ -3,8 +3,17 @@ import { View, StyleSheet, FlatList, ActivityIndicator, Modal, TouchableOpacity,
 import { Text, Card, Button, Chip, TextInput } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { fetchOrders as fetchOrdersApi, payOrder, cancelOrder, exportData, importData } from '../api/client';
+import { useResponsiveLayout } from '../utils/responsive';
 
 export const OrdersScreen = () => {
+  const {
+    insets,
+    safeHorizontalPadding,
+    centeredContainerStyle,
+    tabBarBottomClearance,
+    modalMaxHeight,
+    modalScrollMaxHeight,
+  } = useResponsiveLayout();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [payingOrderId, setPayingOrderId] = useState<string | null>(null);
@@ -301,7 +310,14 @@ export const OrdersScreen = () => {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View
+        style={[
+          styles.header,
+          safeHorizontalPadding,
+          centeredContainerStyle,
+          { paddingTop: Math.max(16, insets.top + 8) },
+        ]}
+      >
         <View>
           <Text style={styles.screenTitle}>My Orders</Text>
           <Text style={styles.subtitle}>Track deliveries, pay invoices & reorder</Text>
@@ -351,7 +367,11 @@ export const OrdersScreen = () => {
           data={orders}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
-          contentContainerStyle={{ paddingBottom: 100 }}
+          contentContainerStyle={[
+            safeHorizontalPadding,
+            centeredContainerStyle,
+            { paddingBottom: tabBarBottomClearance },
+          ]}
           onRefresh={fetchOrders}
           refreshing={loading}
           showsVerticalScrollIndicator={false}
@@ -361,9 +381,19 @@ export const OrdersScreen = () => {
       {/* Live Order Tracking Modal */}
       <Modal visible={trackingModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
+          <View
+            style={[
+              styles.modalSheet,
+              {
+                maxHeight: modalMaxHeight,
+                paddingLeft: Math.max(24, insets.left),
+                paddingRight: Math.max(24, insets.right),
+                paddingBottom: Math.max(24, insets.bottom + 12),
+              },
+            ]}
+          >
             <View style={styles.modalHeader}>
-              <View>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                 <Text style={styles.modalSheetTitle}>Delivery & Tank Tracking</Text>
                 <Text style={styles.modalSubtitle}>Order #{selectedOrder?.orderId || selectedOrder?.orderNumber} • {selectedOrder?.product}</Text>
               </View>
@@ -372,7 +402,8 @@ export const OrdersScreen = () => {
               </TouchableOpacity>
             </View>
 
-            <View style={{ marginVertical: 12 }}>
+            <ScrollView style={{ maxHeight: modalScrollMaxHeight }} showsVerticalScrollIndicator={false}>
+              <View style={{ marginVertical: 12 }}>
               {[
                 { title: '1. Order Placed', desc: 'Received & logged in agronomy queue', key: 1 },
                 { title: '2. Accepted & Payment Link Sent', desc: 'Invoice delivered to email for settlement', key: 2 },
@@ -414,7 +445,8 @@ export const OrdersScreen = () => {
                   </View>
                 );
               })}
-            </View>
+              </View>
+            </ScrollView>
 
             <Button
               mode="contained"
@@ -431,14 +463,25 @@ export const OrdersScreen = () => {
       {/* Duplicate / Reorder Payment Modal */}
       <Modal visible={paymentModalVisible} animationType="slide" transparent={true}>
         <View style={styles.modalOverlay}>
-          <View style={styles.paymentContainer}>
+          <View
+            style={[
+              styles.paymentContainer,
+              {
+                maxHeight: modalMaxHeight,
+                paddingLeft: Math.max(24, insets.left),
+                paddingRight: Math.max(24, insets.right),
+                paddingBottom: Math.max(24, insets.bottom + 12),
+              },
+            ]}
+          >
             <View style={styles.paymentHeader}>
-              <Text style={styles.paymentTitle}>Quick Reorder Checkout</Text>
+              <Text style={[styles.paymentTitle, { flex: 1, minWidth: 0, paddingRight: 8 }]}>Quick Reorder Checkout</Text>
               <TouchableOpacity onPress={() => !isProcessingPayment && setPaymentModalVisible(false)}>
                 <MaterialCommunityIcons name="close" size={24} color="#374151" />
               </TouchableOpacity>
             </View>
 
+            <ScrollView style={{ maxHeight: modalScrollMaxHeight }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <View style={styles.paymentDetails}>
               <Text style={styles.detailLabel}>Product:</Text>
               <Text style={styles.detailValue}>{orderToDuplicate?.product || 'ReNu N-32% K-28% Blend'} ({orderToDuplicate?.qty || '10 Gal'})</Text>
@@ -450,12 +493,12 @@ export const OrdersScreen = () => {
             <Text style={styles.inputLabel}>Card Number</Text>
             <TextInput mode="outlined" placeholder="**** **** **** 4242" style={styles.input} disabled={isProcessingPayment} outlineColor="#E2E8F0" activeOutlineColor="#0C6054" />
 
-            <View style={styles.row}>
-              <View style={{ flex: 1, marginRight: 10 }}>
+            <View style={[styles.row, { flexWrap: 'wrap', gap: 10 }]}>
+              <View style={{ flex: 1, minWidth: 120 }}>
                 <Text style={styles.inputLabel}>Expiry</Text>
                 <TextInput mode="outlined" placeholder="MM/YY" style={styles.input} disabled={isProcessingPayment} outlineColor="#E2E8F0" activeOutlineColor="#0C6054" />
               </View>
-              <View style={{ flex: 1 }}>
+              <View style={{ flex: 1, minWidth: 120 }}>
                 <Text style={styles.inputLabel}>CVC</Text>
                 <TextInput mode="outlined" placeholder="123" style={styles.input} disabled={isProcessingPayment} outlineColor="#E2E8F0" activeOutlineColor="#0C6054" />
               </View>
@@ -471,6 +514,7 @@ export const OrdersScreen = () => {
             >
               {isProcessingPayment ? 'Processing...' : `Confirm & Place Order`}
             </Button>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -478,13 +522,24 @@ export const OrdersScreen = () => {
       {/* JSON Import Modal */}
       <Modal visible={importModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
+          <View
+            style={[
+              styles.modalSheet,
+              {
+                maxHeight: modalMaxHeight,
+                paddingLeft: Math.max(24, insets.left),
+                paddingRight: Math.max(24, insets.right),
+                paddingBottom: Math.max(24, insets.bottom + 12),
+              },
+            ]}
+          >
             <View style={styles.modalHeader}>
-              <Text style={styles.modalSheetTitle}>Import Orders</Text>
+              <Text style={[styles.modalSheetTitle, { flex: 1, minWidth: 0, paddingRight: 8 }]}>Import Orders</Text>
               <TouchableOpacity onPress={() => setImportModalVisible(false)}>
                 <MaterialCommunityIcons name="close-circle" size={28} color="#64748B" />
               </TouchableOpacity>
             </View>
+            <ScrollView style={{ maxHeight: modalScrollMaxHeight }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <TextInput
               mode="outlined"
               multiline
@@ -495,7 +550,8 @@ export const OrdersScreen = () => {
               outlineColor="#CBD5E1"
               activeOutlineColor="#0C6054"
             />
-            <View style={{ flexDirection: 'row', gap: 12 }}>
+            </ScrollView>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 12 }}>
               <Button mode="outlined" onPress={() => setImportModalVisible(false)} style={{ flex: 1 }} textColor="#64748B">
                 Cancel
               </Button>
@@ -510,9 +566,19 @@ export const OrdersScreen = () => {
       {/* Cancel Order Modal with Reason and Refund Confirmation */}
       <Modal visible={cancelModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
+          <View
+            style={[
+              styles.modalSheet,
+              {
+                maxHeight: modalMaxHeight,
+                paddingLeft: Math.max(24, insets.left),
+                paddingRight: Math.max(24, insets.right),
+                paddingBottom: Math.max(24, insets.bottom + 12),
+              },
+            ]}
+          >
             <View style={styles.modalHeader}>
-              <View>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                 <Text style={styles.modalSheetTitle}>Cancel Order</Text>
                 <Text style={styles.modalSubtitle}>Order #{orderToCancel?.orderId || orderToCancel?.orderNumber} • {orderToCancel?.product}</Text>
               </View>
@@ -521,7 +587,7 @@ export const OrdersScreen = () => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ maxHeight: modalScrollMaxHeight }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               {/* Refund Notice Box */}
               {orderToCancel?.status === 'PAID' || orderToCancel?.status === 'DISPATCHED' ? (
                 <View style={[styles.infoBanner, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}>
@@ -596,10 +662,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',
-    paddingHorizontal: 20,
   },
   header: {
-    paddingTop: 60,
     paddingBottom: 16,
   },
   screenTitle: {
@@ -614,6 +678,7 @@ const styles = StyleSheet.create({
   },
   headerActions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 10,
     marginTop: 14,
   },
@@ -659,16 +724,19 @@ const styles = StyleSheet.create({
   },
   cardActionsRow: {
     flexDirection: 'row',
-    gap: 10,
+    flexWrap: 'wrap',
+    gap: 8,
     marginTop: 12,
   },
   trackingBtn: {
-    flex: 1.2,
+    flexGrow: 1,
+    minWidth: 118,
     borderRadius: 8,
     borderColor: '#0C6054',
   },
   dupBtn: {
-    flex: 0.8,
+    flexGrow: 1,
+    minWidth: 92,
     borderRadius: 8,
     borderColor: '#CBD5E1',
   },
@@ -686,13 +754,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.6)',
     justifyContent: 'flex-end',
+    alignItems: 'center',
   },
   modalSheet: {
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
-    maxHeight: '90%',
+    width: '100%',
+    maxWidth: 640,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -768,7 +838,8 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
-    paddingBottom: 40,
+    width: '100%',
+    maxWidth: 640,
   },
   paymentHeader: {
     flexDirection: 'row',
@@ -834,7 +905,8 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   cancelBtn: {
-    flex: 0.8,
+    flexGrow: 1,
+    minWidth: 92,
     borderRadius: 8,
     borderColor: '#DC2626',
     borderWidth: 1.5,

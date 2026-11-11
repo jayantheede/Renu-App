@@ -91,7 +91,7 @@ export const InstallScreen = () => {
           <Card.Content>
             <Text style={styles.title}>Install ReNu-Biome on Your Device</Text>
             <Text style={styles.subtitle}>
-              Add the Grower Portal directly to your home screen for quick 1-tap access to delivery schedules, tank levels, and nutrition programs — no app store required.
+              Download the official iOS app from the Apple App Store or add the Grower Portal to your home screen for quick 1-tap access to delivery schedules, tank levels, and nutrition programs.
             </Text>
 
             <Divider style={{ marginVertical: 18 }} />
@@ -101,8 +101,24 @@ export const InstallScreen = () => {
               <View style={styles.instructionSection}>
                 <View style={styles.deviceHeader}>
                   <MaterialCommunityIcons name="apple" size={24} color="#0F172A" />
-                  <Text style={styles.deviceTitle}>iPhone & iPad (Safari)</Text>
+                  <Text style={styles.deviceTitle}>iPhone & iPad (App Store)</Text>
                 </View>
+
+                <Button
+                  mode="contained"
+                  icon="apple"
+                  buttonColor="#0F172A"
+                  textColor="#FFFFFF"
+                  onPress={() => Linking.openURL('https://apps.apple.com/app/id6832246515')}
+                  style={[styles.portalButton, { marginBottom: 18 }]}
+                  contentStyle={{ paddingVertical: 6 }}
+                >
+                  Download on the App Store
+                </Button>
+
+                <Text style={[styles.qrInstruction, { marginBottom: 14 }]}>
+                  Or add the web portal directly via Safari:
+                </Text>
 
                 <View style={styles.stepRow}>
                   <View style={styles.stepNumberBadge}>
@@ -212,26 +228,41 @@ export const InstallScreen = () => {
               <View style={styles.instructionSection}>
                 <View style={styles.deviceHeader}>
                   <MaterialCommunityIcons name="qrcode-scan" size={24} color={BRAND_COLORS.primaryTeal} />
-                  <Text style={styles.deviceTitle}>Scan to Install on iPhone or Android</Text>
+                  <Text style={styles.deviceTitle}>Scan to Download on the App Store</Text>
                 </View>
 
                 <Text style={styles.qrInstruction}>
-                  Point your smartphone camera at the QR code below to open this install page directly on your phone:
+                  Point your smartphone camera at the QR code below to open ReNu-Biome in the Apple App Store:
                 </Text>
 
-                <View style={styles.qrWrapper}>
+                <TouchableOpacity
+                  style={styles.qrWrapper}
+                  activeOpacity={0.85}
+                  onPress={() => Linking.openURL('https://apps.apple.com/app/id6832246515')}
+                >
                   <Image
                     source={require('../../assets/brand/renu-biome-install-qr-300dpi.png')}
                     style={styles.qrImage}
                     resizeMode="contain"
                   />
-                  <Text style={styles.qrUrl}>app.renu-biome.com/install</Text>
-                </View>
+                  <Text style={styles.qrUrl}>apps.apple.com/app/id6832246515</Text>
+                </TouchableOpacity>
+
+                <Button
+                  mode="outlined"
+                  icon="apple"
+                  textColor={BRAND_COLORS.primaryTeal}
+                  onPress={() => Linking.openURL('https://apps.apple.com/app/id6832246515')}
+                  style={[styles.portalButton, { marginTop: 12, borderColor: BRAND_COLORS.primaryTeal }]}
+                  contentStyle={{ paddingVertical: 4 }}
+                >
+                  Open in App Store
+                </Button>
 
                 <View style={styles.desktopTipBox}>
                   <MaterialCommunityIcons name="monitor" size={18} color="#64748B" />
                   <Text style={styles.desktopTipText}>
-                    On Chrome or Edge desktop, click the Install icon (computer with down arrow) in your address bar to install on your computer.
+                    On Chrome or Edge desktop, click the Install icon (computer with down arrow) in your address bar to install the portal on your computer.
                   </Text>
                 </View>
               </View>

@@ -4,8 +4,10 @@ import { Text, Switch, Button, Divider, TextInput, Chip } from 'react-native-pap
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { fetchFeatureFlags, saveFeatureFlags, exportReportCsv, fetchAdminCustomers } from '../../api/client';
 import { useAuthStore } from '../../store/useAuthStore';
+import { useResponsiveLayout } from '../../utils/responsive';
 
 export const AdminFeatureFlagsScreen = () => {
+  const { insets, safeHorizontalPadding, centeredContainerStyle, tabBarBottomClearance } = useResponsiveLayout(840);
   const logout = useAuthStore(state => state.logout);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -207,14 +209,19 @@ export const AdminFeatureFlagsScreen = () => {
   return (
     <View style={styles.container}>
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          safeHorizontalPadding,
+          centeredContainerStyle,
+          { paddingBottom: tabBarBottomClearance },
+        ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor="#0C6054" />
         }
       >
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: Math.max(16, insets.top + 8) }]}>
           <Text style={styles.title}>Feature Flags & Reports</Text>
           <Text style={styles.subtitle}>Configure deferred modules & export operational reports</Text>
         </View>
@@ -266,7 +273,7 @@ export const AdminFeatureFlagsScreen = () => {
                   <MaterialCommunityIcons name={meta.icon as any} size={22} color={active ? '#15803D' : '#64748B'} />
                 </View>
 
-                <View style={{ flex: 1, paddingRight: 10 }}>
+                <View style={{ flex: 1, minWidth: 0, paddingRight: 10 }}>
                   <Text style={styles.flagName}>{meta.title}</Text>
                   <Text style={styles.flagDesc}>{meta.desc}</Text>
                 </View>
@@ -298,10 +305,10 @@ export const AdminFeatureFlagsScreen = () => {
           <Text style={styles.scopeHelp}>Export comprehensive records for bookkeeping and audits.</Text>
 
           {/* Type Picker */}
-          <View style={{ flexDirection: 'row', gap: 10, marginVertical: 12 }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginVertical: 12 }}>
             <TouchableOpacity
               onPress={() => setReportType('deliveries')}
-              style={[styles.typeBtn, reportType === 'deliveries' && styles.typeBtnActive]}
+              style={[styles.typeBtn, { minWidth: 130 }, reportType === 'deliveries' && styles.typeBtnActive]}
             >
               <Text style={[styles.typeBtnText, reportType === 'deliveries' && styles.typeBtnTextActive]}>
                 Deliveries Log
@@ -310,7 +317,7 @@ export const AdminFeatureFlagsScreen = () => {
 
             <TouchableOpacity
               onPress={() => setReportType('invoices')}
-              style={[styles.typeBtn, reportType === 'invoices' && styles.typeBtnActive]}
+              style={[styles.typeBtn, { minWidth: 130 }, reportType === 'invoices' && styles.typeBtnActive]}
             >
               <Text style={[styles.typeBtnText, reportType === 'invoices' && styles.typeBtnTextActive]}>
                 Invoices Ledger
@@ -319,14 +326,14 @@ export const AdminFeatureFlagsScreen = () => {
           </View>
 
           {/* Date Range Inputs */}
-          <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
             <TextInput
               label="Start Date"
               value={startDate}
               onChangeText={setStartDate}
               mode="outlined"
               placeholder="YYYY-MM-DD"
-              style={[styles.input, { flex: 1 }]}
+              style={[styles.input, { flex: 1, minWidth: 135 }]}
             />
             <TextInput
               label="End Date"
@@ -334,7 +341,7 @@ export const AdminFeatureFlagsScreen = () => {
               onChangeText={setEndDate}
               mode="outlined"
               placeholder="YYYY-MM-DD"
-              style={[styles.input, { flex: 1 }]}
+              style={[styles.input, { flex: 1, minWidth: 135 }]}
             />
           </View>
 
@@ -375,8 +382,8 @@ export const AdminFeatureFlagsScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
-  scrollContent: { paddingBottom: 160, paddingHorizontal: 16 },
-  header: { paddingTop: 54, paddingBottom: 16 },
+  scrollContent: { paddingHorizontal: 16 },
+  header: { paddingBottom: 16 },
   title: { fontSize: 22, fontWeight: '800', color: '#0F172A' },
   subtitle: { fontSize: 13, color: '#64748B', marginTop: 2 },
   scopeCard: {
@@ -469,6 +476,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#FECACA',
     marginTop: 14,
-    marginBottom: 40,
+    marginBottom: 12,
   },
 });

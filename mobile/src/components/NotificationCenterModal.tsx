@@ -25,6 +25,7 @@ import {
   getNotificationPermissionAsync,
   requestNotificationPermission,
 } from '../utils/notifications';
+import { useSafeInsets } from '../utils/responsive';
 
 interface Props {
   visible: boolean;
@@ -56,7 +57,8 @@ const SafeNavigationContext = (NavigationContext as React.Context<any> | undefin
 
 export const NotificationCenterModal: React.FC<Props> = ({ visible, onClose }) => {
   const { width, height } = useWindowDimensions();
-  const isWideViewport = width >= 640;
+  const insets = useSafeInsets();
+  const isWideViewport = width >= 640 && height >= 500;
   const navigation = useContext(SafeNavigationContext);
   const role = useAuthStore((s) => s.role);
 
@@ -170,7 +172,15 @@ export const NotificationCenterModal: React.FC<Props> = ({ visible, onClose }) =
             styles.sheet,
             isWideViewport
               ? [styles.sheetWide, { maxHeight: Math.min(720, Math.round(height * 0.85)) }]
-              : [styles.sheetCompact, { maxHeight: Math.round(height * 0.88) }],
+              : [
+                  styles.sheetCompact,
+                  {
+                    maxHeight: Math.round(height * 0.9),
+                    paddingLeft: insets.left,
+                    paddingRight: insets.right,
+                    paddingBottom: Math.max(8, insets.bottom),
+                  },
+                ],
           ]}
         >
           {/* Header */}
@@ -179,9 +189,9 @@ export const NotificationCenterModal: React.FC<Props> = ({ visible, onClose }) =
               <View style={styles.headerIcon}>
                 <MaterialCommunityIcons name="bell-badge-outline" size={20} color="#1E5631" />
               </View>
-              <View>
-                <Text style={styles.headerTitle}>App Alerts & Updates</Text>
-                <Text style={styles.headerSubtitle}>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
+                <Text style={styles.headerTitle} numberOfLines={1}>App Alerts & Updates</Text>
+                <Text style={styles.headerSubtitle} numberOfLines={1}>
                   {unreadCount > 0 ? `${unreadCount} unread operational alert${unreadCount === 1 ? '' : 's'}` : 'All caught up'}
                 </Text>
               </View>
@@ -195,6 +205,11 @@ export const NotificationCenterModal: React.FC<Props> = ({ visible, onClose }) =
             </TouchableOpacity>
           </View>
 
+          <ScrollView
+            style={styles.listScroll}
+            contentContainerStyle={styles.listScrollOuter}
+            showsVerticalScrollIndicator={false}
+          >
           {/* OS Notification Status & Controls */}
           <View style={styles.statusBanner}>
             <View style={styles.statusTopRow}>
@@ -294,11 +309,7 @@ export const NotificationCenterModal: React.FC<Props> = ({ visible, onClose }) =
           <Divider />
 
           {/* Alert List */}
-          <ScrollView
-            style={styles.listScroll}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-          >
+          <View style={styles.listContent}>
             {isLoading && alerts.length === 0 ? (
               <View style={styles.emptyBox}>
                 <ActivityIndicator size="small" color="#1E5631" />
@@ -351,6 +362,7 @@ export const NotificationCenterModal: React.FC<Props> = ({ visible, onClose }) =
                 );
               })
             )}
+          </View>
           </ScrollView>
         </View>
       </View>
@@ -405,6 +417,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     flex: 1,
+    minWidth: 0,
   },
   headerIcon: {
     width: 38,
@@ -556,6 +569,9 @@ const styles = StyleSheet.create({
   listScroll: {
     flexGrow: 0,
   },
+  listScrollOuter: {
+    paddingBottom: 12,
+  },
   listContent: {
     padding: 14,
     gap: 10,
@@ -603,6 +619,7 @@ const styles = StyleSheet.create({
   },
   alertBody: {
     flex: 1,
+    minWidth: 0,
   },
   alertTitleRow: {
     flexDirection: 'row',
@@ -630,8 +647,10 @@ const styles = StyleSheet.create({
   },
   alertMetaRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 6,
     marginTop: 8,
   },
   alertTimestamp: {

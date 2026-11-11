@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, Alert, Modal, Switch, Linking, Platform } from 'react-native';
 import { Text, List, useTheme, Avatar, TextInput, Button, Divider } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useResponsiveLayout } from '../utils/responsive';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuthStore } from '../store/useAuthStore';
 import {
@@ -33,7 +33,14 @@ import * as ImagePicker from 'expo-image-picker';
 import { BRAND_COLORS } from '../theme/theme';
 
 export const MoreScreen = () => {
-  const insets = useSafeAreaInsets();
+  const {
+    insets,
+    safeHorizontalPadding,
+    centeredContainerStyle,
+    tabBarBottomClearance,
+    modalMaxHeight,
+    modalScrollMaxHeight,
+  } = useResponsiveLayout(840);
   const theme = useTheme();
   const navigation = useNavigation<any>();
   const user = useAuthStore(state => state.user);
@@ -538,7 +545,11 @@ export const MoreScreen = () => {
   return (
     <ScrollView 
       style={[styles.container, { backgroundColor: theme.colors.background }]}
-      contentContainerStyle={{ paddingBottom: 120 + insets.bottom, paddingTop: Math.max(16, insets.top) }}
+      contentContainerStyle={[
+        safeHorizontalPadding,
+        centeredContainerStyle,
+        { paddingBottom: tabBarBottomClearance, paddingTop: Math.max(12, insets.top + 8) },
+      ]}
     >
       <Text variant="headlineMedium" style={styles.pageTitle}>Profile & Settings</Text>
       
@@ -691,10 +702,20 @@ export const MoreScreen = () => {
 
       {/* ==================== NOTIFICATIONS MODAL ==================== */}
       <Modal visible={notificationsModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingLeft: Math.max(16, insets.left),
+              paddingRight: Math.max(16, insets.right),
+              paddingTop: Math.max(16, insets.top),
+              paddingBottom: Math.max(16, insets.bottom),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             <View style={styles.modalHeader}>
-              <View>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                 <Text style={styles.modalTitle}>Notification Preferences</Text>
                 <Text style={styles.modalSubtitle}>Manage your order and delivery alerts</Text>
               </View>
@@ -703,7 +724,7 @@ export const MoreScreen = () => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 440 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: modalScrollMaxHeight }}>
               {/* Background Notification Status Banner */}
               <View style={{ backgroundColor: '#F0FDFA', borderWidth: 1, borderColor: '#99F6E4', borderRadius: 10, padding: 12, marginBottom: 14 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
@@ -824,10 +845,20 @@ export const MoreScreen = () => {
 
       {/* ==================== SECURITY & 2FA MODAL ==================== */}
       <Modal visible={securityModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingLeft: Math.max(16, insets.left),
+              paddingRight: Math.max(16, insets.right),
+              paddingTop: Math.max(16, insets.top),
+              paddingBottom: Math.max(16, insets.bottom),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             <View style={styles.modalHeader}>
-              <View>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                 <Text style={styles.modalTitle}>Security & Authentication</Text>
                 <Text style={styles.modalSubtitle}>Manage your password and two-factor protection</Text>
               </View>
@@ -836,7 +867,7 @@ export const MoreScreen = () => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 440 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: modalScrollMaxHeight }}>
               <View style={styles.settingRow}>
                 <View style={{ flex: 1, paddingRight: 12 }}>
                   <Text style={styles.settingName}>Two-Factor Authentication (2FA)</Text>
@@ -912,10 +943,20 @@ export const MoreScreen = () => {
 
       {/* ==================== HELP CENTER MODAL ==================== */}
       <Modal visible={helpModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingLeft: Math.max(16, insets.left),
+              paddingRight: Math.max(16, insets.right),
+              paddingTop: Math.max(16, insets.top),
+              paddingBottom: Math.max(16, insets.bottom),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             <View style={styles.modalHeader}>
-              <View>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                 <Text style={styles.modalTitle}>Help & Support Center</Text>
                 <Text style={styles.modalSubtitle}>Assistance with ranches, deliveries & invoices</Text>
               </View>
@@ -924,7 +965,7 @@ export const MoreScreen = () => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 440 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: modalScrollMaxHeight }}>
               <View style={styles.helpGuideCard}>
                 <View style={styles.helpRow}>
                   <Text style={styles.helpKey}>Email</Text>
@@ -997,10 +1038,20 @@ export const MoreScreen = () => {
 
       {/* ==================== YEAR-END PURCHASE SUMMARY MODAL ==================== */}
       <Modal visible={yearEndModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingLeft: Math.max(16, insets.left),
+              paddingRight: Math.max(16, insets.right),
+              paddingTop: Math.max(16, insets.top),
+              paddingBottom: Math.max(16, insets.bottom),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             <View style={styles.modalHeader}>
-              <View>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                 <Text style={styles.modalTitle}>Year-End Purchase Summary</Text>
                 <Text style={styles.modalSubtitle}>Statement for tax accountant & records</Text>
               </View>
@@ -1010,7 +1061,7 @@ export const MoreScreen = () => {
             </View>
 
             {/* Year Selector Chips */}
-            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
               {[2026, 2025, 2024].map((year) => (
                 <TouchableOpacity
                   key={year}
@@ -1136,10 +1187,20 @@ export const MoreScreen = () => {
 
       {/* ==================== ILRP COMPLIANCE MODAL (Deferred: compliance) ==================== */}
       <Modal visible={complianceModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingLeft: Math.max(16, insets.left),
+              paddingRight: Math.max(16, insets.right),
+              paddingTop: Math.max(16, insets.top),
+              paddingBottom: Math.max(16, insets.bottom),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             <View style={styles.modalHeader}>
-              <View style={{ flex: 1 }}>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
                   <MaterialCommunityIcons name="sprout" size={18} color="#0C6054" />
                   <Text style={styles.modalSub}>Irrigated Lands Regulatory Program</Text>
@@ -1239,7 +1300,7 @@ export const MoreScreen = () => {
                         <View style={styles.yieldRow}>
                           <Text style={styles.yieldLabel}>Kernel Yield (lb/ac):</Text>
                           {isEditing ? (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, flex: 1, minWidth: 180 }}>
                               <TextInput
                                 value={editingYieldVal}
                                 onChangeText={setEditingYieldVal}
@@ -1314,10 +1375,20 @@ export const MoreScreen = () => {
 
       {/* ==================== DOCUMENTS & SDS VAULT MODAL (Deferred: documents) ==================== */}
       <Modal visible={documentsModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingLeft: Math.max(16, insets.left),
+              paddingRight: Math.max(16, insets.right),
+              paddingTop: Math.max(16, insets.top),
+              paddingBottom: Math.max(16, insets.bottom),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             <View style={styles.modalHeader}>
-              <View style={{ flex: 1 }}>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
                   <MaterialCommunityIcons name="file-cabinet" size={18} color="#0C6054" />
                   <Text style={styles.modalSub}>ReNu-Biome Regulatory Vault</Text>
@@ -1715,8 +1786,8 @@ export const MoreScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  pageTitle: { fontWeight: 'bold', color: '#0C6054', marginBottom: 24, marginTop: 40 },
+  container: { flex: 1 },
+  pageTitle: { fontWeight: 'bold', color: '#0C6054', marginBottom: 20, marginTop: 4 },
   profileSection: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 24, marginBottom: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 3 },
   avatarContainer: { alignItems: 'center', marginBottom: 16 },
   avatar: { backgroundColor: '#0C6054' },
@@ -1820,6 +1891,8 @@ const styles = StyleSheet.create({
   },
   modalActions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
     marginTop: 20,
   },
 
@@ -1976,6 +2049,8 @@ const styles = StyleSheet.create({
   },
   compMetricsGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
     borderRadius: 8,
@@ -1986,6 +2061,7 @@ const styles = StyleSheet.create({
   },
   compMetricCol: {
     alignItems: 'center',
+    minWidth: 72,
   },
   compMetricLabel: {
     fontSize: 10,
@@ -1999,6 +2075,8 @@ const styles = StyleSheet.create({
   },
   yieldRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     alignItems: 'center',
     justifyContent: 'space-between',
   },
@@ -2176,19 +2254,21 @@ const styles = StyleSheet.create({
   },
   helpRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: 8,
   },
   helpKey: {
     fontSize: 13,
     fontWeight: '700',
     color: '#0F172A',
-    width: 100,
+    minWidth: 86,
   },
   helpVal: {
     fontSize: 12.5,
     color: '#475569',
     flex: 1,
+    minWidth: 150,
     textAlign: 'right',
   },
 });

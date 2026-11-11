@@ -4,8 +4,17 @@ import { Text, TextInput, Button, Chip, Divider, Switch } from 'react-native-pap
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { submitProduct, fetchProducts, deleteProduct, updateProduct, fetchFeatureFlags } from '../../api/client';
+import { useResponsiveLayout } from '../../utils/responsive';
 
 export const ManageProductsScreen = () => {
+  const {
+    insets,
+    safeHorizontalPadding,
+    centeredContainerStyle,
+    tabBarBottomClearance,
+    modalMaxHeight,
+    modalScrollMaxHeight,
+  } = useResponsiveLayout(840);
   const [name, setName] = useState('');
   const [analysis, setAnalysis] = useState('');
   const [omriListed, setOmriListed] = useState(true);
@@ -160,9 +169,17 @@ export const ManageProductsScreen = () => {
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          safeHorizontalPadding,
+          centeredContainerStyle,
+          { paddingBottom: tabBarBottomClearance },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: Math.max(16, insets.top + 8) }]}>
           <Text style={styles.title}>Product Catalogue</Text>
           <Text style={styles.subtitle}>Maintain product formulations, nutrient analysis & OMRI status</Text>
         </View>
@@ -317,10 +334,20 @@ export const ManageProductsScreen = () => {
 
       {/* ================= EDIT PRODUCT MODAL (NO PRICE) ================= */}
       <Modal visible={editModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingLeft: Math.max(16, insets.left),
+              paddingRight: Math.max(16, insets.right),
+              paddingTop: Math.max(16, insets.top),
+              paddingBottom: Math.max(16, insets.bottom),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             <View style={styles.modalHeader}>
-              <View>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                 <Text style={styles.modalTitle}>Edit Product Specifications</Text>
                 <Text style={styles.modalSubtitle}>{editingProduct?.name}</Text>
               </View>
@@ -329,7 +356,7 @@ export const ManageProductsScreen = () => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: modalScrollMaxHeight }}>
               <TextInput
                 label="Product Name"
                 value={editName}
@@ -386,7 +413,7 @@ export const ManageProductsScreen = () => {
                 mode="outlined"
                 onPress={() => setEditModalVisible(false)}
                 textColor="#64748B"
-                style={{ flex: 1, marginRight: 8, minHeight: 48, justifyContent: 'center' }}
+                style={{ flex: 1, minWidth: 110, minHeight: 48, justifyContent: 'center' }}
               >
                 Cancel
               </Button>
@@ -395,7 +422,7 @@ export const ManageProductsScreen = () => {
                 onPress={handleSaveEdit}
                 loading={updating}
                 buttonColor="#2E5D36"
-                style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}
+                style={{ flex: 1, minWidth: 120, minHeight: 48, justifyContent: 'center' }}
               >
                 Save Changes
               </Button>
@@ -410,8 +437,8 @@ export const ManageProductsScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
-  scrollContent: { paddingBottom: 160, paddingHorizontal: 16 },
-  header: { paddingTop: 54, paddingBottom: 16 },
+  scrollContent: { paddingHorizontal: 16 },
+  header: { paddingBottom: 16 },
   title: { fontSize: 22, fontWeight: '800', color: '#0F172A' },
   subtitle: { fontSize: 13, color: '#64748B', marginTop: 2 },
   formCard: {
@@ -484,8 +511,8 @@ const styles = StyleSheet.create({
     maxWidth: 560,
     alignSelf: 'center',
   },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
   modalTitle: { fontSize: 19, fontWeight: '800', color: '#0F172A' },
   modalSubtitle: { fontSize: 12, color: '#64748B', marginTop: 2 },
-  modalActions: { flexDirection: 'row', marginTop: 12 },
+  modalActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 12 },
 });

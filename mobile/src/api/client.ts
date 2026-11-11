@@ -4,7 +4,8 @@ import { Platform } from 'react-native';
 export const PRIMARY_PRODUCTION_BACKEND_URL = 'https://renu-app-backend.onrender.com';
 export const FALLBACK_PRODUCTION_BACKEND_URL = 'https://biome-app1.onrender.com';
 
-const REQUEST_TIMEOUT_MS = 65000;
+const REQUEST_TIMEOUT_MS = 35000;
+const PRIMARY_FAILOVER_TIMEOUT_MS = 12000;
 let pinnedNativeApiBaseUrl: string | null = null;
 
 function normalizeApiBaseUrl(rawUrl: string): string {
@@ -84,8 +85,16 @@ export const warmUpBackend = async () => {
   if (Platform.OS === 'web' || typeof fetch !== 'function') return;
   try {
     const baseUrl = await getApiBaseUrl();
-    const healthUrl = `${baseUrl.replace(/\/api$/, '')}/health`;
-    await fetchWithTimeout(healthUrl, { method: 'GET' }, 15000);
+    const healthUrls = new Set<string>([
+      `${baseUrl.replace(/\/api$/, '')}/health`,
+      `${PRIMARY_PRODUCTION_BACKEND_URL}/health`,
+      `${FALLBACK_PRODUCTION_BACKEND_URL}/health`,
+    ]);
+    await Promise.allSettled(
+      Array.from(healthUrls).map((healthUrl) =>
+        fetchWithTimeout(healthUrl, { method: 'GET' }, 12000)
+      )
+    );
   } catch {
     // Non-blocking warm-up ping; ignore errors
   }
@@ -139,19 +148,21 @@ export const apiClient = async (endpoint: string, options: RequestInit = {}) => 
   let activeBaseUrl = baseUrl;
   let response: Response;
 
+  const primaryTimeoutMs = canFailoverOnNative ? PRIMARY_FAILOVER_TIMEOUT_MS : REQUEST_TIMEOUT_MS;
+
   try {
-    response = await fetchWithTimeout(`${activeBaseUrl}${endpoint}`, requestInit);
+    response = await fetchWithTimeout(`${activeBaseUrl}${endpoint}`, requestInit, primaryTimeoutMs);
     if (canFailoverOnNative && [502, 503, 504].includes(response.status)) {
       console.warn(`[API Failover] ${activeBaseUrl} returned HTTP ${response.status}; trying ${fallbackNorm}`);
       activeBaseUrl = fallbackNorm;
-      response = await fetchWithTimeout(`${activeBaseUrl}${endpoint}`, requestInit);
+      response = await fetchWithTimeout(`${activeBaseUrl}${endpoint}`, requestInit, REQUEST_TIMEOUT_MS);
     }
   } catch (error: any) {
     if (canFailoverOnNative) {
       console.warn(`[Network Failover] ${activeBaseUrl}${endpoint} failed (${error?.message || error}); trying ${fallbackNorm}`);
       try {
         activeBaseUrl = fallbackNorm;
-        response = await fetchWithTimeout(`${activeBaseUrl}${endpoint}`, requestInit);
+        response = await fetchWithTimeout(`${activeBaseUrl}${endpoint}`, requestInit, REQUEST_TIMEOUT_MS);
       } catch (fallbackError: any) {
         console.warn(`[Network Offline / Error] ${endpoint}:`, fallbackError?.message || fallbackError);
         throw fallbackError;

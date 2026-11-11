@@ -11,8 +11,8 @@ import {
 } from 'react-native';
 import { Text, Chip, Divider, ActivityIndicator, Button, TextInput } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useResponsiveLayout } from '../utils/responsive';
 import {
   fetchDeliveries,
   fetchRanches,
@@ -25,7 +25,14 @@ import { BRAND_COLORS } from '../theme/theme';
 import { NotificationBellButton } from '../components/NotificationBellButton';
 
 export const DeliveriesScreen = ({ route }: any) => {
-  const insets = useSafeAreaInsets();
+  const {
+    insets,
+    safeHorizontalPadding,
+    centeredContainerStyle,
+    tabBarBottomClearance,
+    modalMaxHeight,
+    modalScrollMaxHeight,
+  } = useResponsiveLayout();
   const navigation = useNavigation<any>();
 
   const [deliveries, setDeliveries] = useState<any[]>([]);
@@ -262,14 +269,21 @@ export const DeliveriesScreen = ({ route }: any) => {
   return (
     <View style={styles.container}>
       {/* Top Header */}
-      <View style={[styles.header, { paddingTop: Math.max(16, insets.top + 8) }]}>
-        <View style={{ flex: 1, paddingRight: 8 }}>
+      <View
+        style={[
+          styles.header,
+          safeHorizontalPadding,
+          centeredContainerStyle,
+          { paddingTop: Math.max(14, insets.top + 8) },
+        ]}
+      >
+        <View style={{ flex: 1, minWidth: 180, paddingRight: 8 }}>
           <Text style={styles.headerTitle}>Deliveries</Text>
           <Text style={styles.headerSubtitle}>
             Scheduled tank refills, OptimoRoute driver tracking & nutrient accounting
           </Text>
         </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <NotificationBellButton color={BRAND_COLORS.primaryTeal} />
           {orderingEnabled && (
             <TouchableOpacity
@@ -284,8 +298,18 @@ export const DeliveriesScreen = ({ route }: any) => {
       </View>
 
       {/* Ranch Filter Pills */}
-      <View style={styles.filterWrapper}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
+      <View style={[styles.filterWrapper, centeredContainerStyle]}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={[
+            styles.filterScroll,
+            {
+              paddingLeft: safeHorizontalPadding.paddingLeft,
+              paddingRight: safeHorizontalPadding.paddingRight,
+            },
+          ]}
+        >
           <TouchableOpacity
             style={[styles.filterPill, selectedRanchFilter === 'ALL' && styles.filterPillActive]}
             onPress={() => setSelectedRanchFilter('ALL')}
@@ -309,7 +333,12 @@ export const DeliveriesScreen = ({ route }: any) => {
       </View>
 
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 160 + insets.bottom }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          safeHorizontalPadding,
+          centeredContainerStyle,
+          { paddingBottom: tabBarBottomClearance },
+        ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={BRAND_COLORS.primaryTeal} />
@@ -548,12 +577,22 @@ export const DeliveriesScreen = ({ route }: any) => {
 
       {/* Delivery Detail Modal */}
       <Modal visible={detailModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingLeft: Math.max(16, insets.left),
+              paddingRight: Math.max(16, insets.right),
+              paddingTop: Math.max(16, insets.top),
+              paddingBottom: Math.max(16, insets.bottom),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             {selectedDelivery && (
               <>
                 <View style={styles.modalHeader}>
-                  <View style={{ flex: 1 }}>
+                  <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                     <Text style={styles.modalOrderId}>Delivery #{selectedDelivery.orderId}</Text>
                     <Text style={styles.modalProduct}>{selectedDelivery.product}</Text>
                   </View>
@@ -565,7 +604,7 @@ export const DeliveriesScreen = ({ route }: any) => {
                   </TouchableOpacity>
                 </View>
 
-                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 440 }}>
+                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: modalScrollMaxHeight }}>
                   {/* OptimoRoute Driver Card */}
                   {selectedDelivery.optimoroute && (
                     <View style={styles.modalOptimoBox}>
@@ -713,10 +752,20 @@ export const DeliveriesScreen = ({ route }: any) => {
 
       {/* ==================== ORDER PLACEMENT MODAL (Deferred: ordering) ==================== */}
       <Modal visible={orderModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingLeft: Math.max(16, insets.left),
+              paddingRight: Math.max(16, insets.right),
+              paddingTop: Math.max(16, insets.top),
+              paddingBottom: Math.max(16, insets.bottom),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             <View style={styles.modalHeader}>
-              <View>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                 <Text style={styles.modalSub}>Customer Self-Ordering</Text>
                 <Text style={styles.modalTitle}>Request Delivery / Refill</Text>
               </View>
@@ -725,7 +774,7 @@ export const DeliveriesScreen = ({ route }: any) => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 440 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: modalScrollMaxHeight }}>
               <View style={styles.orderForm}>
                 {/* Product Selection */}
                 <Text style={styles.formSectionLabel}>1. Select Formulation</Text>
@@ -883,12 +932,22 @@ export const DeliveriesScreen = ({ route }: any) => {
 
       {/* ==================== CUSTOMER CONFIRM DELIVERY DETAILS MODAL ==================== */}
       <Modal visible={confirmModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingLeft: Math.max(16, insets.left),
+              paddingRight: Math.max(16, insets.right),
+              paddingTop: Math.max(16, insets.top),
+              paddingBottom: Math.max(16, insets.bottom),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             {confirmingDelivery && (
               <>
                 <View style={styles.modalHeader}>
-                  <View>
+                  <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                     <Text style={styles.modalSub}>Order #{confirmingDelivery.orderId} Accepted</Text>
                     <Text style={styles.modalTitle}>Confirm Delivery Details</Text>
                   </View>
@@ -897,7 +956,7 @@ export const DeliveriesScreen = ({ route }: any) => {
                   </TouchableOpacity>
                 </View>
 
-                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 440 }}>
+                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: modalScrollMaxHeight }}>
                   <View style={styles.orderForm}>
                     <View style={styles.confirmSummaryBox}>
                       <Text style={styles.confirmSummaryTitle}>
@@ -919,7 +978,7 @@ export const DeliveriesScreen = ({ route }: any) => {
                       style={{ marginBottom: 10, backgroundColor: '#FFFFFF' }}
                     />
 
-                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
                       <TextInput
                         label="Gate / Lockbox Code"
                         value={confirmGateCode}
@@ -928,7 +987,7 @@ export const DeliveriesScreen = ({ route }: any) => {
                         outlineColor="#CBD5E1"
                         activeOutlineColor="#0C6054"
                         placeholder="e.g. #4921"
-                        style={{ flex: 1, backgroundColor: '#FFFFFF' }}
+                        style={{ flex: 1, minWidth: 135, backgroundColor: '#FFFFFF' }}
                       />
                       <TextInput
                         label="Contact Phone"
@@ -938,7 +997,7 @@ export const DeliveriesScreen = ({ route }: any) => {
                         outlineColor="#CBD5E1"
                         activeOutlineColor="#0C6054"
                         placeholder="Contact Phone (optional)"
-                        style={{ flex: 1, backgroundColor: '#FFFFFF' }}
+                        style={{ flex: 1, minWidth: 135, backgroundColor: '#FFFFFF' }}
                       />
                     </View>
 
@@ -1014,12 +1073,22 @@ export const DeliveriesScreen = ({ route }: any) => {
 
       {/* ==================== PROOF OF DELIVERY (POD) MODAL (Deferred: optimoroute) ==================== */}
       <Modal visible={podModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingLeft: Math.max(16, insets.left),
+              paddingRight: Math.max(16, insets.right),
+              paddingTop: Math.max(16, insets.top),
+              paddingBottom: Math.max(16, insets.bottom),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             {podDelivery && (
               <>
                 <View style={styles.modalHeader}>
-                  <View>
+                  <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                     <Text style={styles.modalSub}>OptimoRoute Dispatch POD</Text>
                     <Text style={styles.modalTitle}>Proof of Delivery #{podDelivery.orderId}</Text>
                   </View>
@@ -1028,11 +1097,11 @@ export const DeliveriesScreen = ({ route }: any) => {
                   </TouchableOpacity>
                 </View>
 
-                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 460 }}>
+                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: modalScrollMaxHeight }}>
                   {/* Verified Badge */}
                   <View style={styles.podVerifiedStrip}>
                     <MaterialCommunityIcons name="check-decagram" size={22} color="#15803D" />
-                    <View style={{ marginLeft: 8 }}>
+                    <View style={{ marginLeft: 8, flex: 1, minWidth: 0 }}>
                       <Text style={styles.podVerifiedTitle}>Delivery Completed & Geotagged</Text>
                       <Text style={styles.podVerifiedSub}>
                         Delivered on {podDelivery.deliveredDate || podDelivery.date} · OptimoRoute Order #{podDelivery.optimoRouteOrderId || 'OR-9412'}
@@ -1124,11 +1193,13 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 8,
+    gap: 8,
   },
   headerTitle: {
     fontSize: 22,
@@ -1225,8 +1296,10 @@ const styles = StyleSheet.create({
   },
   cardBody: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 6,
     marginBottom: 8,
   },
   productText: {
@@ -1234,6 +1307,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1E293B',
     flex: 1,
+    minWidth: 150,
     marginRight: 8,
   },
   gallonsText: {
@@ -1256,6 +1330,8 @@ const styles = StyleSheet.create({
   optimoRouteText: {
     fontSize: 12,
     color: '#0369A1',
+    flex: 1,
+    flexShrink: 1,
   },
   nutrientsRow: {
     flexDirection: 'row',
@@ -1271,6 +1347,8 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: BRAND_COLORS.primaryTeal,
+    flex: 1,
+    flexShrink: 1,
   },
   cardFooter: {
     flexDirection: 'row',
@@ -1334,6 +1412,7 @@ const styles = StyleSheet.create({
   },
   modalActionRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 10,
     marginTop: 16,
   },
@@ -1397,6 +1476,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   detailItem: {
+    flexGrow: 1,
+    minWidth: 130,
     width: '48%',
     backgroundColor: '#F8FAFC',
     borderRadius: 8,
@@ -1705,6 +1786,8 @@ const styles = StyleSheet.create({
   podRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 8,
     paddingVertical: 6,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
@@ -1712,11 +1795,15 @@ const styles = StyleSheet.create({
   podLabel: {
     fontSize: 12,
     color: '#64748B',
+    flexShrink: 0,
   },
   podVal: {
     fontSize: 12,
     fontWeight: '600',
     color: '#1E293B',
+    flex: 1,
+    flexShrink: 1,
+    textAlign: 'right',
   },
   podSigCard: {
     backgroundColor: '#FFFFFF',
@@ -1800,6 +1887,7 @@ const styles = StyleSheet.create({
   },
   confirmBannerBox: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     backgroundColor: '#FEF3C7',
     borderWidth: 1,
@@ -1837,6 +1925,8 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: '#0F766E',
+    flex: 1,
+    flexShrink: 1,
   },
   confirmSummaryBox: {
     backgroundColor: '#F0FDFA',

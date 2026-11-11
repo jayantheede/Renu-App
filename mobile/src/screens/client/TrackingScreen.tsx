@@ -3,13 +3,24 @@ import { View, StyleSheet, ScrollView } from 'react-native';
 import { Text } from 'react-native-paper';
 import { GlassCard } from '../../components/GlassCard';
 import { Ionicons } from '@expo/vector-icons';
+import { useResponsiveLayout } from '../../utils/responsive';
 
 export const TrackingScreen = () => {
+  const { insets, safeHorizontalPadding, centeredContainerStyle, tabBarBottomClearance } = useResponsiveLayout(760);
+
   return (
     <View style={styles.background}>
       <View style={styles.overlay}>
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <View style={styles.header}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            safeHorizontalPadding,
+            centeredContainerStyle,
+            { paddingBottom: tabBarBottomClearance },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={[styles.header, { paddingTop: Math.max(20, insets.top + 12) }]}>
             <Text variant="headlineMedium" style={styles.title}>Tracking</Text>
             <Text variant="bodyMedium" style={styles.subtitle}>Monitor your active orders</Text>
           </View>
@@ -50,11 +61,11 @@ const styles = StyleSheet.create({
   background: { flex: 1, backgroundColor: 'transparent' },
   overlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.2)' },
   scrollContent: { paddingBottom: 120, paddingHorizontal: 20 },
-  header: { paddingTop: 80, paddingBottom: 20 },
+  header: { paddingBottom: 20 },
   title: { color: '#FFF', fontWeight: 'bold' },
   subtitle: { color: 'rgba(255,255,255,0.7)' },
   orderCard: { padding: 20, marginBottom: 16 },
-  orderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  orderHeader: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   orderId: { color: '#FFF', fontWeight: 'bold' },
   statusBadge: { backgroundColor: 'rgba(74, 222, 128, 0.2)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 },
   statusText: { color: '#4ade80', fontSize: 12, fontWeight: 'bold' },

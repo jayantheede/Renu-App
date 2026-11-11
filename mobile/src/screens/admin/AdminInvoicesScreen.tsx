@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, Alert, Modal, TouchableOpacity, Platform, Image } from 'react-native';
 import { Text, TextInput, Button, Chip, Divider } from 'react-native-paper';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useResponsiveLayout } from '../../utils/responsive';
 import { InvoiceLogo } from '../../components/InvoiceLogo';
 import {
   fetchInvoices,
@@ -16,7 +16,14 @@ import {
 import { printInvoiceDocument } from '../../utils/printInvoice';
 
 export const AdminInvoicesScreen = () => {
-  const insets = useSafeAreaInsets();
+  const {
+    insets,
+    safeHorizontalPadding,
+    centeredContainerStyle,
+    tabBarBottomClearance,
+    modalMaxHeight,
+    modalScrollMaxHeight,
+  } = useResponsiveLayout();
   const [invoices, setInvoices] = useState<any[]>([]);
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -223,17 +230,25 @@ export const AdminInvoicesScreen = () => {
   return (
     <View style={styles.container}>
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 110 + insets.bottom }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          centeredContainerStyle,
+          safeHorizontalPadding,
+          {
+            paddingTop: Math.max(16, insets.top + 8),
+            paddingBottom: Math.max(tabBarBottomClearance, insets.bottom + tabBarBottomClearance),
+          },
+        ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor="#0C6054" />
         }
       >
         {/* Header */}
-        <View style={[styles.header, { paddingTop: Math.max(16, insets.top + 8) }]}>
-          <View style={{ flex: 1, paddingRight: 10 }}>
-            <Text style={styles.title} numberOfLines={1}>Invoices (QuickBooks)</Text>
-            <Text style={styles.subtitle} numberOfLines={1}>Hand-entered from QuickBooks statements</Text>
+        <View style={styles.header}>
+          <View style={{ flex: 1, minWidth: 160, paddingRight: 10 }}>
+            <Text style={styles.title}>Invoices (QuickBooks)</Text>
+            <Text style={styles.subtitle}>Hand-entered from QuickBooks statements</Text>
           </View>
           <TouchableOpacity onPress={handleOpenAddModal} style={styles.addBtn}>
             <Ionicons name="add" size={18} color="#FFF" />
@@ -290,9 +305,9 @@ export const AdminInvoicesScreen = () => {
             return (
               <View key={inv.id} style={styles.card}>
                 <View style={styles.cardHeader}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 160 }}>
                     <InvoiceLogo size={28} color="#0C6054" />
-                    <View style={{ flex: 1 }}>
+                    <View style={{ flex: 1, minWidth: 0 }}>
                       <Text style={styles.invoiceNumber}>{inv.invoiceNumber}</Text>
                       <Text style={styles.customerName}>{inv.customerName || 'Customer'}</Text>
                     </View>
@@ -405,10 +420,20 @@ export const AdminInvoicesScreen = () => {
 
       {/* ================= ADD HAND-ENTERED INVOICE MODAL ================= */}
       <Modal visible={addModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingTop: Math.max(16, insets.top + 8),
+              paddingBottom: Math.max(16, insets.bottom + 8),
+              paddingLeft: Math.max(16, insets.left + 8),
+              paddingRight: Math.max(16, insets.right + 8),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             <View style={styles.modalHeader}>
-              <View>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                 <Text style={styles.modalTitle}>Enter QuickBooks Invoice</Text>
                 <Text style={styles.modalSubtitle}>Office manual entry; prices not computed by app</Text>
               </View>
@@ -417,16 +442,16 @@ export const AdminInvoicesScreen = () => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ maxHeight: modalScrollMaxHeight }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <TextInput label="Invoice Number" value={newInvoiceNumber} onChangeText={setNewInvoiceNumber} mode="outlined" style={styles.modalInput} />
               <TextInput label="Customer Name" value={newCustomerName} onChangeText={setNewCustomerName} mode="outlined" style={styles.modalInput} />
               <TextInput label="Customer Email" value={newCustomerEmail} onChangeText={setNewCustomerEmail} mode="outlined" style={styles.modalInput} />
 
               <TextInput label="Invoice Amount ($ Total)" value={newAmount} onChangeText={setNewAmount} keyboardType="decimal-pad" mode="outlined" placeholder="e.g. 7500.00" style={styles.modalInput} />
 
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <TextInput label="Invoice Date" value={newInvoiceDate} onChangeText={setNewInvoiceDate} mode="outlined" style={[styles.modalInput, { flex: 1 }]} />
-                <TextInput label="Due Date" value={newDueDate} onChangeText={setNewDueDate} mode="outlined" style={[styles.modalInput, { flex: 1 }]} />
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                <TextInput label="Invoice Date" value={newInvoiceDate} onChangeText={setNewInvoiceDate} mode="outlined" style={[styles.modalInput, { flex: 1, minWidth: 130 }]} />
+                <TextInput label="Due Date" value={newDueDate} onChangeText={setNewDueDate} mode="outlined" style={[styles.modalInput, { flex: 1, minWidth: 130 }]} />
               </View>
 
               <TextInput label="QuickBooks Invoice ID" value={newQuickbooksId} onChangeText={setNewQuickbooksId} mode="outlined" placeholder="e.g. QB-94812" style={styles.modalInput} />
@@ -446,18 +471,30 @@ export const AdminInvoicesScreen = () => {
 
       {/* ================= MARK PAID (RECORD CHECK) MODAL ================= */}
       <Modal visible={payModalVisible} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingTop: Math.max(16, insets.top + 8),
+              paddingBottom: Math.max(16, insets.bottom + 8),
+              paddingLeft: Math.max(16, insets.left + 8),
+              paddingRight: Math.max(16, insets.right + 8),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             <Text style={styles.modalTitle}>Record Payment (Check / Wire)</Text>
             <Text style={styles.modalSubtitle}>{invoiceToPay?.invoiceNumber} • ${Number(invoiceToPay?.amount || 0).toLocaleString()}</Text>
-            <TextInput
-              label="Payment / Check Date"
-              value={paymentDate}
-              onChangeText={setPaymentDate}
-              mode="outlined"
-              placeholder="YYYY-MM-DD"
-              style={styles.modalInput}
-            />
+            <ScrollView style={{ maxHeight: modalScrollMaxHeight, marginTop: 8 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <TextInput
+                label="Payment / Check Date"
+                value={paymentDate}
+                onChangeText={setPaymentDate}
+                mode="outlined"
+                placeholder="YYYY-MM-DD"
+                style={styles.modalInput}
+              />
+            </ScrollView>
             <View style={styles.modalActions}>
               <Button mode="outlined" onPress={() => setPayModalVisible(false)} textColor="#64748B" style={{ flex: 1, marginRight: 8, minHeight: 48, justifyContent: 'center' }}>Cancel</Button>
               <Button mode="contained" onPress={handleConfirmPaid} loading={markingPaid} buttonColor="#166534" style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}>Record Paid</Button>
@@ -468,10 +505,20 @@ export const AdminInvoicesScreen = () => {
 
       {/* ================= IN-APP PRINTABLE PDF MODAL ================= */}
       <Modal visible={pdfModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '92%' }]}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingTop: Math.max(16, insets.top + 8),
+              paddingBottom: Math.max(16, insets.bottom + 8),
+              paddingLeft: Math.max(16, insets.left + 8),
+              paddingRight: Math.max(16, insets.right + 8),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             <View style={styles.modalHeader}>
-              <View>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                 <Text style={styles.modalTitle}>Invoice {selectedInvoiceForPdf?.invoiceNumber}</Text>
                 <Text style={styles.modalSubtitle}>QuickBooks Statement Document</Text>
               </View>
@@ -480,10 +527,10 @@ export const AdminInvoicesScreen = () => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ maxHeight: modalScrollMaxHeight }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <View style={styles.statementBox}>
                 <View style={{ borderBottomWidth: 2, borderBottomColor: '#0C6054', paddingBottom: 10 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                     <Image
                       source={require('../../../assets/brand/renu-biome-logo-teal-orange-for-light-backgrounds.png')}
                       style={{ width: 130, height: 38 }}
@@ -500,8 +547,8 @@ export const AdminInvoicesScreen = () => {
                   </View>
                 </View>
 
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginVertical: 12 }}>
-                  <View>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 8, marginVertical: 12 }}>
+                  <View style={{ flex: 1, minWidth: 140 }}>
                     <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '700' }}>BILLED TO:</Text>
                     <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>{selectedInvoiceForPdf?.customerName}</Text>
                     <Text style={{ fontSize: 12, color: '#475569' }}>{selectedInvoiceForPdf?.customerEmail}</Text>
@@ -532,7 +579,7 @@ export const AdminInvoicesScreen = () => {
 
                 <Divider style={{ marginVertical: 8 }} />
 
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 }}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 8, paddingVertical: 8 }}>
                   <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>Total Amount Due</Text>
                   <Text style={{ fontSize: 18, fontWeight: '900', color: '#0C6054' }}>
                     ${Number(selectedInvoiceForPdf?.amount || 0).toLocaleString()}
@@ -551,16 +598,28 @@ export const AdminInvoicesScreen = () => {
 
       {/* ================= EDIT INVOICE MODAL ================= */}
       <Modal visible={editModalVisible} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingTop: Math.max(16, insets.top + 8),
+              paddingBottom: Math.max(16, insets.bottom + 8),
+              paddingLeft: Math.max(16, insets.left + 8),
+              paddingRight: Math.max(16, insets.right + 8),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             <Text style={styles.modalTitle}>Edit Invoice Details</Text>
-            <TextInput label="Invoice Number" value={editNumber} onChangeText={setEditNumber} mode="outlined" style={styles.modalInput} />
-            <TextInput label="Amount ($)" value={editAmount} onChangeText={setEditAmount} keyboardType="decimal-pad" mode="outlined" style={styles.modalInput} />
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <TextInput label="Invoice Date" value={editDate} onChangeText={setEditDate} mode="outlined" style={[styles.modalInput, { flex: 1 }]} />
-              <TextInput label="Due Date" value={editDueDate} onChangeText={setEditDueDate} mode="outlined" style={[styles.modalInput, { flex: 1 }]} />
-            </View>
-            <TextInput label="QuickBooks ID" value={editQbId} onChangeText={setEditQbId} mode="outlined" style={styles.modalInput} />
+            <ScrollView style={{ maxHeight: modalScrollMaxHeight, marginTop: 8 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <TextInput label="Invoice Number" value={editNumber} onChangeText={setEditNumber} mode="outlined" style={styles.modalInput} />
+              <TextInput label="Amount ($)" value={editAmount} onChangeText={setEditAmount} keyboardType="decimal-pad" mode="outlined" style={styles.modalInput} />
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                <TextInput label="Invoice Date" value={editDate} onChangeText={setEditDate} mode="outlined" style={[styles.modalInput, { flex: 1, minWidth: 130 }]} />
+                <TextInput label="Due Date" value={editDueDate} onChangeText={setEditDueDate} mode="outlined" style={[styles.modalInput, { flex: 1, minWidth: 130 }]} />
+              </View>
+              <TextInput label="QuickBooks ID" value={editQbId} onChangeText={setEditQbId} mode="outlined" style={styles.modalInput} />
+            </ScrollView>
             <View style={styles.modalActions}>
               <Button mode="outlined" onPress={() => setEditModalVisible(false)} textColor="#64748B" style={{ flex: 1, marginRight: 8, minHeight: 48, justifyContent: 'center' }}>Cancel</Button>
               <Button mode="contained" onPress={handleSaveEdit} loading={updatingInvoice} buttonColor="#0C6054" style={{ flex: 1, marginLeft: 8, minHeight: 48, justifyContent: 'center' }}>Save</Button>
@@ -578,9 +637,10 @@ const styles = StyleSheet.create({
   scrollContent: { paddingBottom: 120, paddingHorizontal: 16 },
   header: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 54,
+    gap: 10,
     paddingBottom: 16,
     width: '100%',
   },
@@ -637,7 +697,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  cardHeader: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
   invoiceNumber: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
   customerName: { fontSize: 13, color: '#64748B', marginTop: 2 },
   amountText: { fontSize: 18, fontWeight: '800', color: '#0F172A' },
@@ -678,7 +738,7 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 19, fontWeight: '800', color: '#0F172A' },
   modalSubtitle: { fontSize: 12, color: '#64748B', marginTop: 2 },
   modalInput: { marginBottom: 10, backgroundColor: '#FFFFFF' },
-  modalActions: { flexDirection: 'row', marginTop: 12 },
+  modalActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 12 },
   statementBox: {
     backgroundColor: '#FFFFFF',
     padding: 16,

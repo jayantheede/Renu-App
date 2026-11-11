@@ -81,6 +81,8 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 import rateLimit from 'express-rate-limit';
 
+app.set('trust proxy', 1);
+
 // Global API rate limiting
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -121,7 +123,7 @@ app.get('/manifest.json', (req, res) => {
     background_color: '#0F2318',
     theme_color: '#2E5D36',
     display: 'standalone',
-    orientation: 'portrait'
+    orientation: 'any'
   });
 });
 
@@ -195,7 +197,9 @@ app.get('/install', (req, res) => {
     const box = document.getElementById('device-instructions');
 
     if (isIOS) {
-      box.innerHTML = '<div class="instruction-header">📱 iPhone & iPad (Safari)</div>' +
+      box.innerHTML = '<div class="instruction-header">📱 iPhone & iPad (App Store)</div>' +
+        '<a href="https://apps.apple.com/app/id6832246515" class="btn" style="background:#0F172A;margin:0 0 14px 0;">Download on the App Store</a>' +
+        '<div style="font-size:12px;color:#64748B;margin-bottom:10px;">Or add the web portal directly via Safari:</div>' +
         '<div class="step"><div class="step-num">1</div><div>Tap the <strong>Share</strong> button at the bottom of Safari (square with up arrow).</div></div>' +
         '<div class="step"><div class="step-num">2</div><div>Scroll down and tap <strong>Add to Home Screen</strong>.</div></div>' +
         '<div class="step"><div class="step-num">3</div><div>Tap <strong>Add</strong> in the top right. ReNu-Biome will appear on your home screen.</div></div>';
@@ -205,16 +209,97 @@ app.get('/install', (req, res) => {
         '<div class="step"><div class="step-num">2</div><div>Select <strong>Install app</strong> or <strong>Add to Home screen</strong>.</div></div>' +
         '<div class="step"><div class="step-num">3</div><div>Tap <strong>Add</strong> to confirm.</div></div>';
     } else {
-      box.innerHTML = '<div class="instruction-header">📷 Scan to Install on Mobile</div>' +
-        '<p style="font-size:12px;color:#64748B;margin-bottom:12px;">Open your phone camera and point it at the QR code below:</p>' +
-        '<div class="qr-container"><img src="/brand/renu-biome-install-qr-300dpi.png" class="qr-img" alt="ReNu-Biome Install QR">' +
-        '<div class="qr-url">app.renu-biome.com/install</div></div>' +
-        '<p style="font-size:11px;color:#94A3B8;margin-top:8px;">Or on desktop Chrome/Edge, click the install icon in the address bar.</p>';
+      box.innerHTML = '<div class="instruction-header">📷 Scan to Download on the App Store</div>' +
+        '<p style="font-size:12px;color:#64748B;margin-bottom:12px;">Open your phone camera and point it at the QR code below to download from the App Store:</p>' +
+        '<div class="qr-container"><a href="https://apps.apple.com/app/id6832246515" style="text-decoration:none;">' +
+        '<img src="/brand/renu-biome-install-qr-300dpi.png" class="qr-img" alt="ReNu-Biome App Store QR">' +
+        '<div class="qr-url">apps.apple.com/app/id6832246515</div></a></div>' +
+        '<a href="https://apps.apple.com/app/id6832246515" class="btn" style="background:#0F172A;margin-top:8px;">Open in App Store</a>' +
+        '<p style="font-size:11px;color:#94A3B8;margin-top:10px;">Or on desktop Chrome/Edge, click the install icon in the address bar.</p>';
     }
   </script>
 </body>
 </html>`);
 });
+
+// Auth Helpers (non-blocking SMTP dispatch so sign-in/OTP never stalls on slow SMTP)
+function resolveOtpTargetEmail(email: string): string {
+  if (!email.includes('@')) {
+    return email.includes('admin')
+      ? 'support@renu-biome.com'
+      : 'rgundavelli@gmail.com';
+  }
+  return email;
+}
+
+function dispatchMailAsync(mailOptions: any, tag: string, onFailure?: () => void): void {
+  if (!(process.env.SMTP_USER && process.env.SMTP_PASS)) {
+    if (onFailure) onFailure();
+    return;
+  }
+  void transporter
+    .sendMail(mailOptions)
+    .then(() => {
+      console.log(`[${tag}] Email dispatched to ${mailOptions.to}`);
+    })
+    .catch((mailErr: any) => {
+      console.warn(`[${tag}] SMTP dispatch to ${mailOptions.to} failed:`, mailErr?.message || mailErr);
+      if (onFailure) onFailure();
+    });
+}
+
+function dispatchMfaOtpEmail(params: {
+  userEmail: string;
+  targetEmail: string;
+  code: string;
+  isResend?: boolean;
+}): void {
+  const { userEmail, targetEmail, code, isResend } = params;
+  const tag = isResend ? 'MFA Resend' : 'MFA';
+  const intro = isResend
+    ? 'A fresh verification code was requested for your account:'
+    : 'Please use the following 6-digit verification code to complete your sign-in:';
+  const logoAtt = getLogoAttachment();
+
+  dispatchMailAsync(
+    {
+      from: `"ReNu-Biome Security" <${process.env.SMTP_USER}>`,
+      to: targetEmail,
+      subject: `Your ReNu-Biome Sign-In Verification Code: ${code}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #F8FAFC; color: #1E293B; margin: 0; padding: 24px; }
+            .card { max-width: 500px; margin: 0 auto; background: #FFFFFF; border-radius: 12px; border: 1px solid #CBD5E1; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.08); text-align: center; }
+            .content { padding: 32px 24px; }
+            .code-box { font-size: 34px; font-weight: 800; letter-spacing: 8px; color: #0C6054; background: #F0FDFA; border: 2px dashed #99F6E4; padding: 16px 28px; border-radius: 10px; margin: 20px 0; font-family: monospace; display: inline-block; }
+            .note { font-size: 13px; color: #64748B; margin-top: 14px; line-height: 1.5; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            ${getEmailHeaderHtml('Two-Factor Authentication', 'Sign-In Security Verification')}
+            <div class="content">
+              <p style="margin-top: 0; font-size: 15px;">${intro}</p>
+              <div class="code-box">${code}</div>
+              <p class="note">This code is valid for 10 minutes. Never share this code with anyone.</p>
+            </div>
+            ${getEmailFooterHtml()}
+          </div>
+        </body>
+        </html>
+      `,
+      attachments: logoAtt ? [logoAtt] : []
+    },
+    tag,
+    () => {
+      console.log(`[MFA Verification Code Generated] ${code} for ${userEmail} (Target: ${targetEmail})`);
+    }
+  );
+}
 
 // Auth Routes (Custom OTP Flow)
 app.post('/api/auth/send-otp', async (req, res) => {
@@ -262,14 +347,10 @@ app.post('/api/auth/send-otp', async (req, res) => {
       attachments: logoAtt ? [logoAtt] : []
     };
 
-    if (process.env.SMTP_USER && process.env.SMTP_PASS) {
-      await transporter.sendMail(mailOptions);
-      console.log(`[Auth] Real OTP sent to: ${email} via SMTP.`);
-      res.json({ success: true, message: 'OTP sent successfully to your email' });
-    } else {
+    dispatchMailAsync(mailOptions, 'Auth OTP', () => {
       console.log(`[Auth Simulation] OTP generated for: ${email}: ${code}`);
-      res.json({ success: true, message: 'OTP sent successfully to your email' });
-    }
+    });
+    res.json({ success: true, message: 'OTP sent successfully to your email' });
 
   } catch (error: any) {
     console.error('Failed to send OTP:', error);
@@ -371,57 +452,8 @@ app.post(['/api/auth/login', '/auth/login', '/app/login', '/api/app/login', '/ap
         (global as any).pendingMfa[email.toLowerCase().trim()] = mfaPayload;
       }
 
-      // Send real OTP email to user/admin email via Office 365 SMTP
-      let targetEmail = user.email;
-      if (!targetEmail.includes('@')) {
-        targetEmail = targetEmail.includes('admin')
-          ? 'support@renu-biome.com'
-          : 'rgundavelli@gmail.com';
-      }
-
-      if (process.env.SMTP_USER && process.env.SMTP_PASS) {
-        try {
-          const logoAtt = getLogoAttachment();
-          await transporter.sendMail({
-            from: `"ReNu-Biome Security" <${process.env.SMTP_USER}>`,
-            to: targetEmail,
-            subject: `Your ReNu-Biome Sign-In Verification Code: ${code}`,
-            html: `
-              <!DOCTYPE html>
-              <html>
-              <head>
-                <meta charset="utf-8">
-                <style>
-                  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #F8FAFC; color: #1E293B; margin: 0; padding: 24px; }
-                  .card { max-width: 500px; margin: 0 auto; background: #FFFFFF; border-radius: 12px; border: 1px solid #CBD5E1; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.08); text-align: center; }
-                  .content { padding: 32px 24px; }
-                  .code-box { font-size: 34px; font-weight: 800; letter-spacing: 8px; color: #0C6054; background: #F0FDFA; border: 2px dashed #99F6E4; padding: 16px 28px; border-radius: 10px; margin: 20px 0; font-family: monospace; display: inline-block; }
-                  .note { font-size: 13px; color: #64748B; margin-top: 14px; line-height: 1.5; }
-                </style>
-              </head>
-              <body>
-                <div class="card">
-                  ${getEmailHeaderHtml('Two-Factor Authentication', 'Sign-In Security Verification')}
-                  <div class="content">
-                    <p style="margin-top: 0; font-size: 15px;">Please use the following 6-digit verification code to complete your sign-in:</p>
-                    <div class="code-box">${code}</div>
-                    <p class="note">This code is valid for 10 minutes. Never share this code with anyone.</p>
-                  </div>
-                  ${getEmailFooterHtml()}
-                </div>
-              </body>
-              </html>
-            `,
-            attachments: logoAtt ? [logoAtt] : []
-          });
-          console.log(`[MFA] Sent 6-digit real security OTP email to ${targetEmail}`);
-        } catch (mailErr: any) {
-          console.warn(`[MFA Warning] SMTP dispatch to ${targetEmail} failed:`, mailErr.message);
-          console.log(`[MFA Verification Code Generated] ${code} for ${user.email} (Target: ${targetEmail})`);
-        }
-      } else {
-        console.log(`[MFA Verification Code Generated] ${code} for ${user.email} (Target: ${targetEmail})`);
-      }
+      const targetEmail = resolveOtpTargetEmail(user.email);
+      dispatchMfaOtpEmail({ userEmail: user.email, targetEmail, code });
 
       return res.json({
         mfaRequired: true,
@@ -543,35 +575,15 @@ app.post('/api/auth/resend-mfa', async (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     const code = String(Math.floor(100000 + Math.random() * 900000));
+    const expiresAt = Date.now() + 10 * 60 * 1000;
     (global as any).pendingMfa = (global as any).pendingMfa || {};
-    (global as any).pendingMfa[norm] = {
-      code,
-      user,
-      expiresAt: Date.now() + 10 * 60 * 1000
-    };
+    (global as any).pendingMfa[norm] = { code, user, expiresAt };
+    (global as any).pendingMfa[user.email.toLowerCase()] = { code, user, expiresAt };
 
-    if (process.env.SMTP_USER && process.env.SMTP_PASS) {
-      try {
-        await transporter.sendMail({
-          from: `"ReNu-Biome Security" <${process.env.SMTP_USER}>`,
-          to: user.email,
-          subject: `Your ReNu-Biome Sign-In Verification Code: ${code}`,
-          html: `
-            <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 24px; color: #1E293B;">
-              <h2 style="color: #0C6054;">ReNu-Biome Security Verification</h2>
-              <p>A fresh verification code was requested for your account:</p>
-              <div style="font-size: 32px; font-weight: 800; letter-spacing: 6px; color: #0C6054; margin: 16px 0;">${code}</div>
-              <p>This code will expire in 10 minutes.</p>
-            </div>
-          `
-        });
-        console.log(`[MFA Resend] Real code dispatched to ${user.email}`);
-      } catch (e: any) {
-        console.warn(`[MFA Resend] Could not send email:`, e.message);
-      }
-    }
+    const targetEmail = resolveOtpTargetEmail(user.email);
+    dispatchMfaOtpEmail({ userEmail: user.email, targetEmail, code, isResend: true });
 
-    res.json({ success: true, message: `New verification code dispatched to ${user.email}` });
+    res.json({ success: true, targetEmail, message: `New verification code dispatched to ${targetEmail}` });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to resend code' });
   }
@@ -1568,8 +1580,8 @@ for (const distPath of possibleDistPaths) {
   }
 }
 
-// Only listen if not running on Vercel Serverless
-if (process.env.VERCEL !== '1') {
+// Only listen if not running on Vercel Serverless or Jest unit tests
+if (process.env.VERCEL !== '1' && !process.env.JEST_WORKER_ID) {
   app.listen(Number(PORT), '0.0.0.0', async () => {
     console.log(`Backend server running on port ${PORT}`);
     await syncStoreFromDB();

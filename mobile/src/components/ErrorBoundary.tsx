@@ -1,6 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import { Text, Button } from 'react-native-paper';
+import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { BRAND_COLORS } from '../theme/theme';
 
@@ -52,7 +52,7 @@ export class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <View style={styles.errorContainer}>
+        <ScrollView contentContainerStyle={styles.errorContainer} style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
           <View style={styles.errorCard}>
             <View style={styles.iconCircle}>
               <MaterialCommunityIcons name="alert-circle-outline" size={44} color="#DC2626" />
@@ -92,7 +92,7 @@ export class ErrorBoundary extends Component<Props, State> {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </ScrollView>
       );
     }
 
@@ -102,12 +102,11 @@ export class ErrorBoundary extends Component<Props, State> {
 
 const styles = StyleSheet.create({
   errorContainer: {
-    flex: 1,
+    flexGrow: 1,
     backgroundColor: '#F8FAFC',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
-    minHeight: 400,
   },
   errorCard: {
     backgroundColor: '#FFFFFF',

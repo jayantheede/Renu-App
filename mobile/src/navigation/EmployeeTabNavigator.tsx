@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -7,7 +7,6 @@ import { Text } from 'react-native-paper';
 import { AdminProfileScreen } from '../screens/admin/AdminProfileScreen';
 
 const Tab = createBottomTabNavigator();
-const { width } = Dimensions.get('window');
 
 import { EmployeeDashboardScreen } from '../screens/employee/EmployeeDashboardScreen';
 import { EmployeeTasksScreen } from '../screens/employee/EmployeeTasksScreen';
@@ -22,7 +21,7 @@ const TabBarIcon = ({ name, isFocused, label }: { name: string, isFocused: boole
         size={22} 
         color={isFocused ? '#1F4E34' : '#6B7280'} 
       />
-      <Text style={[styles.iconLabel, isFocused && styles.activeIconLabel]}>
+      <Text style={[styles.iconLabel, isFocused && styles.activeIconLabel]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
         {label}
       </Text>
     </View>
@@ -33,8 +32,14 @@ const CustomTabBar = ({ state, descriptors, navigation }: any) => {
   const insets = useSafeAreaInsets();
   return (
     <View
-      pointerEvents="box-none"
-      style={[styles.tabBarOuter, { bottom: Math.max(12, insets.bottom + 6) }]}
+      style={[
+        styles.tabBarOuter,
+        {
+          paddingBottom: Math.max(8, insets.bottom),
+          paddingLeft: Math.max(8, insets.left),
+          paddingRight: Math.max(8, insets.right),
+        },
+      ]}
     >
       <View style={styles.tabBarWrapper}>
         <View style={styles.tabBar}>
@@ -105,42 +110,40 @@ const styles = StyleSheet.create({
     backgroundColor: '#F4F7F4',
   },
   tabBarOuter: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    paddingHorizontal: 16,
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 10,
     alignItems: 'center',
-    zIndex: 999,
   },
   tabBarWrapper: {
     width: '100%',
-    maxWidth: 480,
-    borderRadius: 30,
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 10,
+    maxWidth: 680,
   },
   tabBar: {
     flexDirection: 'row',
-    height: 70,
+    height: 60,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
+    justifyContent: 'space-around',
+    paddingHorizontal: 6,
   },
   tabButton: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 48,
   },
   iconWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 20,
+    paddingVertical: 6,
+    paddingHorizontal: 6,
+    borderRadius: 16,
   },
   activeIconWrapper: {
     backgroundColor: '#E8F5E9',

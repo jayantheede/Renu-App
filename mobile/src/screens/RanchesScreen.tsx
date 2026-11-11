@@ -40,14 +40,21 @@ import {
   fetchFeatureFlags,
 } from '../api/client';
 import { useNavigation } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '../store/useAuthStore';
+import { useResponsiveLayout } from '../utils/responsive';
 import { BRAND_COLORS } from '../theme/theme';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { NotificationBellButton } from '../components/NotificationBellButton';
 
 const RanchesScreenContent = ({ route }: any) => {
-  const insets = useSafeAreaInsets();
+  const {
+    insets,
+    safeHorizontalPadding,
+    centeredContainerStyle,
+    tabBarBottomClearance,
+    modalMaxHeight,
+    modalScrollMaxHeight,
+  } = useResponsiveLayout();
   const navigation = useNavigation<any>();
   const user = useAuthStore((state) => state.user);
   const isAdmin = user?.role === 'admin';
@@ -662,9 +669,11 @@ const RanchesScreenContent = ({ route }: any) => {
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
+          safeHorizontalPadding,
+          centeredContainerStyle,
           {
-            paddingTop: Math.max(16, insets.top + 8),
-            paddingBottom: Math.max(180, 180 + insets.bottom),
+            paddingTop: Math.max(12, insets.top + 8),
+            paddingBottom: tabBarBottomClearance,
           },
         ]}
         showsVerticalScrollIndicator={false}
@@ -679,7 +688,7 @@ const RanchesScreenContent = ({ route }: any) => {
         {/* Top Header */}
         <View style={styles.header}>
           <View style={styles.headerTopRow}>
-            <View style={{ flex: 1, paddingRight: 8 }}>
+            <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
               <Text style={styles.title}>Ranches & Programs</Text>
               <Text style={styles.subtitle}>
                 Planted field inventory, nutrition programs & Otodata tank telemetry
@@ -899,7 +908,7 @@ const RanchesScreenContent = ({ route }: any) => {
               <View key={ranch.id || Math.random()} style={styles.ranchSection}>
                 {/* Ranch Card Banner */}
                 <View style={styles.ranchBanner}>
-                  <View style={{ flex: 1 }}>
+                  <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                     <Text style={styles.ranchTitle}>{ranch.name || 'Sierra Ranch'}</Text>
                     <Text style={styles.ranchCountyText}>
                       <MaterialCommunityIcons name="map-marker-outline" size={14} color="#64748B" />{' '}
@@ -923,7 +932,7 @@ const RanchesScreenContent = ({ route }: any) => {
                   return (
                     <View key={prog.id} style={styles.programBanner}>
                       <View style={styles.progHeaderRow}>
-                        <View style={{ flex: 1 }}>
+                        <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
                             <MaterialCommunityIcons name="sprout" size={16} color={BRAND_COLORS.primaryTeal} />
                             <Text style={styles.progBadgeText}>ANNUAL NUTRITION PROGRAM</Text>
@@ -1038,9 +1047,9 @@ const RanchesScreenContent = ({ route }: any) => {
                               <Text style={styles.blockIdBadgeText}>{b.blockId}</Text>
                             </View>
                           </View>
-                          <View style={{ flex: 2.2 }}>
+                          <View style={{ flex: 2.2, minWidth: 0, paddingRight: 6 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                              <Text style={styles.cropVarietyText} numberOfLines={1}>
+                              <Text style={[styles.cropVarietyText, { flexShrink: 1 }]} numberOfLines={1}>
                                 {b.crop} · {b.variety}
                               </Text>
                               {hasSample && (
@@ -1148,18 +1157,26 @@ const RanchesScreenContent = ({ route }: any) => {
             );
           })
         )}
-        {/* Generous bottom clearance spacer so bottom-most cards & action buttons are never covered by the floating tab bar */}
-        <View style={{ height: 180, width: '100%' }} />
       </ScrollView>
 
       {/* Block Detail & Lab Recommendations Modal */}
       <Modal visible={blockModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingLeft: Math.max(16, insets.left),
+              paddingRight: Math.max(16, insets.right),
+              paddingTop: Math.max(16, insets.top),
+              paddingBottom: Math.max(16, insets.bottom),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             {selectedBlock && (
               <>
                 <View style={styles.modalHeader}>
-                  <View style={{ flex: 1 }}>
+                  <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                     <View style={styles.modalBadgeRow}>
                       <View style={styles.modalBadge}>
                         <Text style={styles.modalBadgeText}>{selectedBlock.blockId}</Text>
@@ -1178,7 +1195,7 @@ const RanchesScreenContent = ({ route }: any) => {
                   </TouchableOpacity>
                 </View>
 
-                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 460 }}>
+                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: modalScrollMaxHeight }}>
                   {/* Specifications */}
                   <View style={styles.detailGrid}>
                     <View style={styles.detailItem}>
@@ -1486,19 +1503,29 @@ const RanchesScreenContent = ({ route }: any) => {
 
       {/* Send Lab Results Modal (Phase 2 - Section 5.1) */}
       <Modal visible={sampleModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingLeft: Math.max(16, insets.left),
+              paddingRight: Math.max(16, insets.right),
+              paddingTop: Math.max(16, insets.top),
+              paddingBottom: Math.max(16, insets.bottom),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             <View style={styles.modalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, paddingRight: 8 }}>
                 <MaterialCommunityIcons name="flask-outline" size={24} color={BRAND_COLORS.primaryTeal} />
-                <Text style={styles.formTitle}>Submit Lab Assay Results</Text>
+                <Text style={[styles.formTitle, { flexShrink: 1 }]}>Submit Lab Assay Results</Text>
               </View>
               <TouchableOpacity onPress={() => setSampleModalVisible(false)}>
                 <MaterialCommunityIcons name="close" size={24} color="#64748B" />
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={{ maxHeight: modalScrollMaxHeight }}>
               <Text style={styles.formLabel}>Select Planted Ranch *</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
                 {ranches.map((r) => {
@@ -1668,18 +1695,29 @@ const RanchesScreenContent = ({ route }: any) => {
 
       {/* Import Blocks CSV Modal (Section A11) */}
       <Modal visible={importModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingLeft: Math.max(16, insets.left),
+              paddingRight: Math.max(16, insets.right),
+              paddingTop: Math.max(16, insets.top),
+              paddingBottom: Math.max(16, insets.bottom),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             <View style={styles.modalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, paddingRight: 8 }}>
                 <MaterialCommunityIcons name="file-delimited-outline" size={24} color={BRAND_COLORS.primaryTeal} />
-                <Text style={styles.formTitle}>Import Blocks (CSV)</Text>
+                <Text style={[styles.formTitle, { flexShrink: 1 }]}>Import Blocks (CSV)</Text>
               </View>
               <TouchableOpacity onPress={() => setImportModalVisible(false)}>
                 <MaterialCommunityIcons name="close" size={24} color="#64748B" />
               </TouchableOpacity>
             </View>
 
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={{ maxHeight: modalScrollMaxHeight }}>
             <Text style={styles.formSubtitle}>
               Target: <Text style={{ fontWeight: '700' }}>{importRanch?.name}</Text>. Paste CSV rows below with header:
             </Text>
@@ -1708,6 +1746,7 @@ const RanchesScreenContent = ({ route }: any) => {
                 ))}
               </View>
             )}
+            </ScrollView>
 
             <View style={styles.modalButtonsRow}>
               <Button
@@ -1734,8 +1773,19 @@ const RanchesScreenContent = ({ route }: any) => {
 
       {/* Add Ranch Modal */}
       <Modal visible={addRanchModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingLeft: Math.max(16, insets.left),
+              paddingRight: Math.max(16, insets.right),
+              paddingTop: Math.max(16, insets.top),
+              paddingBottom: Math.max(16, insets.bottom),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={{ maxHeight: modalScrollMaxHeight }}>
             <Text style={styles.formTitle}>Add New Ranch</Text>
             <Text style={styles.formSubtitle}>
               Ranch acreage is strictly computed from its planted blocks.
@@ -1759,6 +1809,7 @@ const RanchesScreenContent = ({ route }: any) => {
               outlineColor="#CBD5E1"
               activeOutlineColor={BRAND_COLORS.primaryTeal}
             />
+            </ScrollView>
 
             <View style={styles.modalButtonsRow}>
               <Button
@@ -1785,12 +1836,22 @@ const RanchesScreenContent = ({ route }: any) => {
 
       {/* Add Block Modal */}
       <Modal visible={addBlockModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingLeft: Math.max(16, insets.left),
+              paddingRight: Math.max(16, insets.right),
+              paddingTop: Math.max(16, insets.top),
+              paddingBottom: Math.max(16, insets.bottom),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             <Text style={styles.formTitle}>Add Block to {targetRanchForBlock?.name}</Text>
             <Text style={styles.formSubtitle}>Enter planted field unit specifications.</Text>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 380 }}>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={{ maxHeight: modalScrollMaxHeight }}>
               <TextInput
                 label="Block ID (e.g. Block-10) *"
                 value={blkId}
@@ -1901,8 +1962,19 @@ const RanchesScreenContent = ({ route }: any) => {
 
       {/* Add Tank Modal */}
       <Modal visible={addTankModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingLeft: Math.max(16, insets.left),
+              paddingRight: Math.max(16, insets.right),
+              paddingTop: Math.max(16, insets.top),
+              paddingBottom: Math.max(16, insets.bottom),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={{ maxHeight: modalScrollMaxHeight }}>
             <Text style={styles.formTitle}>Register Injection Tank</Text>
             <Text style={styles.formSubtitle}>
               Add an Otodata monitored tank to {targetRanchForTank?.name}.
@@ -1936,6 +2008,7 @@ const RanchesScreenContent = ({ route }: any) => {
               outlineColor="#CBD5E1"
               activeOutlineColor={BRAND_COLORS.primaryTeal}
             />
+            </ScrollView>
 
             <View style={styles.modalButtonsRow}>
               <Button
@@ -1962,12 +2035,22 @@ const RanchesScreenContent = ({ route }: any) => {
 
       {/* ==================== OTODATA TELEMETRY MODAL (Deferred: telemetry) ==================== */}
       <Modal visible={telemetryModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingLeft: Math.max(16, insets.left),
+              paddingRight: Math.max(16, insets.right),
+              paddingTop: Math.max(16, insets.top),
+              paddingBottom: Math.max(16, insets.bottom),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             {selectedTelemetryTank && (
               <>
                 <View style={styles.modalHeader}>
-                  <View style={{ flex: 1 }}>
+                  <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
                       <MaterialCommunityIcons name="remote" size={16} color="#0C6054" />
                       <Text style={styles.modalSub}>Otodata Cellular Telemetry Feed</Text>
@@ -1985,7 +2068,7 @@ const RanchesScreenContent = ({ route }: any) => {
                   </TouchableOpacity>
                 </View>
 
-                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
+                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: modalScrollMaxHeight }}>
                   {/* Cellular Sensor Status Strip */}
                   <View style={styles.telemetryStatusStrip}>
                     <View style={styles.telemetryChip}>
@@ -2087,12 +2170,22 @@ const RanchesScreenContent = ({ route }: any) => {
 
       {/* Tank Operations Hub Modal: Medicines, Trackers, Reports */}
       <Modal visible={tankHubModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '92%' }]}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingLeft: Math.max(16, insets.left),
+              paddingRight: Math.max(16, insets.right),
+              paddingTop: Math.max(16, insets.top),
+              paddingBottom: Math.max(16, insets.bottom),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             {selectedHubTank && (
               <>
                 <View style={styles.modalHeader}>
-                  <View style={{ flex: 1 }}>
+                  <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
                       <MaterialCommunityIcons name="layers-outline" size={16} color={BRAND_COLORS.primaryTeal} />
                       <Text style={styles.modalSub}>Tank Operations & Inventory Hub</Text>
@@ -2178,7 +2271,7 @@ const RanchesScreenContent = ({ route }: any) => {
                   </TouchableOpacity>
                 </View>
 
-                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 400 }}>
+                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: modalScrollMaxHeight }}>
                   {/* TAB 1: MEDICINES & TREATMENTS */}
                   {hubActiveTab === 'medicines' && (
                     <View style={styles.tabContentArea}>
@@ -2382,11 +2475,11 @@ const RanchesScreenContent = ({ route }: any) => {
 
                       <View style={styles.trackerDetailCard}>
                         <View style={styles.trackerDetailHeader}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, paddingRight: 8 }}>
                             <View style={styles.trackerIconBox}>
                               <MaterialCommunityIcons name="satellite-variant" size={20} color="#2563EB" />
                             </View>
-                            <View>
+                            <View style={{ flex: 1, minWidth: 0 }}>
                               <Text style={styles.trackerTitle}>Otodata Cellular Telemetry Unit</Text>
                               <Text style={styles.trackerSerial}>
                                 Serial: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{selectedHubTank.serial || 'OTO-99214'}</Text>
@@ -2635,7 +2728,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 180,
+    paddingBottom: 28,
   },
   header: {
     marginBottom: 16,
@@ -2730,6 +2823,8 @@ const styles = StyleSheet.create({
   },
   ranchBanner: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
@@ -2773,6 +2868,8 @@ const styles = StyleSheet.create({
   },
   progHeaderRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
@@ -2824,6 +2921,8 @@ const styles = StyleSheet.create({
   },
   progStatsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
     justifyContent: 'space-between',
     marginTop: 4,
   },
@@ -3105,6 +3204,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   detailItem: {
+    flexGrow: 1,
+    minWidth: 130,
     width: '48%',
     backgroundColor: '#F8FAFC',
     borderRadius: 8,
@@ -3383,6 +3484,7 @@ const styles = StyleSheet.create({
   },
   modalButtonsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'flex-end',
     gap: 10,
     marginTop: 14,
@@ -4167,6 +4269,8 @@ const styles = StyleSheet.create({
   },
   trackerDetailHeader: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 14,
@@ -4215,6 +4319,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   trackerGridItem: {
+    flexGrow: 1,
+    minWidth: 130,
     width: '48%',
     backgroundColor: '#F8FAFC',
     borderRadius: 10,

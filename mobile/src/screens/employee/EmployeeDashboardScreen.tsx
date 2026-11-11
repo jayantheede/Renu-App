@@ -24,8 +24,18 @@ const RECENT_ACTIVITIES = [
 ];
 
 import * as Location from 'expo-location';
+import { useResponsiveLayout } from '../../utils/responsive';
 
 export const EmployeeDashboardScreen = ({ navigation }: any) => {
+  const {
+    insets,
+    safeHorizontalPadding,
+    centeredContainerStyle,
+    tabBarBottomClearance,
+    modalMaxHeight,
+    modalScrollMaxHeight,
+    isNarrowPortrait,
+  } = useResponsiveLayout();
   const user = useAuthStore(state => state.user);
   const [weather, setWeather] = useState<any>(null);
   const [city, setCity] = useState('Local');
@@ -131,11 +141,23 @@ export const EmployeeDashboardScreen = ({ navigation }: any) => {
   }, []);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[
+        styles.scrollContent,
+        centeredContainerStyle,
+        safeHorizontalPadding,
+        {
+          paddingTop: Math.max(20, insets.top + 12),
+          paddingBottom: Math.max(tabBarBottomClearance, insets.bottom + tabBarBottomClearance),
+        },
+      ]}
+      showsVerticalScrollIndicator={false}
+    >
       
       {/* Premium Header */}
       <View style={styles.header}>
-        <View>
+        <View style={{ flex: 1, minWidth: 0, paddingRight: 12 }}>
           <Text style={styles.greeting}>Field Staff</Text>
           <Text style={styles.title}>{user?.name || 'Employee Portal'}</Text>
         </View>
@@ -170,7 +192,7 @@ export const EmployeeDashboardScreen = ({ navigation }: any) => {
 
       {/* Main Stats Grid */}
       <View style={styles.gridContainer}>
-        <View style={styles.gridColumn}>
+        <View style={[styles.gridColumn, { minWidth: isNarrowPortrait ? '100%' : 140 }]}>
           <StatCard 
             title="Tasks Today" 
             value="12" 
@@ -179,7 +201,7 @@ export const EmployeeDashboardScreen = ({ navigation }: any) => {
             subtitle="8 completed"
           />
         </View>
-        <View style={styles.gridColumn}>
+        <View style={[styles.gridColumn, { minWidth: isNarrowPortrait ? '100%' : 140 }]}>
           <StatCard 
             title="Acres Covered" 
             value="450" 
@@ -188,10 +210,7 @@ export const EmployeeDashboardScreen = ({ navigation }: any) => {
             subtitle="This week"
           />
         </View>
-      </View>
-
-      <View style={styles.gridContainer}>
-        <View style={styles.gridColumn}>
+        <View style={[styles.gridColumn, { minWidth: isNarrowPortrait ? '100%' : 140 }]}>
           <StatCard 
             title="Hours Logged" 
             value="34h" 
@@ -200,7 +219,7 @@ export const EmployeeDashboardScreen = ({ navigation }: any) => {
             subtitle="Since Monday"
           />
         </View>
-        <View style={styles.gridColumn}>
+        <View style={[styles.gridColumn, { minWidth: isNarrowPortrait ? '100%' : 140 }]}>
           <StatCard 
             title="Alerts" 
             value="2" 
@@ -261,9 +280,15 @@ export const EmployeeDashboardScreen = ({ navigation }: any) => {
       {/* Log Application Modal */}
       <Modal visible={appModalVisible} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
+          <View
+            style={[
+              styles.modalSheet,
+              centeredContainerStyle,
+              { maxHeight: modalMaxHeight, paddingBottom: Math.max(20, insets.bottom + 12) },
+            ]}
+          >
             <View style={styles.modalHeader}>
-              <View>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                 <Text style={styles.modalTitle}>Log Product Application</Text>
                 <Text style={styles.modalSubtitle}>Record bio-fertilizer delivery & tank dosing</Text>
               </View>
@@ -272,7 +297,7 @@ export const EmployeeDashboardScreen = ({ navigation }: any) => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ maxHeight: modalScrollMaxHeight }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <Text style={styles.inputLabel}>Field Site / Ranch Location *</Text>
               <TextInput
                 mode="outlined"
@@ -295,8 +320,8 @@ export const EmployeeDashboardScreen = ({ navigation }: any) => {
                 activeOutlineColor="#0C6054"
               />
 
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                <View style={{ flex: 1, minWidth: 130 }}>
                   <Text style={styles.inputLabel}>Quantity Applied</Text>
                   <TextInput
                     mode="outlined"
@@ -308,7 +333,7 @@ export const EmployeeDashboardScreen = ({ navigation }: any) => {
                     activeOutlineColor="#0C6054"
                   />
                 </View>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 130 }}>
                   <Text style={styles.inputLabel}>Acres Covered</Text>
                   <TextInput
                     mode="outlined"
@@ -324,11 +349,11 @@ export const EmployeeDashboardScreen = ({ navigation }: any) => {
               </View>
             </ScrollView>
 
-            <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 16 }}>
               <Button
                 mode="outlined"
                 onPress={() => setAppModalVisible(false)}
-                style={{ flex: 1, borderColor: '#CBD5E1' }}
+                style={{ flex: 1, minWidth: 120, borderColor: '#CBD5E1' }}
                 textColor="#64748B"
               >
                 Cancel
@@ -338,7 +363,7 @@ export const EmployeeDashboardScreen = ({ navigation }: any) => {
                 loading={appSubmitting}
                 disabled={appSubmitting}
                 onPress={handleLogApplication}
-                style={{ flex: 1, backgroundColor: '#0C6054' }}
+                style={{ flex: 1, minWidth: 120, backgroundColor: '#0C6054' }}
                 textColor="#FFFFFF"
               >
                 Submit Log
@@ -351,9 +376,15 @@ export const EmployeeDashboardScreen = ({ navigation }: any) => {
       {/* Soil Report Modal */}
       <Modal visible={soilModalVisible} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
+          <View
+            style={[
+              styles.modalSheet,
+              centeredContainerStyle,
+              { maxHeight: modalMaxHeight, paddingBottom: Math.max(20, insets.bottom + 12) },
+            ]}
+          >
             <View style={styles.modalHeader}>
-              <View>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                 <Text style={styles.modalTitle}>Field Soil Assay Report</Text>
                 <Text style={styles.modalSubtitle}>Sync soil metrics with agronomist logs</Text>
               </View>
@@ -362,9 +393,9 @@ export const EmployeeDashboardScreen = ({ navigation }: any) => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <View style={{ flex: 1 }}>
+            <ScrollView style={{ maxHeight: modalScrollMaxHeight }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                <View style={{ flex: 1, minWidth: 130 }}>
                   <Text style={styles.inputLabel}>Soil pH</Text>
                   <TextInput
                     mode="outlined"
@@ -377,7 +408,7 @@ export const EmployeeDashboardScreen = ({ navigation }: any) => {
                     activeOutlineColor="#3B82F6"
                   />
                 </View>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 130 }}>
                   <Text style={styles.inputLabel}>Nitrogen (PPM)</Text>
                   <TextInput
                     mode="outlined"
@@ -392,8 +423,8 @@ export const EmployeeDashboardScreen = ({ navigation }: any) => {
                 </View>
               </View>
 
-              <View style={{ flexDirection: 'row', gap: 12, marginTop: 8 }}>
-                <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
+                <View style={{ flex: 1, minWidth: 130 }}>
                   <Text style={styles.inputLabel}>Moisture %</Text>
                   <TextInput
                     mode="outlined"
@@ -406,7 +437,7 @@ export const EmployeeDashboardScreen = ({ navigation }: any) => {
                     activeOutlineColor="#3B82F6"
                   />
                 </View>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 130 }}>
                   <Text style={styles.inputLabel}>Microbial Score</Text>
                   <TextInput
                     mode="outlined"
@@ -435,11 +466,11 @@ export const EmployeeDashboardScreen = ({ navigation }: any) => {
               />
             </ScrollView>
 
-            <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 16 }}>
               <Button
                 mode="outlined"
                 onPress={() => setSoilModalVisible(false)}
-                style={{ flex: 1, borderColor: '#CBD5E1' }}
+                style={{ flex: 1, minWidth: 120, borderColor: '#CBD5E1' }}
                 textColor="#64748B"
               >
                 Cancel
@@ -449,7 +480,7 @@ export const EmployeeDashboardScreen = ({ navigation }: any) => {
                 loading={soilSubmitting}
                 disabled={soilSubmitting}
                 onPress={handleSubmitSoilReport}
-                style={{ flex: 1, backgroundColor: '#3B82F6' }}
+                style={{ flex: 1, minWidth: 120, backgroundColor: '#3B82F6' }}
                 textColor="#FFFFFF"
               >
                 Submit Report
@@ -469,15 +500,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   scrollContent: {
-    padding: 24,
-    paddingTop: 60,
-    paddingBottom: 100,
+    padding: 20,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 32,
+    gap: 12,
+    marginBottom: 24,
   },
   greeting: {
     fontSize: 16,
@@ -531,11 +561,14 @@ const styles = StyleSheet.create({
   },
   gridContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
+    gap: 12,
     marginBottom: 16,
   },
   gridColumn: {
-    width: '48%',
+    flex: 1,
+    minWidth: 140,
   },
   statCard: {
     backgroundColor: '#FFF',
@@ -582,11 +615,14 @@ const styles = StyleSheet.create({
   },
   quickActions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
+    gap: 12,
     marginBottom: 24,
   },
   actionBtn: {
-    width: '48%',
+    flex: 1,
+    minWidth: 140,
     borderRadius: 20,
     overflow: 'hidden',
     elevation: 4,

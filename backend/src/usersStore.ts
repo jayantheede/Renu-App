@@ -17,6 +17,9 @@ export const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
   port: parseInt(process.env.SMTP_PORT || '465', 10),
   secure: process.env.SMTP_SECURE === 'true' || process.env.SMTP_PORT === '465',
+  connectionTimeout: 8000,
+  greetingTimeout: 8000,
+  socketTimeout: 12000,
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS ? process.env.SMTP_PASS.replace(/\s+/g, '') : undefined,
@@ -25,6 +28,21 @@ export const transporter = nodemailer.createTransport({
     rejectUnauthorized: false,
   },
 });
+
+async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+        timer.unref?.();
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 const prisma = new PrismaClient();
 
@@ -93,7 +111,11 @@ export async function syncStoreFromDB(force = false): Promise<void> {
   }
   ongoingSync = (async () => {
     try {
-      const record = await prisma.appDataStore.findUnique({ where: { key: 'main_store' } });
+      const record = await withTimeout(
+        prisma.appDataStore.findUnique({ where: { key: 'main_store' } }),
+        5000,
+        'syncStoreFromDB'
+      );
       if (record && record.payload) {
         const data = JSON.parse(record.payload);
       if (Array.isArray(data.users)) {
@@ -1473,17 +1495,25 @@ export async function findUserByEmail(email: string): Promise<AppUser | null> {
   }
 
   try {
-    let dbUser = await prisma.user.findUnique({ where: { email: normalized } });
+    let dbUser = await withTimeout(
+      prisma.user.findUnique({ where: { email: normalized } }),
+      2500,
+      'findUserByEmail.findUnique'
+    );
     if (!dbUser && isAdminQuery) {
-      dbUser = await prisma.user.findFirst({
-        where: {
-          OR: [
-            { email: 'support@renu-biome.com' },
-            { email: 'admin@renu.com' },
-            { role: 'admin' }
-          ]
-        }
-      });
+      dbUser = await withTimeout(
+        prisma.user.findFirst({
+          where: {
+            OR: [
+              { email: 'support@renu-biome.com' },
+              { email: 'admin@renu.com' },
+              { role: 'admin' }
+            ]
+          }
+        }),
+        2500,
+        'findUserByEmail.findFirst'
+      );
     }
     if (dbUser) {
       return {

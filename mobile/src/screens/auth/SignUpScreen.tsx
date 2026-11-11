@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, Alert, ScrollView, KeyboardAvoidingView, Platform, ImageBackground } from 'react-native';
 import { Text, TextInput, Button, useTheme } from 'react-native-paper';
 import { GlassCard } from '../../components/GlassCard';
 import { useAuthStore } from '../../store/useAuthStore';
-import { getApiBaseUrl } from '../../api/client';
+import { getApiBaseUrl, warmUpBackend } from '../../api/client';
+import { useResponsiveLayout } from '../../utils/responsive';
 
 export const SignUpScreen = ({ navigation }: any) => {
   const [name, setName] = useState('');
@@ -15,6 +16,11 @@ export const SignUpScreen = ({ navigation }: any) => {
   const [isOtpSent, setIsOtpSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const theme = useTheme();
+  const { insets, isCompactHeight } = useResponsiveLayout(460);
+
+  useEffect(() => {
+    warmUpBackend?.().catch(() => {});
+  }, []);
 
   const handleSignUp = async () => {
     if (!name || !username || !email || !password) {
@@ -112,7 +118,19 @@ export const SignUpScreen = ({ navigation }: any) => {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.overlay}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              paddingLeft: Math.max(20, insets.left),
+              paddingRight: Math.max(20, insets.right),
+              paddingTop: Math.max(isCompactHeight ? 16 : 24, insets.top + 12),
+              paddingBottom: Math.max(isCompactHeight ? 16 : 24, insets.bottom + 12),
+            },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           
           <GlassCard style={styles.card}>
             <View style={styles.headerContainer}>
@@ -181,7 +199,7 @@ export const SignUpScreen = ({ navigation }: any) => {
                 <Text style={{ fontSize: 13, fontWeight: '700', color: '#1E293B', marginTop: 6, marginBottom: 8 }}>
                   Active Operational Phases:
                 </Text>
-                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
                   {['Pre Harvest', 'Harvest', 'Post Harvest'].map(stage => {
                     const selected = harvestStages.includes(stage);
                     return (
@@ -194,7 +212,7 @@ export const SignUpScreen = ({ navigation }: any) => {
                           if (selected) setHarvestStages(harvestStages.filter(s => s !== stage));
                           else setHarvestStages([...harvestStages, stage]);
                         }}
-                        style={{ flex: 1, borderRadius: 8, borderColor: '#2E5D36' }}
+                        style={{ flex: 1, minWidth: 96, borderRadius: 8, borderColor: '#2E5D36' }}
                         labelStyle={{ fontSize: 11, marginHorizontal: 2 }}
                         compact
                       >
@@ -276,8 +294,11 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     padding: 24,
     justifyContent: 'center',
+    alignItems: 'center',
   },
   card: {
+    width: '100%',
+    maxWidth: 460,
     backgroundColor: 'rgba(245, 248, 245, 0.92)',
     padding: 16,
     borderRadius: 20,

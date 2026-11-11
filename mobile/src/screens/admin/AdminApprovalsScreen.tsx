@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
 import { Text, ActivityIndicator, Button, Chip } from 'react-native-paper';
 import { fetchAdminApprovals, approveCustomer, approveRanch, approveTank, acceptAdminOrder } from '../../api/client';
+import { useResponsiveLayout } from '../../utils/responsive';
 
 export const AdminApprovalsScreen = () => {
+  const { insets, safeHorizontalPadding, centeredContainerStyle, tabBarBottomClearance } = useResponsiveLayout();
   const [data, setData] = useState<{
     orders?: any[];
     customers?: any[];
@@ -71,13 +73,18 @@ export const AdminApprovalsScreen = () => {
   return (
     <View style={styles.container}>
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          safeHorizontalPadding,
+          centeredContainerStyle,
+          { paddingBottom: tabBarBottomClearance },
+        ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor="#2E5D36" />
         }
       >
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: Math.max(16, insets.top + 8) }]}>
           <Text variant="headlineMedium" style={styles.headerTitle}>Approvals</Text>
           <Text variant="bodyMedium" style={styles.headerSubtitle}>
             Review and approve pending ranches, orders, tanks, and accounts
@@ -95,7 +102,7 @@ export const AdminApprovalsScreen = () => {
                 {data.ranches?.map(ranch => (
                   <View key={ranch.id} style={styles.card}>
                     <View style={styles.cardHeader}>
-                      <View style={{ flex: 1 }}>
+                      <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                         <Text style={styles.cardTitle}>{ranch.name}</Text>
                         <Text style={styles.cardSubtitle}>{ranch.county} • {ranch.ac} acres</Text>
                         {ranch.entity?.name && (
@@ -120,7 +127,7 @@ export const AdminApprovalsScreen = () => {
                 {data.orders?.map(order => (
                   <View key={order.id} style={styles.card}>
                     <View style={styles.cardHeader}>
-                      <View style={{ flex: 1 }}>
+                      <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                         <Text style={styles.cardTitle}>Order #{order.orderId}</Text>
                         <Text style={styles.cardSubtitle}>{order.product} • {order.qty} • ${order.amt?.toLocaleString()}</Text>
                         <Text style={styles.entityName}>Customer: {order.customerEmail || 'Unknown'}</Text>
@@ -142,7 +149,7 @@ export const AdminApprovalsScreen = () => {
                 {data.tanks?.map(tank => (
                   <View key={tank.id} style={styles.card}>
                     <View style={styles.cardHeader}>
-                      <View style={{ flex: 1 }}>
+                      <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                         <Text style={styles.cardTitle}>{tank.capacity} Gal Fertilizer Tank</Text>
                         <Text style={styles.cardSubtitle}>Location: {tank.location || 'Main Station'}</Text>
                         <Text style={styles.entityName}>Ranch: {tank.ranch?.name || tank.ranchId}</Text>
@@ -165,7 +172,7 @@ export const AdminApprovalsScreen = () => {
                 {data.customers?.map(customer => (
                   <View key={customer.id} style={styles.card}>
                     <View style={styles.cardHeader}>
-                      <View style={{ flex: 1 }}>
+                      <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                         <Text style={styles.cardTitle}>{customer.name || 'New Customer'}</Text>
                         <Text style={styles.cardSubtitle}>{customer.email} • Role: {customer.role || 'Grower'}</Text>
                       </View>
@@ -237,6 +244,8 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
@@ -266,6 +275,7 @@ const styles = StyleSheet.create({
   },
   actionRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'flex-end',
     marginTop: 14,
     gap: 8,

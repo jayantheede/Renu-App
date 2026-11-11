@@ -3,6 +3,7 @@ import {
   View,
   StyleSheet,
   FlatList,
+  ScrollView,
   TouchableOpacity,
   Modal,
   Alert,
@@ -13,6 +14,7 @@ import { Text, TextInput, Button, Chip, Avatar, Divider, ActivityIndicator } fro
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { fetchMessages as fetchMessagesApi, sendMessage } from '../api/client';
 import { useAuthStore } from '../store/useAuthStore';
+import { useResponsiveLayout } from '../utils/responsive';
 
 const MESSAGE_TYPE_META: Record<string, { icon: string; color: string; bg: string; label: string }> = {
   ORDER: { icon: 'package-variant', color: '#D97706', bg: '#FEF3C7', label: 'Order' },
@@ -26,6 +28,14 @@ const MESSAGE_TYPE_META: Record<string, { icon: string; color: string; bg: strin
 
 export const MessagesScreen = () => {
   const user = useAuthStore(state => state.user);
+  const {
+    insets,
+    safeHorizontalPadding,
+    centeredContainerStyle,
+    tabBarBottomClearance,
+    modalMaxHeight,
+    modalScrollMaxHeight,
+  } = useResponsiveLayout();
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -93,7 +103,7 @@ export const MessagesScreen = () => {
           <View style={[styles.iconBox, { backgroundColor: m.bg }]}>
             <MaterialCommunityIcons name={m.icon as any} size={22} color={m.color} />
           </View>
-          <View style={{ flex: 1 }}>
+          <View style={{ flex: 1, minWidth: 0 }}>
             <View style={styles.msgHeader}>
               <Text style={[styles.msgTitle, isUnread && { color: '#0F172A' }]} numberOfLines={1}>
                 {item.title}
@@ -119,21 +129,30 @@ export const MessagesScreen = () => {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.pageTitle}>Messages</Text>
-          <Text style={styles.pageSubtitle}>
-            {unreadCount > 0 ? `${unreadCount} unread notification${unreadCount > 1 ? 's' : ''}` : 'All caught up!'}
-          </Text>
+      <View
+        style={[
+          styles.header,
+          safeHorizontalPadding,
+          { paddingTop: Math.max(16, insets.top + 8) },
+        ]}
+      >
+        <View style={[styles.headerInner, centeredContainerStyle]}>
+          <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
+            <Text style={styles.pageTitle}>Messages</Text>
+            <Text style={styles.pageSubtitle}>
+              {unreadCount > 0 ? `${unreadCount} unread notification${unreadCount > 1 ? 's' : ''}` : 'All caught up!'}
+            </Text>
+          </View>
+          <TouchableOpacity style={styles.composeBtn} onPress={() => setComposeVisible(true)}>
+            <MaterialCommunityIcons name="pencil-plus" size={22} color="#FFFFFF" />
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity style={styles.composeBtn} onPress={() => setComposeVisible(true)}>
-          <MaterialCommunityIcons name="pencil-plus" size={22} color="#FFFFFF" />
-        </TouchableOpacity>
       </View>
 
       {/* Stats Row */}
       {!loading && messages.length > 0 && (
-        <View style={styles.statsRow}>
+        <View style={[styles.statsRow, safeHorizontalPadding]}>
+          <View style={[styles.statsInner, centeredContainerStyle]}>
           {(['ORDER', 'ALERT', 'REPORT'] as string[]).map(type => {
             const count = messages.filter(m => m.type === type).length;
             const m = meta(type);
@@ -144,6 +163,7 @@ export const MessagesScreen = () => {
               </View>
             ) : null;
           })}
+          </View>
         </View>
       )}
 
@@ -172,7 +192,11 @@ export const MessagesScreen = () => {
           data={messages}
           keyExtractor={(item, i) => item.id || String(i)}
           renderItem={renderItem}
-          contentContainerStyle={{ paddingBottom: 120, paddingHorizontal: 20 }}
+          contentContainerStyle={[
+            safeHorizontalPadding,
+            centeredContainerStyle,
+            { paddingTop: 12, paddingBottom: tabBarBottomClearance },
+          ]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={() => loadMessages(true)} colors={['#0C6054']} tintColor="#0C6054" />
@@ -184,22 +208,34 @@ export const MessagesScreen = () => {
       {/* Message Detail Modal */}
       <Modal visible={!!selectedMsg} animationType="slide" transparent onRequestClose={() => setSelectedMsg(null)}>
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
+          <View
+            style={[
+              styles.modalSheet,
+              {
+                maxHeight: modalMaxHeight,
+                paddingLeft: Math.max(24, insets.left),
+                paddingRight: Math.max(24, insets.right),
+                paddingBottom: Math.max(24, insets.bottom + 12),
+              },
+            ]}
+          >
             {selectedMsg && (() => {
               const m = meta(selectedMsg.type);
               return (
                 <>
                   <View style={styles.modalDragBar} />
-                  <View style={[styles.modalIconBox, { backgroundColor: m.bg }]}>
-                    <MaterialCommunityIcons name={m.icon as any} size={30} color={m.color} />
-                  </View>
-                  <Text style={styles.modalTitle}>{selectedMsg.title}</Text>
-                  <Text style={styles.modalFrom}>
-                    {selectedMsg.fromEmail ? `From: ${selectedMsg.fromEmail}` : 'System Notification'} • {selectedMsg.when}
-                  </Text>
-                  <Divider style={{ marginVertical: 14 }} />
-                  <Text style={styles.modalBody}>{selectedMsg.sub}</Text>
-                  <View style={{ marginTop: 24, flexDirection: 'row', gap: 12 }}>
+                  <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: modalScrollMaxHeight }}>
+                    <View style={[styles.modalIconBox, { backgroundColor: m.bg }]}>
+                      <MaterialCommunityIcons name={m.icon as any} size={30} color={m.color} />
+                    </View>
+                    <Text style={styles.modalTitle}>{selectedMsg.title}</Text>
+                    <Text style={styles.modalFrom}>
+                      {selectedMsg.fromEmail ? `From: ${selectedMsg.fromEmail}` : 'System Notification'} • {selectedMsg.when}
+                    </Text>
+                    <Divider style={{ marginVertical: 14 }} />
+                    <Text style={styles.modalBody}>{selectedMsg.sub}</Text>
+                  </ScrollView>
+                  <View style={{ marginTop: 16, flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
                     <Button
                       mode="outlined"
                       onPress={() => setSelectedMsg(null)}
@@ -232,18 +268,29 @@ export const MessagesScreen = () => {
       {/* Compose Message Modal */}
       <Modal visible={composeVisible} animationType="slide" transparent onRequestClose={() => setComposeVisible(false)}>
         <View style={styles.modalBackdrop}>
-          <View style={[styles.modalSheet, { paddingBottom: 40 }]}>
+          <View
+            style={[
+              styles.modalSheet,
+              {
+                maxHeight: modalMaxHeight,
+                paddingLeft: Math.max(24, insets.left),
+                paddingRight: Math.max(24, insets.right),
+                paddingBottom: Math.max(24, insets.bottom + 12),
+              },
+            ]}
+          >
             <View style={styles.modalDragBar} />
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <Text style={styles.composeTitle}>New Message</Text>
               <TouchableOpacity onPress={() => setComposeVisible(false)}>
                 <MaterialCommunityIcons name="close-circle" size={28} color="#94A3B8" />
               </TouchableOpacity>
             </View>
 
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={{ maxHeight: modalScrollMaxHeight }}>
             <View style={styles.toBox}>
               <MaterialCommunityIcons name="account-tie" size={16} color="#0C6054" style={{ marginRight: 6 }} />
-              <Text style={{ color: '#334155', fontSize: 14 }}>To: <Text style={{ fontWeight: 'bold' }}>ReNu-Biome Team (support@renu-biome.com)</Text></Text>
+              <Text style={{ color: '#334155', fontSize: 14, flex: 1, flexShrink: 1 }}>To: <Text style={{ fontWeight: 'bold' }}>ReNu-Biome Team (support@renu-biome.com)</Text></Text>
             </View>
 
             <TextInput
@@ -280,6 +327,7 @@ export const MessagesScreen = () => {
             >
               Send Message
             </Button>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -290,15 +338,16 @@ export const MessagesScreen = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 60,
     paddingBottom: 16,
-    paddingHorizontal: 20,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
+  },
+  headerInner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
   },
   pageTitle: { fontSize: 26, fontWeight: 'bold', color: '#0F172A' },
   pageSubtitle: { fontSize: 13, color: '#64748B', marginTop: 2 },
@@ -309,6 +358,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
+    flexShrink: 0,
     shadowColor: '#0C6054',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -316,14 +366,15 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   statsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    paddingHorizontal: 20,
     paddingVertical: 12,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
+  },
+  statsInner: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   statChip: {
     flexDirection: 'row',
@@ -382,20 +433,20 @@ const styles = StyleSheet.create({
   msgTitle: { fontSize: 14, fontWeight: '600', color: '#334155', flex: 1, marginRight: 8 },
   msgTime: { fontSize: 11, color: '#94A3B8' },
   msgSub: { fontSize: 13, color: '#64748B', lineHeight: 18 },
-  msgFooter: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 },
+  msgFooter: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', marginTop: 8, gap: 8 },
   typeBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
   typeLabel: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
-  fromText: { fontSize: 11, color: '#94A3B8' },
+  fromText: { fontSize: 11, color: '#94A3B8', flexShrink: 1 },
   unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#0C6054', alignSelf: 'center', flexShrink: 0 },
   // Modal
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.5)', justifyContent: 'flex-end' },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.5)', justifyContent: 'flex-end', alignItems: 'center' },
   modalSheet: {
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
-    paddingBottom: 48,
-    minHeight: 300,
+    width: '100%',
+    maxWidth: 640,
   },
   modalDragBar: { width: 40, height: 4, backgroundColor: '#E2E8F0', borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
   modalIconBox: {

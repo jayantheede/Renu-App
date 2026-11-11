@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView, Image } from 'react-native';
+import { View, StyleSheet, ScrollView } from 'react-native';
 import { Text, Button } from 'react-native-paper';
 import { GlassCard } from '../../components/GlassCard';
 import { Ionicons } from '@expo/vector-icons';
+import { useResponsiveLayout } from '../../utils/responsive';
 
 const DUMMY_PRODUCTS = [
   { id: 1, name: 'Premium Fertilizer', price: 49.99, desc: 'High-yield nutrient mix.' },
@@ -10,11 +11,21 @@ const DUMMY_PRODUCTS = [
 ];
 
 export const ShopScreen = () => {
+  const { insets, safeHorizontalPadding, centeredContainerStyle, tabBarBottomClearance } = useResponsiveLayout(760);
+
   return (
     <View style={styles.background}>
       <View style={styles.overlay}>
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <View style={styles.header}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            safeHorizontalPadding,
+            centeredContainerStyle,
+            { paddingBottom: tabBarBottomClearance },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={[styles.header, { paddingTop: Math.max(20, insets.top + 12) }]}>
             <Text variant="headlineMedium" style={styles.title}>Shop</Text>
             <Text variant="bodyMedium" style={styles.subtitle}>Purchase agricultural products</Text>
           </View>
@@ -46,7 +57,7 @@ const styles = StyleSheet.create({
   background: { flex: 1, backgroundColor: 'transparent' },
   overlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.2)' },
   scrollContent: { paddingBottom: 120, paddingHorizontal: 20 },
-  header: { paddingTop: 80, paddingBottom: 20 },
+  header: { paddingBottom: 20 },
   title: { color: '#FFF', fontWeight: 'bold' },
   subtitle: { color: 'rgba(255,255,255,0.7)' },
   productCard: { padding: 20, marginBottom: 16 },

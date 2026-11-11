@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, Animated, Dimensions, Platform } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Animated, Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AdminDashboardScreen } from '../screens/admin/AdminDashboardScreen';
@@ -48,7 +48,9 @@ const TabBarIcon = ({ name, isFocused, label }: { name: string; isFocused: boole
       ) : (
         <Ionicons name={name as any} size={21} color={isFocused ? '#4ADE80' : '#E2E8F0'} />
       )}
-      <Text style={[styles.iconLabel, isFocused && styles.iconLabelFocused]}>{label}</Text>
+      <Text style={[styles.iconLabel, isFocused && styles.iconLabelFocused]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
+        {label}
+      </Text>
     </Animated.View>
   );
 };
@@ -65,8 +67,14 @@ const CustomTabBar = ({ state, descriptors, navigation }: any) => {
   const insets = useSafeAreaInsets();
   return (
     <View
-      pointerEvents="box-none"
-      style={[styles.tabBarOuter, { bottom: Math.max(12, insets.bottom + 6) }]}
+      style={[
+        styles.tabBarOuter,
+        {
+          paddingBottom: Math.max(8, insets.bottom),
+          paddingLeft: Math.max(8, insets.left),
+          paddingRight: Math.max(8, insets.right),
+        },
+      ]}
     >
       <View style={styles.tabBarWrapper}>
         <View style={styles.glassTabBar}>
@@ -140,33 +148,28 @@ export const AdminTabNavigator = () => {
 
 const styles = StyleSheet.create({
   tabBarOuter: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    paddingHorizontal: 12,
+    width: '100%',
+    backgroundColor: '#083F38',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.14)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.14,
+    shadowRadius: 8,
+    elevation: 10,
     alignItems: 'center',
-    zIndex: 999,
   },
   tabBarWrapper: {
     width: '100%',
-    maxWidth: 480,
-    borderRadius: 24,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 14,
-    elevation: 8,
+    maxWidth: 680,
   },
   glassTabBar: {
     flexDirection: 'row',
-    height: 64,
+    height: 60,
     alignItems: 'center',
     justifyContent: 'space-around',
     paddingHorizontal: 4,
     backgroundColor: '#083F38',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
   },
   tabButton: {
     flex: 1,

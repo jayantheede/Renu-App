@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, RefreshControl, Linking, Modal } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Linking, Modal } from 'react-native';
 import { Text, ActivityIndicator, Chip, Button, Divider } from 'react-native-paper';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthStore } from '../store/useAuthStore';
 import { fetchProducts, fetchFeatureFlags } from '../api/client';
-
-const SCREEN_WIDTH = Dimensions.get('window').width;
+import { useResponsiveLayout } from '../utils/responsive';
 
 const DEFAULT_REAL_PRODUCTS = [
   {
@@ -128,6 +127,8 @@ export const ShopScreen = () => {
   const [notes, setNotes] = useState('');
 
   const user = useAuthStore(state => state.user);
+  const { insets, safeHorizontalPadding, centeredContainerStyle, tabBarBottomClearance, modalMaxHeight, modalScrollMaxHeight } =
+    useResponsiveLayout();
 
   const loadData = async () => {
     try {
@@ -167,8 +168,18 @@ export const ShopScreen = () => {
   return (
     <View style={styles.container}>
       {/* Brand Header */}
-      <LinearGradient colors={['#083F38', '#0C6054']} style={styles.header}>
-        <View style={styles.headerContent}>
+      <LinearGradient
+        colors={['#083F38', '#0C6054']}
+        style={[
+          styles.header,
+          {
+            paddingTop: Math.max(18, insets.top + 12),
+            paddingLeft: Math.max(20, insets.left),
+            paddingRight: Math.max(20, insets.right),
+          },
+        ]}
+      >
+        <View style={[styles.headerContent, centeredContainerStyle]}>
           <Text style={styles.brandTag}>FARMER'S PRIDE</Text>
           <Text style={styles.headerTitle}>Product Catalogue</Text>
           <Text style={styles.headerSubtitle}>
@@ -178,7 +189,12 @@ export const ShopScreen = () => {
       </LinearGradient>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          safeHorizontalPadding,
+          centeredContainerStyle,
+          { paddingBottom: tabBarBottomClearance },
+        ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -317,10 +333,10 @@ export const ShopScreen = () => {
 
       {/* Product Spec Modal */}
       <Modal visible={detailVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View style={[styles.modalOverlay, safeHorizontalPadding]}>
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
             <View style={styles.modalHeader}>
-              <View style={{ flex: 1, paddingRight: 10 }}>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 10 }}>
                 <Text style={styles.modalBrand}>RENU-BIOME FORMULATION SPEC</Text>
                 <Text style={styles.modalTitle}>{selectedProduct?.name}</Text>
               </View>
@@ -329,7 +345,7 @@ export const ShopScreen = () => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: modalScrollMaxHeight, flexShrink: 1 }}>
               <View style={styles.specBox}>
                 <Text style={styles.specLabel}>Guaranteed Chemical Analysis</Text>
                 <Text style={styles.specAnalysis}>{selectedProduct?.analysis}</Text>
@@ -575,8 +591,10 @@ const styles = StyleSheet.create({
   },
   cardFooter: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 8,
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
     marginTop: 14,

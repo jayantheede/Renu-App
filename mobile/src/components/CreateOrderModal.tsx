@@ -12,6 +12,7 @@ import { Text, TextInput, Button, Chip, Divider } from 'react-native-paper';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { fetchAdminCustomers, fetchRanches, fetchProducts, submitDelivery } from '../api/client';
 import { BRAND_COLORS } from '../theme/theme';
+import { useResponsiveLayout } from '../utils/responsive';
 
 export interface CreateOrderModalProps {
   visible: boolean;
@@ -38,6 +39,7 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
   initialCustomerId,
   initialCustomerName,
 }) => {
+  const { insets, modalMaxHeight } = useResponsiveLayout(600);
   const [customers, setCustomers] = useState<any[]>([]);
   const [ranches, setRanches] = useState<any[]>([]);
   const [products, setProducts] = useState<string[]>(CANONICAL_PRODUCTS);
@@ -185,11 +187,21 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
+      <View
+        style={[
+          styles.modalOverlay,
+          {
+            paddingLeft: Math.max(16, insets.left),
+            paddingRight: Math.max(16, insets.right),
+            paddingTop: Math.max(16, insets.top),
+            paddingBottom: Math.max(16, insets.bottom),
+          },
+        ]}
+      >
+        <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
           {/* Header */}
           <View style={styles.modalHeader}>
-            <View>
+            <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
               <Text style={styles.modalTitle}>Create Delivery Order</Text>
               <Text style={styles.modalSubtitle}>Office order entry from phone call or email</Text>
             </View>
@@ -236,7 +248,7 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
             {activeRanch?.tanks && activeRanch.tanks.length > 0 && (
               <>
                 <Text style={styles.fieldLabel}>DESTINATION TANK</Text>
-                <View style={styles.chipRow}>
+                <View style={styles.chipWrapRow}>
                   {activeRanch.tanks.map((t: any) => (
                     <TouchableOpacity
                       key={t.id || t.name}
@@ -315,7 +327,7 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
 
             {/* 7. Date & Window */}
             <View style={styles.splitRow}>
-              <View style={{ flex: 1, marginRight: 8 }}>
+              <View style={styles.splitCol}>
                 <Text style={styles.fieldLabel}>DELIVERY DATE</Text>
                 <TextInput
                   value={deliveryDate}
@@ -327,7 +339,7 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
                   style={styles.textInput}
                 />
               </View>
-              <View style={{ flex: 1, marginLeft: 8 }}>
+              <View style={styles.splitCol}>
                 <Text style={styles.fieldLabel}>WINDOW</Text>
                 <TextInput
                   value={deliveryWindow}
@@ -343,7 +355,7 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
 
             {/* 8. Gate Code & Who To Call */}
             <View style={styles.splitRow}>
-              <View style={{ flex: 1, marginRight: 8 }}>
+              <View style={styles.splitCol}>
                 <Text style={styles.fieldLabel}>GATE CODE</Text>
                 <TextInput
                   value={gateCode}
@@ -355,7 +367,7 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
                   style={styles.textInput}
                 />
               </View>
-              <View style={{ flex: 1, marginLeft: 8 }}>
+              <View style={styles.splitCol}>
                 <Text style={styles.fieldLabel}>WHO TO CALL ON ARRIVAL</Text>
                 <TextInput
                   value={whoToCall}
@@ -471,6 +483,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginBottom: 6,
   },
+  chipWrapRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 6,
+  },
   customerChip: {
     paddingHorizontal: 14,
     paddingVertical: 8,
@@ -583,6 +601,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#0C6054',
   },
   productText: {
+    flex: 1,
+    flexShrink: 1,
     fontSize: 13,
     color: '#334155',
     fontWeight: '500',
@@ -623,9 +643,16 @@ const styles = StyleSheet.create({
   },
   splitRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  splitCol: {
+    flex: 1,
+    minWidth: 135,
   },
   actionRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
     marginTop: 16,
     paddingTop: 12,

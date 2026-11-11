@@ -98,7 +98,11 @@ export const AppAlertsLifecycle: React.FC = () => {
       pointerEvents="box-none"
       style={[
         styles.bannerHost,
-        { top: Math.max(14, insets.top + 8), paddingHorizontal: width >= 640 ? 24 : 12 },
+        {
+          top: Math.max(14, insets.top + 8),
+          paddingLeft: width >= 640 ? Math.max(24, insets.left) : Math.max(12, insets.left),
+          paddingRight: width >= 640 ? Math.max(24, insets.right) : Math.max(12, insets.right),
+        },
       ]}
     >
       <TouchableOpacity
@@ -171,6 +175,7 @@ const styles = StyleSheet.create({
   },
   textWrap: {
     flex: 1,
+    minWidth: 0,
   },
   title: {
     color: '#FFFFFF',
