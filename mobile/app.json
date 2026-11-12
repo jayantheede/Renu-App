@@ -13,7 +13,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.renubiome.app",
-      "buildNumber": "5",
+      "buildNumber": "6",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "UIApplicationSceneManifest": {
@@ -33,7 +33,7 @@
       "package": "com.renubiome.portal",
       "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#14233F",
+        "backgroundColor": "#3176D1",
         "foregroundImage": "./assets/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": false
