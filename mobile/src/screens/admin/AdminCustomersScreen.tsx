@@ -456,14 +456,15 @@ const AdminCustomersScreenInner = () => {
               <Divider style={{ marginVertical: 12, backgroundColor: '#F1F5F9' }} />
 
               {/* Customer Operations Buttons */}
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              <View style={styles.customerActionRow}>
                 <Button 
                   mode="contained" 
                   onPress={() => openDrilldown(c)}
                   buttonColor="#0C6054"
                   icon="tree-outline"
-                  style={{ borderRadius: 10, flex: 1, minWidth: 140 }}
-                  contentStyle={{ minHeight: 48 }}
+                  style={styles.customerActionBtn}
+                  contentStyle={styles.customerActionBtnContent}
+                  labelStyle={styles.customerActionLabel}
                 >
                   Ranches & Blocks
                 </Button>
@@ -472,8 +473,9 @@ const AdminCustomersScreenInner = () => {
                   mode="outlined" 
                   onPress={() => openCreateOrderModal(c)}
                   textColor="#0C6054"
-                  style={{ borderColor: '#0C6054', borderRadius: 10, flex: 1, minWidth: 130 }}
-                  contentStyle={{ minHeight: 48 }}
+                  style={[styles.customerActionBtn, { borderColor: '#0C6054' }]}
+                  contentStyle={styles.customerActionBtnContent}
+                  labelStyle={styles.customerActionLabel}
                 >
                   Create Order
                 </Button>
@@ -486,7 +488,9 @@ const AdminCustomersScreenInner = () => {
                     setResetPasswordModalVisible(true);
                   }}
                   textColor="#64748B"
-                  style={{ minHeight: 48, justifyContent: 'center' }}
+                  style={styles.customerResetBtn}
+                  contentStyle={styles.customerActionBtnContent}
+                  labelStyle={styles.customerResetLabel}
                 >
                   Reset Password
                 </Button>
@@ -1188,5 +1192,29 @@ const styles = StyleSheet.create({
   radioItemSelected: {
     backgroundColor: '#F0FDF4',
     borderColor: '#0C6054',
+  },
+  customerActionRow: {
+    flexDirection: 'column',
+    gap: 8,
+    width: '100%',
+  },
+  customerActionBtn: {
+    borderRadius: 10,
+    width: '100%',
+  },
+  customerActionBtnContent: {
+    minHeight: 44,
+  },
+  customerActionLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  customerResetBtn: {
+    borderRadius: 10,
+    width: '100%',
+  },
+  customerResetLabel: {
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

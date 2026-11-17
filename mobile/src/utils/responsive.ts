@@ -70,7 +70,7 @@ export function useResponsiveLayout(maxContentWidth = 960): ResponsiveLayout {
       centeredContainerStyle: contentMaxWidth
         ? { width: '100%', maxWidth: contentMaxWidth, alignSelf: 'center' }
         : { width: '100%', alignSelf: 'center' },
-      tabBarBottomClearance: 28,
+      tabBarBottomClearance: Math.max(96, insets.bottom + 84),
       modalMaxHeight: Math.max(260, Math.round(height * 0.88)),
       modalScrollMaxHeight: Math.max(
         160,

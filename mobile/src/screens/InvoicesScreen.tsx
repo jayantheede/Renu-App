@@ -25,6 +25,7 @@ import {
 } from '../api/client';
 import { BRAND_COLORS } from '../theme/theme';
 import { NotificationBellButton } from '../components/NotificationBellButton';
+import { useAuthStore } from '../store/useAuthStore';
 import { printInvoiceDocument, printYearEndSummaryDocument } from '../utils/printInvoice';
 
 export const InvoicesScreen = () => {
@@ -36,6 +37,8 @@ export const InvoicesScreen = () => {
     modalMaxHeight,
     modalScrollMaxHeight,
   } = useResponsiveLayout();
+  const user = useAuthStore((state) => state.user);
+  const isAdmin = user?.role === 'admin';
   const [invoices, setInvoices] = useState<any[]>([]);
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -263,7 +266,11 @@ export const InvoicesScreen = () => {
         <View style={[{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10 }, centeredContainerStyle]}>
           <View style={{ flex: 1, minWidth: 160, paddingRight: 8 }}>
             <Text style={styles.pageTitle}>Invoices</Text>
-            <Text style={styles.subtitle}>QuickBooks billing records, linked deliveries & statements</Text>
+            <Text style={styles.subtitle}>
+              {isAdmin 
+                ? 'QuickBooks billing records, linked deliveries & statements'
+                : 'Billing records, linked deliveries & statements'}
+            </Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <NotificationBellButton color={BRAND_COLORS.primaryTeal} />
@@ -278,8 +285,8 @@ export const InvoicesScreen = () => {
         </View>
       </View>
 
-      {/* QuickBooks Online 2-Way Sync Status Banner (Deferred Capability: quickbooks) */}
-      {quickbooksEnabled && (
+      {/* QuickBooks Online 2-Way Sync Status Banner (Only for admin) */}
+      {isAdmin && quickbooksEnabled && (
         <View style={[styles.qbBanner, centeredContainerStyle, { marginLeft: Math.max(16, insets.left), marginRight: Math.max(16, insets.right) }]}>
           <View style={styles.qbBannerLeft}>
             <View style={styles.qbIconCircle}>

@@ -169,6 +169,10 @@ const RanchesScreenContent = ({ route }: any) => {
   const [importErrors, setImportErrors] = useState<string[]>([]);
   const [importing, setImporting] = useState(false);
 
+  // Program Level Detail Modal
+  const [selectedProgram, setSelectedProgram] = useState<any>(null);
+  const [programModalVisible, setProgramModalVisible] = useState(false);
+
   const loadAll = async () => {
     try {
       const [rData, dData, pData, sData, fData] = await Promise.all([
@@ -930,7 +934,15 @@ const RanchesScreenContent = ({ route }: any) => {
                   const progressValue = Math.max(0, Math.min(1, planned > 0 ? delivered / planned : 0));
 
                   return (
-                    <View key={prog.id} style={styles.programBanner}>
+                    <TouchableOpacity
+                      key={prog.id}
+                      style={styles.programBanner}
+                      activeOpacity={0.85}
+                      onPress={() => {
+                        setSelectedProgram(prog);
+                        setProgramModalVisible(true);
+                      }}
+                    >
                       <View style={styles.progHeaderRow}>
                         <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
@@ -942,9 +954,12 @@ const RanchesScreenContent = ({ route }: any) => {
                             Crop: {prog.crop || 'Almond'} · Units: {prog.nUnitsPerAcre || 180} lb N/ac · {prog.k2oUnitsPerAcre || 200} lb K2O/ac
                           </Text>
                         </View>
-                        <Chip style={styles.activePill} textStyle={styles.activePillText} compact>
-                          Active
-                        </Chip>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Chip style={styles.activePill} textStyle={styles.activePillText} compact>
+                            {prog.status || 'Active'}
+                          </Chip>
+                          <MaterialCommunityIcons name="chevron-right" size={20} color={BRAND_COLORS.primaryTeal} />
+                        </View>
                       </View>
 
                       <View style={{ marginTop: 10 }}>
@@ -961,10 +976,10 @@ const RanchesScreenContent = ({ route }: any) => {
                           <Text style={styles.progStatsText}>
                             {delivered.toLocaleString()} / {planned.toLocaleString()} Gallons Delivered
                           </Text>
-                          <Text style={styles.progBufferText}>Includes 6% N-loss buffer</Text>
+                          <Text style={styles.progBufferText}>Tap to view stage lines & details</Text>
                         </View>
                       </View>
-                    </View>
+                    </TouchableOpacity>
                   );
                 })}
 
@@ -1108,7 +1123,12 @@ const RanchesScreenContent = ({ route }: any) => {
                       const on = Boolean(flags?.telemetry);
 
                       return (
-                        <View key={tank.id || tIdx} style={[styles.tankCard, isLow && on && styles.tankCardLow]}>
+                        <TouchableOpacity 
+                          key={tank.id || tIdx} 
+                          style={[styles.tankCard, isLow && on && styles.tankCardLow]}
+                          activeOpacity={0.85}
+                          onPress={() => handleOpenTankHub(ranch, tank)}
+                        >
                           <View style={styles.tankCardHeader}>
                             <View style={{ flex: 1, marginRight: 8 }}>
                               <Text style={styles.tankName} numberOfLines={1}>{tank.name || `Tank #${tIdx + 1}`}</Text>
@@ -1116,11 +1136,12 @@ const RanchesScreenContent = ({ route }: any) => {
                                 {cap.toLocaleString()} gal, {loc}
                               </Text>
                             </View>
-                            {on && (
-                              <View style={{ alignItems: 'flex-end' }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              {on && (
                                 <Text style={[styles.tankLevelPct, { color: barColor }]}>{level}%</Text>
-                              </View>
-                            )}
+                              )}
+                              <MaterialCommunityIcons name="cog-outline" size={18} color="#0C6054" />
+                            </View>
                           </View>
 
                           {on ? (
@@ -1145,10 +1166,10 @@ const RanchesScreenContent = ({ route }: any) => {
                             </>
                           ) : (
                             <Text style={{ fontSize: 12, color: '#64748B', marginTop: 4, fontStyle: 'italic' }}>
-                              Level shown once the Otodata monitor is linked (Phase 2).
+                              Level shown once the Otodata monitor is linked (Phase 2). Tap to configure.
                             </Text>
                           )}
-                        </View>
+                        </TouchableOpacity>
                       );
                     })}
                   </View>
@@ -1495,6 +1516,142 @@ const RanchesScreenContent = ({ route }: any) => {
                     })()}
                   </View>
                 </ScrollView>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Program Level Detail Modal */}
+      <Modal visible={programModalVisible} animationType="slide" transparent>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingLeft: Math.max(16, insets.left),
+              paddingRight: Math.max(16, insets.right),
+              paddingTop: Math.max(16, insets.top),
+              paddingBottom: Math.max(16, insets.bottom),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
+            {selectedProgram && (
+              <>
+                <View style={styles.modalHeader}>
+                  <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
+                    <View style={styles.modalBadgeRow}>
+                      <View style={[styles.modalBadge, { backgroundColor: '#F0FDFA' }]}>
+                        <Text style={[styles.modalBadgeText, { color: BRAND_COLORS.primaryTeal }]}>
+                          {selectedProgram.seasonYear || 2027}
+                        </Text>
+                      </View>
+                      <Text style={styles.modalRanchName}>{selectedProgram.ranchName || 'Sierra Foothills Ranch'}</Text>
+                    </View>
+                    <Text style={styles.modalTitle} numberOfLines={1}>
+                      {selectedProgram.name}
+                    </Text>
+                    <Text style={styles.modalSub}>
+                      Crop: {selectedProgram.crop} · Target: {selectedProgram.targetN || selectedProgram.nUnitsPerAcre || 180} lb N/ac, {selectedProgram.targetK2O || selectedProgram.k2oUnitsPerAcre || 200} lb K2O/ac
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setProgramModalVisible(false)}
+                    style={styles.modalCloseBtn}
+                  >
+                    <MaterialCommunityIcons name="close" size={24} color="#64748B" />
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  style={{ maxHeight: modalScrollMaxHeight }}
+                >
+                  {/* Progress Summary Card */}
+                  <View style={[styles.programBanner, { marginBottom: 14, backgroundColor: '#F8FAFC' }]}>
+                    <View style={styles.progBarMetaRow}>
+                      <Text style={styles.progProgressLabel}>Season Delivery Progress</Text>
+                      <Text style={styles.progProgressPct}>
+                        {selectedProgram.plannedGallons > 0
+                          ? Math.min(100, Math.round(((selectedProgram.deliveredGallons || 0) / selectedProgram.plannedGallons) * 100))
+                          : 0}%
+                      </Text>
+                    </View>
+                    <ProgressBar
+                      progress={
+                        selectedProgram.plannedGallons > 0
+                          ? Math.min(1, (selectedProgram.deliveredGallons || 0) / selectedProgram.plannedGallons)
+                          : 0
+                      }
+                      color={BRAND_COLORS.primaryTeal}
+                      style={styles.progProgressBar}
+                    />
+                    <View style={[styles.progStatsRow, { marginTop: 6 }]}>
+                      <Text style={styles.progStatsText}>
+                        {(selectedProgram.deliveredGallons || 0).toLocaleString()} / {(selectedProgram.plannedGallons || 0).toLocaleString()} gal delivered
+                      </Text>
+                      <Text style={styles.progBufferText}>
+                        {selectedProgram.blocksCovered?.length || 1} Blocks Covered · {selectedProgram.totalAcreage || 45} ac
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Program Notes if any */}
+                  {selectedProgram.notes ? (
+                    <View style={{ backgroundColor: '#F1F5F9', borderRadius: 10, padding: 10, marginBottom: 14 }}>
+                      <Text style={{ fontSize: 12, color: '#334155', fontStyle: 'italic' }}>
+                        "{selectedProgram.notes}"
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {/* Stage-by-Stage Line Items */}
+                  <Text style={[styles.sectionHeaderTitle, { marginBottom: 8 }]}>
+                    Program Stages & Nutrient Applications
+                  </Text>
+                  {Array.isArray(selectedProgram.lines) && selectedProgram.lines.length > 0 ? (
+                    selectedProgram.lines.map((line: any, idx: number) => (
+                      <View key={line.id || idx} style={styles.timelineItem}>
+                        <View style={[styles.timelineDot, { backgroundColor: line.status === 'Completed' ? '#10B981' : BRAND_COLORS.primaryTeal }]} />
+                        <View style={styles.timelineContent}>
+                          <View style={styles.timelineHeader}>
+                            <Text style={styles.timelineProduct}>{line.productName || line.product}</Text>
+                            <Chip style={[styles.sampleStatusChip, { backgroundColor: line.status === 'Completed' ? '#ECFDF5' : '#EFF6FF' }]} textStyle={styles.sampleStatusChipText} compact>
+                              {line.status || (line.deliveredGallons >= line.plannedGallons ? 'Completed' : 'Planned')}
+                            </Chip>
+                          </View>
+                          <Text style={styles.timelineGallons}>
+                            Stage: <Text style={{ fontWeight: '700' }}>{line.cropStage || 'Soil Blend'}</Text> · Rate: {line.ratePerAcre || line.rate} gal/ac ({line.applicationsCount || line.apps || 1} apps)
+                          </Text>
+                          <Text style={[styles.timelineGallons, { color: '#64748B', marginTop: 2 }]}>
+                            Planned: {(line.plannedGallons || 0).toLocaleString()} gal · Delivered: {(line.deliveredGallons || 0).toLocaleString()} gal
+                          </Text>
+                          {line.timingNote ? (
+                            <Text style={{ fontSize: 11, color: '#0C6054', marginTop: 3 }}>
+                              🗓 {line.timingNote}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </View>
+                    ))
+                  ) : (
+                    <View style={styles.emptySampleBox}>
+                      <Text style={styles.emptySampleText}>No line item details configured for this program.</Text>
+                    </View>
+                  )}
+                </ScrollView>
+
+                <View style={[styles.modalButtonsRow, { marginTop: 14 }]}>
+                  <Button
+                    mode="contained"
+                    buttonColor={BRAND_COLORS.primaryTeal}
+                    onPress={() => setProgramModalVisible(false)}
+                    style={{ flex: 1, borderRadius: 8 }}
+                  >
+                    Close Program Details
+                  </Button>
+                </View>
               </>
             )}
           </View>

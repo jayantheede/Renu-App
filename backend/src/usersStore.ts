@@ -444,9 +444,10 @@ export interface FeatureFlagsConfig {
 
 export interface ProgramLineItem {
   id: string;
-  productId: string;
+  productId?: string;
   productName: string;
-  stageName: string;
+  stageName?: string;
+  cropStage?: string;
   ratePerAcre: number;
   applicationsCount: number;
   plannedGallons: number;
@@ -1371,7 +1372,160 @@ export const mockProducts: ProductItem[] = (_persistedStore.products && _persist
   ? _persistedStore.products
   : JSON.parse(JSON.stringify(CANONICAL_PRODUCTS));
 
-export const mockPrograms: NutritionProgram[] = _persistedStore.programs || [];
+export const CANONICAL_PROGRAMS: NutritionProgram[] = [
+  {
+    id: 'prog-ranch-1-almond-2027',
+    name: '2027 Almond Nutrition Program',
+    crop: 'Almond',
+    seasonYear: 2027,
+    ranchId: 'ranch-1',
+    ranchName: 'Sierra Foothills Ranch',
+    blocksCovered: ['N-4'],
+    totalAcreage: 45,
+    targetN: 180,
+    targetK2O: 200,
+    nLossFactor: 0.06,
+    status: 'Active',
+    stageWindow: 'Full Season (Feb - Oct)',
+    notes: 'Formulated for Nemaguard rootstock with balanced 32-0-28 and potassium acetate foliar shots.',
+    lines: [
+      {
+        id: 'line-1',
+        productName: 'Bloom Foliars + Boron',
+        cropStage: 'Bloom foliars',
+        ratePerAcre: 3.0,
+        applicationsCount: 3,
+        plannedGallons: 405,
+        deliveredGallons: 405,
+        timingNote: 'Feb 1 to Mar 10 · Dormant, bee bloom and petal fall',
+        status: 'Completed'
+      },
+      {
+        id: 'line-2',
+        productName: 'ReNu N-32%, K-28% Blend',
+        cropStage: 'Soil blend applications',
+        ratePerAcre: 8.0,
+        applicationsCount: 2,
+        plannedGallons: 720,
+        deliveredGallons: 720,
+        timingNote: 'Mar 1 to Apr 15 · 1st & 2nd soil shots',
+        status: 'Completed'
+      },
+      {
+        id: 'line-3',
+        productName: 'ReNu N-32%, K-24% Blend (K acetate)',
+        cropStage: 'Soil blend applications',
+        ratePerAcre: 8.0,
+        applicationsCount: 1,
+        plannedGallons: 360,
+        deliveredGallons: 360,
+        timingNote: 'Apr 1 to Apr 30 · Mid-season translocating blend',
+        status: 'Completed'
+      },
+      {
+        id: 'line-4',
+        productName: 'ReNu N-32%, K-28% Blend + B, Zn',
+        cropStage: 'Soil blend applications',
+        ratePerAcre: 8.0,
+        applicationsCount: 1,
+        plannedGallons: 360,
+        deliveredGallons: 360,
+        timingNote: 'May 1 to May 31 · 4th application with micronutrients',
+        status: 'Completed'
+      },
+      {
+        id: 'line-5',
+        productName: 'ReNu 0-0-29 Potassium Acetate',
+        cropStage: 'Potassium acetate',
+        ratePerAcre: 4.8,
+        applicationsCount: 4,
+        plannedGallons: 972,
+        deliveredGallons: 972,
+        timingNote: 'Apr 1 to Jul 31 · Sizing, nut fill & embryo vigor',
+        status: 'Completed'
+      },
+      {
+        id: 'line-6',
+        productName: 'ReNu Fruit Care',
+        cropStage: 'Fruit Care Heat-Relief Shot',
+        ratePerAcre: 1.0,
+        applicationsCount: 1,
+        plannedGallons: 135,
+        deliveredGallons: 135,
+        timingNote: 'Jun 15 to Jul 15 · Sustained root vigor under heat',
+        status: 'Completed'
+      },
+      {
+        id: 'line-7',
+        productName: 'ReNu N-6%, K-16%, Ca-20% Restorative',
+        cropStage: 'Post-harvest',
+        ratePerAcre: 2.6,
+        applicationsCount: 1,
+        plannedGallons: 117,
+        deliveredGallons: 0,
+        timingNote: 'Sep 1 to Oct 15 · Restorative root flush before dormancy',
+        status: 'Active'
+      }
+    ],
+    createdAt: '2026-01-01T00:00:00.000Z'
+  },
+  {
+    id: 'prog-ranch-1-pistachio-2027',
+    name: '2027 Pistachio Nutrition Program',
+    crop: 'Pistachio',
+    seasonYear: 2027,
+    ranchId: 'ranch-1',
+    ranchName: 'Sierra Foothills Ranch',
+    blocksCovered: ['N-5'],
+    totalAcreage: 40,
+    targetN: 150,
+    targetK2O: 160,
+    nLossFactor: 0.06,
+    status: 'Active',
+    stageWindow: 'Full Season (Mar - Oct)',
+    notes: 'Formulated for Pioneer Gold rootstock on Kerman variety.',
+    lines: [
+      {
+        id: 'line-p1',
+        productName: 'Bloom foliars + boron',
+        cropStage: 'Bloom',
+        ratePerAcre: 2.5,
+        applicationsCount: 2,
+        plannedGallons: 200,
+        deliveredGallons: 200,
+        timingNote: 'Apr 1 to Apr 30 · Early foliar cluster development',
+        status: 'Completed'
+      },
+      {
+        id: 'line-p2',
+        productName: 'ReNu N-32%, K-28% Blend',
+        cropStage: 'Nut fill',
+        ratePerAcre: 6.0,
+        applicationsCount: 3,
+        plannedGallons: 720,
+        deliveredGallons: 720,
+        timingNote: 'May 1 to Jun 30 · Shell expansion & embryo growth',
+        status: 'Completed'
+      },
+      {
+        id: 'line-p3',
+        productName: 'ReNu 0-0-29 Potassium Acetate',
+        cropStage: 'Hull split',
+        ratePerAcre: 4.0,
+        applicationsCount: 2,
+        plannedGallons: 320,
+        deliveredGallons: 0,
+        timingNote: 'Jul 1 to Aug 15 · Split percentage optimization',
+        status: 'Active'
+      }
+    ],
+    createdAt: '2026-01-01T00:00:00.000Z'
+  }
+];
+
+export const mockPrograms: NutritionProgram[] = (_persistedStore.programs && _persistedStore.programs.length > 0)
+  ? _persistedStore.programs
+  : JSON.parse(JSON.stringify(CANONICAL_PROGRAMS));
 export const mockSamples: LabSample[] = _persistedStore.samples || [];
 
 export const mockFeatureFlags: FeatureFlagsConfig = _persistedStore.featureFlags || {
