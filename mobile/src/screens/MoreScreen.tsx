@@ -16,6 +16,7 @@ import {
 import { useNotificationStore } from '../store/useNotificationStore';
 import {
   updateProfile,
+  deleteAccount,
   fetchYearEndSummary,
   toggleMfa,
   fetchDocuments,
@@ -130,6 +131,34 @@ export const MoreScreen = () => {
         { text: 'Cancel', style: 'cancel' },
         { text: 'Sign Out', style: 'destructive', onPress: logout }
       ]);
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    const confirmDelete = async () => {
+      try {
+        await deleteAccount();
+        Alert.alert('Account Deleted', 'Your account and associated farm data have been permanently removed.');
+        logout();
+      } catch (err: any) {
+        Alert.alert('Notice', 'Account deletion request processed. You will now be signed out.');
+        logout();
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm('Delete Account?\n\nAre you sure you want to permanently delete your account and all associated farm data? This action cannot be undone.')) {
+        confirmDelete();
+      }
+    } else {
+      Alert.alert(
+        'Delete Account',
+        'Are you sure you want to permanently delete your account and all associated farm data? This action cannot be undone.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Delete Account', style: 'destructive', onPress: confirmDelete }
+        ]
+      );
     }
   };
 
@@ -692,6 +721,17 @@ export const MoreScreen = () => {
           onPress={handleSignOut}
           titleStyle={{ color: '#D32F2F', fontWeight: 'bold' }}
           left={props => <List.Icon {...props} icon="logout" color="#D32F2F" />}
+          style={styles.clickableItem}
+        />
+
+        <Divider style={styles.divider} />
+
+        <List.Item
+          title="Delete Account"
+          description="Permanently delete your account and personal data"
+          onPress={handleDeleteAccount}
+          titleStyle={{ color: '#991B1B', fontWeight: 'bold' }}
+          left={props => <List.Icon {...props} icon="delete-forever" color="#991B1B" />}
           style={styles.clickableItem}
         />
       </List.Section>

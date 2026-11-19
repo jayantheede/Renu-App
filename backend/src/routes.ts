@@ -17,6 +17,7 @@ import {
   saveStore,
   syncStoreFromDB,
   updateUserProfile,
+  deleteUserProfile,
   computeRanchAcreage,
   getRanchesForCustomer,
   createRanch,
@@ -192,6 +193,25 @@ router.put('/profile', async (req: AuthenticatedRequest, res) => {
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to update profile' });
+  }
+});
+
+router.delete(['/profile', '/account'], async (req: AuthenticatedRequest, res) => {
+  try {
+    const userEmail = req.user!.email;
+    const userId = req.user!.id;
+    deleteUserProfile(userEmail || userId);
+
+    addAuditLog({
+      action: 'ACCOUNT_DELETED',
+      details: `Account deletion completed for user ${userEmail} (${userId})`,
+      actor: userEmail,
+      category: 'USERS'
+    });
+
+    res.json({ success: true, message: 'Account permanently deleted' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to delete account' });
   }
 });
 

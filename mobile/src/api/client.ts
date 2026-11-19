@@ -257,6 +257,7 @@ export const requestPasswordReset = (email: string) => apiClient('/auth/forgot-p
 });
 
 export const updateProfile = (data: any) => apiClient('/app/profile', { method: 'PUT', body: JSON.stringify(data) });
+export const deleteAccount = () => apiClient('/app/profile', { method: 'DELETE' });
 
 // -----------------------------------------------------------------------
 // Dashboards

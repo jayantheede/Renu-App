@@ -236,6 +236,11 @@ export const SignUpScreen = ({ navigation }: any) => {
               </>
             ) : (
               <>
+                <View style={{ marginBottom: 12, backgroundColor: '#E0F2FE', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: '#BAE6FD' }}>
+                  <Text style={{ fontSize: 12, color: '#0369A1', fontWeight: '600', textAlign: 'center' }}>
+                    Enter verification code sent to your email (Review Demo: 123456)
+                  </Text>
+                </View>
                 <TextInput
                   label="6-Digit OTP Code"
                   value={otpCode}

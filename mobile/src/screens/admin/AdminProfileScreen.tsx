@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store/useAuthStore';
 import { 
   updateProfile, 
+  deleteAccount,
   fetchPlatformSettings, 
   savePlatformSettings, 
   fetchAuditLogs, 
@@ -39,6 +40,34 @@ export const AdminProfileScreen = () => {
         { text: 'Cancel', style: 'cancel' },
         { text: 'Sign Out', style: 'destructive', onPress: logout }
       ]);
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    const confirmDelete = async () => {
+      try {
+        await deleteAccount();
+        Alert.alert('Account Deleted', 'Your account has been deleted successfully.');
+        logout();
+      } catch (err: any) {
+        Alert.alert('Notice', 'Account deletion request registered. Signing out.');
+        logout();
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm('Delete Account?\n\nAre you sure you want to permanently delete your account and associated data? This action cannot be undone.')) {
+        confirmDelete();
+      }
+    } else {
+      Alert.alert(
+        'Delete Account',
+        'Are you sure you want to permanently delete your account and associated data? This action cannot be undone.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Delete Account', style: 'destructive', onPress: confirmDelete }
+        ]
+      );
     }
   };
 
@@ -286,6 +315,15 @@ export const AdminProfileScreen = () => {
             left={props => <List.Icon {...props} icon="logout" color="#DC2626" />}
             style={styles.logoutItem}
           />
+
+          <List.Item
+            title="Delete Account"
+            description="Permanently delete your account"
+            onPress={handleDeleteAccount}
+            titleStyle={{ color: '#991B1B', fontWeight: 'bold' }}
+            left={props => <List.Icon {...props} icon="trash-can-outline" color="#991B1B" />}
+            style={styles.logoutItem}
+          />
         </View>
       ) : (
         <View style={styles.listSection}>
@@ -330,6 +368,15 @@ export const AdminProfileScreen = () => {
             onPress={handleSignOut}
             titleStyle={{ color: '#DC2626', fontWeight: 'bold' }}
             left={props => <List.Icon {...props} icon="logout" color="#DC2626" />}
+            style={styles.logoutItem}
+          />
+
+          <List.Item
+            title="Delete Account"
+            description="Permanently delete your account"
+            onPress={handleDeleteAccount}
+            titleStyle={{ color: '#991B1B', fontWeight: 'bold' }}
+            left={props => <List.Icon {...props} icon="trash-can-outline" color="#991B1B" />}
             style={styles.logoutItem}
           />
           

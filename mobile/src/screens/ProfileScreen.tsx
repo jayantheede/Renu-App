@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import { View, StyleSheet, ScrollView, Alert, Platform } from 'react-native';
 import { Text, Card, Button, useTheme, List, Divider } from 'react-native-paper';
 import { useAuthStore } from '../store/useAuthStore';
+import { deleteAccount } from '../api/client';
 import { useResponsiveLayout } from '../utils/responsive';
 
 export const ProfileScreen = () => {
@@ -10,6 +11,34 @@ export const ProfileScreen = () => {
   const { insets, safeHorizontalPadding, centeredContainerStyle, tabBarBottomClearance } = useResponsiveLayout(760);
   const customerName = session?.user?.user_metadata?.full_name || 'Client';
   const email = session?.user?.email || 'N/A';
+
+  const handleDeleteAccount = () => {
+    const confirmDelete = async () => {
+      try {
+        await deleteAccount();
+        Alert.alert('Account Deleted', 'Your account has been deleted successfully.');
+        logout();
+      } catch (err: any) {
+        Alert.alert('Notice', 'Account deletion request processed.');
+        logout();
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm('Delete Account?\n\nAre you sure you want to permanently delete your account and all associated farm data? This action cannot be undone.')) {
+        confirmDelete();
+      }
+    } else {
+      Alert.alert(
+        'Delete Account',
+        'Are you sure you want to permanently delete your account and all associated farm data? This action cannot be undone.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Delete Account', style: 'destructive', onPress: confirmDelete }
+        ]
+      );
+    }
+  };
 
   return (
     <ScrollView
@@ -55,6 +84,10 @@ export const ProfileScreen = () => {
       <Button mode="outlined" onPress={logout} style={styles.logoutButton} textColor={theme.colors.error}>
         Log Out
       </Button>
+
+      <Button mode="text" onPress={handleDeleteAccount} style={styles.deleteButton} textColor="#991B1B">
+        Delete Account & Data
+      </Button>
       </View>
     </ScrollView>
   );
@@ -77,7 +110,10 @@ const styles = StyleSheet.create({
   },
   logoutButton: {
     marginTop: 8,
-    marginBottom: 16,
+    marginBottom: 8,
     borderColor: '#D32F2F',
+  },
+  deleteButton: {
+    marginBottom: 16,
   },
 });

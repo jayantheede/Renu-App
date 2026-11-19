@@ -576,6 +576,18 @@ export const mockUsers: AppUser[] = (_persistedStore.users && _persistedStore.us
         createdAt: '2026-01-02T00:00:00.000Z'
       },
       {
+        id: 'mock-cust-demo',
+        email: 'customer@renu.com',
+        password: 'customer',
+        name: 'Sierra Orchards (Demo Grower)',
+        role: 'Grower',
+        phone: '(559) 555-0188',
+        approvalStatus: 'APPROVED',
+        avatarUrl: '',
+        quickbooksCustomerId: 'QB-CUST-101',
+        createdAt: '2026-01-03T00:00:00.000Z'
+      },
+      {
         id: 'mock-cust-1',
         email: 'rgundavelli@gmail.com',
         password: 'customer',
@@ -1698,6 +1710,17 @@ export function updateUserProfile(idOrEmail: string, updates: { name?: string; a
     return u;
   }
   return null;
+}
+
+export function deleteUserProfile(idOrEmail: string): boolean {
+  const normalized = idOrEmail.toLowerCase().trim();
+  const idx = mockUsers.findIndex(user => user.id.toLowerCase() === normalized || user.email.toLowerCase() === normalized);
+  if (idx !== -1) {
+    mockUsers.splice(idx, 1);
+    saveStore();
+    return true;
+  }
+  return false;
 }
 
 export async function createNewUser(params: {
