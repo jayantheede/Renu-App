@@ -142,14 +142,38 @@ self.addEventListener('fetch', (e) => {});
 app.use('/assets', express.static(path.join(__dirname, '../../mobile/assets')));
 app.use('/brand', express.static(path.join(__dirname, '../../mobile/assets/brand')));
 
-// Dedicated Apple App Review Demonstration portal
+// Dedicated Apple App Review Demonstration portal & video endpoints
 app.get(['/app-review-demo', '/app-review-demo.html'], (req, res) => {
-  const filePath = path.join(__dirname, '../../mobile/assets/app-review-demo.html');
-  if (fs.existsSync(filePath)) {
-    res.sendFile(filePath);
-  } else {
-    res.redirect('/assets/app-review-demo.html');
+  const candidates = [
+    path.join(__dirname, '../../mobile/assets/app-review-demo.html'),
+    path.join(__dirname, '../assets/app-review-demo.html'),
+    path.join(__dirname, '../../mobile/dist/app-review-demo.html'),
+    path.join(process.cwd(), 'mobile/assets/app-review-demo.html'),
+    path.join(process.cwd(), '../mobile/assets/app-review-demo.html'),
+    path.join(process.cwd(), 'assets/app-review-demo.html'),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) {
+      return res.sendFile(c);
+    }
   }
+  res.status(404).send('Walkthrough page not found');
+});
+
+app.get(['/assets/app_review_walkthrough.mp4', '/app_review_walkthrough.mp4'], (req, res) => {
+  const candidates = [
+    path.join(__dirname, '../../mobile/assets/app_review_walkthrough.mp4'),
+    path.join(__dirname, '../assets/app_review_walkthrough.mp4'),
+    path.join(process.cwd(), 'mobile/assets/app_review_walkthrough.mp4'),
+    path.join(process.cwd(), '../mobile/assets/app_review_walkthrough.mp4'),
+    path.join(process.cwd(), 'assets/app_review_walkthrough.mp4'),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) {
+      return res.sendFile(c);
+    }
+  }
+  res.status(404).send('Walkthrough video not found');
 });
 
 // Standalone /install route for direct browser and QR access
