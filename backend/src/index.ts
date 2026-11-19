@@ -142,6 +142,16 @@ self.addEventListener('fetch', (e) => {});
 app.use('/assets', express.static(path.join(__dirname, '../../mobile/assets')));
 app.use('/brand', express.static(path.join(__dirname, '../../mobile/assets/brand')));
 
+// Dedicated Apple App Review Demonstration portal
+app.get(['/app-review-demo', '/app-review-demo.html'], (req, res) => {
+  const filePath = path.join(__dirname, '../../mobile/assets/app-review-demo.html');
+  if (fs.existsSync(filePath)) {
+    res.sendFile(filePath);
+  } else {
+    res.redirect('/assets/app-review-demo.html');
+  }
+});
+
 // Standalone /install route for direct browser and QR access
 app.get('/install', (req, res) => {
   res.send(`<!DOCTYPE html>
