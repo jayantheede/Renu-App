@@ -31,7 +31,7 @@
     },
     "android": {
       "package": "com.renubiome.portal",
-      "versionCode": 1,
+      "versionCode": 8,
       "adaptiveIcon": {
         "backgroundColor": "#3176D1",
         "foregroundImage": "./assets/android-icon-foreground.png"
