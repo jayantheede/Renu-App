@@ -9,3 +9,6 @@ dist/
 !mobile/dist/
 !mobile/dist/**
 backend/dist/
+
+macos_app/*.app
+macos_app/*.dmg
