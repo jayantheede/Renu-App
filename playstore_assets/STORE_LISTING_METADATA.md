@@ -98,3 +98,4 @@ When completing the **Data Safety** questionnaire in Google Play Console:
 
 - **Is data encrypted in transit?**: `Yes` (All network traffic is encrypted via HTTPS / TLS).
 - **Can users request data deletion?**: `Yes` (Users can delete their account directly inside the app under More -> Delete Account, which executes immediate permanent server-side deletion).
+

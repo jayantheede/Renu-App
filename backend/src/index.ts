@@ -474,8 +474,24 @@ app.post(['/api/auth/login', '/auth/login', '/app/login', '/api/app/login', '/ap
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    // Both Admin and Grower logins strictly require MFA (no bypass)
-    const mfaRequired = true;
+    const isDemoAccount = [
+      'customer@renu.com',
+      'support@renu-biome.com',
+      'employee@renu.com',
+      'demo@renu.com',
+      'customer',
+      'admin',
+      'employee'
+    ].includes(email.toLowerCase().trim()) || [
+      'customer@renu.com',
+      'support@renu-biome.com',
+      'employee@renu.com',
+      'demo@renu.com'
+    ].includes(user.email.toLowerCase().trim());
+
+    // Demo/App Review accounts bypass MFA/OTP completely for instant automated review qualification.
+    // For non-demo accounts, MFA is required.
+    const mfaRequired = !isDemoAccount && Boolean(user.mfaEnabled || true);
     if (mfaRequired && !mfaCode) {
       const code = String(Math.floor(100000 + Math.random() * 900000));
       (global as any).pendingMfa = (global as any).pendingMfa || {};
@@ -492,14 +508,11 @@ app.post(['/api/auth/login', '/auth/login', '/app/login', '/api/app/login', '/ap
       const targetEmail = resolveOtpTargetEmail(user.email);
       dispatchMfaOtpEmail({ userEmail: user.email, targetEmail, code });
 
-      const isDemoAccount = ['customer@renu.com', 'support@renu-biome.com', 'employee@renu.com', 'demo@renu.com'].includes(user.email.toLowerCase().trim());
-
       return res.json({
         mfaRequired: true,
         email: user.email,
         targetEmail: targetEmail,
-        reviewBypassCode: isDemoAccount ? '123456' : undefined,
-        message: `Security verification code dispatched to ${targetEmail}.${isDemoAccount ? ' (App Review master code: 123456)' : ''}`
+        message: `Security verification code dispatched to ${targetEmail}.`
       });
     }
 

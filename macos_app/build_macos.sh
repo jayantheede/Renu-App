@@ -62,3 +62,4 @@ rm -f "$DMG_NAME"
 hdiutil create -volname "$APP_NAME" -srcfolder "$APP_DIR" -ov -format UDZO "$DMG_NAME"
 
 echo "Build complete: $(pwd)/${DMG_NAME}"
+

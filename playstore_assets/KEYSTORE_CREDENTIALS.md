@@ -29,3 +29,4 @@
 | **MD5** | `7F:8A:69:9C:FD:2E:71:4B:E2:AC:09:FF:08:61:8F:09` |
 
 Use the **SHA-256** and **SHA-1** fingerprints above when registering your Android app with Google Cloud Console, Google Play App Signing, or Firebase / Maps APIs.
+
