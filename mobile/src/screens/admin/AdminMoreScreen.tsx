@@ -207,6 +207,36 @@ export const AdminMoreScreen = ({ navigation }: any) => {
           <NotificationBellButton tintColor="#0F172A" />
         </View>
 
+        {/* Dedicated 2FA Quick Switch Card */}
+        <View style={styles.twoFactorCard}>
+          <View style={styles.twoFactorHeader}>
+            <View style={styles.twoFactorIconWrap}>
+              <MaterialCommunityIcons name="shield-lock" size={24} color="#0C6054" />
+            </View>
+            <View style={{ flex: 1, marginLeft: 12, marginRight: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={styles.twoFactorTitle}>Two-Factor Authentication</Text>
+                <View style={[styles.twoFactorBadge, { backgroundColor: twoFactorAuth ? '#DCFCE7' : '#F1F5F9' }]}>
+                  <Text style={[styles.twoFactorBadgeText, { color: twoFactorAuth ? '#15803D' : '#64748B' }]}>
+                    {twoFactorAuth ? 'Active' : 'Off'}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.twoFactorDesc}>
+                {twoFactorAuth
+                  ? '6-digit OTP verification code required on login'
+                  : 'Toggle to require email OTP verification on login'}
+              </Text>
+            </View>
+            <Switch
+              value={twoFactorAuth}
+              onValueChange={handleToggleMfa}
+              trackColor={{ false: '#CBD5E1', true: '#0C6054' }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
+        </View>
+
         {/* Menu Cards List */}
         <View style={styles.cardList}>
           {menuItems.map((item, index) => (
@@ -421,6 +451,50 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 2,
     fontWeight: '500',
+  },
+  twoFactorCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#A7F3D0',
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  twoFactorHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  twoFactorIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  twoFactorTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  twoFactorBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  twoFactorBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  twoFactorDesc: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 3,
   },
   cardList: {
     backgroundColor: '#FFFFFF',

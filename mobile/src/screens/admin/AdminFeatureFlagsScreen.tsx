@@ -2,13 +2,53 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, Alert, TouchableOpacity, Platform } from 'react-native';
 import { Text, Switch, Button, Divider, TextInput, Chip } from 'react-native-paper';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { fetchFeatureFlags, saveFeatureFlags, exportReportCsv, fetchAdminCustomers } from '../../api/client';
+import { fetchFeatureFlags, saveFeatureFlags, exportReportCsv, fetchAdminCustomers, toggleMfa } from '../../api/client';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useResponsiveLayout } from '../../utils/responsive';
 
 export const AdminFeatureFlagsScreen = () => {
   const { insets, safeHorizontalPadding, centeredContainerStyle, tabBarBottomClearance } = useResponsiveLayout(840);
   const logout = useAuthStore(state => state.logout);
+  const user = useAuthStore(state => state.user);
+  const updateUser = useAuthStore(state => state.updateUser);
+  const [twoFactorAuth, setTwoFactorAuth] = useState(Boolean(user?.mfaEnabled ?? true));
+
+  useEffect(() => {
+    if (user?.mfaEnabled !== undefined) {
+      setTwoFactorAuth(user.mfaEnabled);
+    } else if (user?.email) {
+      AsyncStorage.getItem(`@security_prefs_${user.email}`).then((stored) => {
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed.twoFactorAuth !== undefined) setTwoFactorAuth(parsed.twoFactorAuth);
+        }
+      }).catch(() => {});
+    }
+  }, [user?.email, user?.mfaEnabled]);
+
+  const handleToggleMfa = async (enabled: boolean) => {
+    setTwoFactorAuth(enabled);
+    try {
+      const email = user?.email || 'support@renu-biome.com';
+      await toggleMfa(email, enabled);
+      await updateUser({ mfaEnabled: enabled });
+      await AsyncStorage.setItem(
+        `@security_prefs_${email}`,
+        JSON.stringify({ twoFactorAuth: enabled })
+      );
+      Alert.alert(
+        enabled ? 'Admin 2FA Protection Enabled' : 'Admin 2FA Protection Disabled',
+        enabled
+          ? 'Two-Factor Authentication is active for office administrators. A 6-digit verification code will be dispatched to rgundavelli@gmail.com on next sign-in.'
+          : 'Two-Factor Authentication has been disabled for office administrators.'
+      );
+    } catch (e: any) {
+      console.warn('Failed to toggle admin 2FA:', e);
+      setTwoFactorAuth(!enabled);
+      Alert.alert('Notice', e?.message || 'Failed to update two-factor authentication settings.');
+    }
+  };
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [customers, setCustomers] = useState<any[]>([]);
@@ -222,8 +262,38 @@ export const AdminFeatureFlagsScreen = () => {
       >
         {/* Header */}
         <View style={[styles.header, { paddingTop: Math.max(16, insets.top + 8) }]}>
-          <Text style={styles.title}>Feature Flags & Reports</Text>
-          <Text style={styles.subtitle}>Configure deferred modules & export operational reports</Text>
+          <Text style={styles.title}>Feature Flags & Settings</Text>
+          <Text style={styles.subtitle}>Configure administrator security, deferred modules & reports</Text>
+        </View>
+
+        {/* Administrator Security & 2FA Card */}
+        <View style={styles.twoFactorCard}>
+          <View style={styles.twoFactorHeader}>
+            <View style={styles.twoFactorIconWrap}>
+              <MaterialCommunityIcons name="shield-lock" size={24} color="#0C6054" />
+            </View>
+            <View style={{ flex: 1, marginLeft: 12, marginRight: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={styles.twoFactorTitle}>Two-Factor Authentication</Text>
+                <View style={[styles.twoFactorBadge, { backgroundColor: twoFactorAuth ? '#DCFCE7' : '#F1F5F9' }]}>
+                  <Text style={[styles.twoFactorBadgeText, { color: twoFactorAuth ? '#15803D' : '#64748B' }]}>
+                    {twoFactorAuth ? 'Active' : 'Off'}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.twoFactorDesc}>
+                {twoFactorAuth
+                  ? 'Active: 6-digit verification code sent to rgundavelli@gmail.com on sign in'
+                  : 'Disabled: Password-only login for office administrators'}
+              </Text>
+            </View>
+            <Switch
+              value={twoFactorAuth}
+              onValueChange={handleToggleMfa}
+              trackColor={{ false: '#CBD5E1', true: '#0C6054' }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
         </View>
 
         {/* Scope Selector: Global vs Customer Override */}
@@ -386,6 +456,50 @@ const styles = StyleSheet.create({
   header: { paddingBottom: 16 },
   title: { fontSize: 22, fontWeight: '800', color: '#0F172A' },
   subtitle: { fontSize: 13, color: '#64748B', marginTop: 2 },
+  twoFactorCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#A7F3D0',
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  twoFactorHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  twoFactorIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  twoFactorTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  twoFactorBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  twoFactorBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  twoFactorDesc: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 3,
+  },
   scopeCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
