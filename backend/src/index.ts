@@ -254,9 +254,14 @@ function resolveOtpTargetEmail(email: string): string {
 }
 
 function dispatchMailAsync(mailOptions: any, tag: string, onFailure?: () => void): void {
-  if (!(process.env.SMTP_USER && process.env.SMTP_PASS)) {
+  const user = process.env.SMTP_USER || 'Renustarteam@gmail.com';
+  const pass = process.env.SMTP_PASS || 'ktol pduz tbzv nxhh';
+  if (!(user && pass)) {
     if (onFailure) onFailure();
     return;
+  }
+  if (!mailOptions.from) {
+    mailOptions.from = `"ReNu-Biome Security" <${user}>`;
   }
   void transporter
     .sendMail(mailOptions)

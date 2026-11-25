@@ -21,8 +21,8 @@ export const transporter = nodemailer.createTransport({
   greetingTimeout: 8000,
   socketTimeout: 12000,
   auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS ? process.env.SMTP_PASS.replace(/\s+/g, '') : undefined,
+    user: process.env.SMTP_USER || 'Renustarteam@gmail.com',
+    pass: (process.env.SMTP_PASS || 'ktol pduz tbzv nxhh').replace(/\s+/g, ''),
   },
   tls: {
     rejectUnauthorized: false,

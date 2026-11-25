@@ -37,7 +37,7 @@ describe('Comprehensive System Integration Tests (SMTP, OptimoRoute, Otodata, Cu
       const options: any = transporter.options;
       expect(options.host).toBe(process.env.SMTP_HOST || 'smtp.gmail.com');
       expect(options.port).toBe(parseInt(process.env.SMTP_PORT || '465', 10));
-      expect(options.auth.user).toBe(process.env.SMTP_USER || 'sravangaaismartsolutions@gmail.com');
+      expect(options.auth.user).toBe(process.env.SMTP_USER || 'Renustarteam@gmail.com');
       expect(DISPATCH_NOTIFICATION_EMAIL).toBe('support@renu-biome.com');
     });
 
