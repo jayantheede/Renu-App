@@ -157,11 +157,11 @@ router.get('/profile', async (req: AuthenticatedRequest, res) => {
 
 router.put('/profile', async (req: AuthenticatedRequest, res) => {
   try {
-    const { name, avatarUrl, phone, password } = req.body;
+    const { name, avatarUrl, phone, password, mfaEnabled } = req.body;
     const userEmail = req.user!.email;
     const userId = req.user!.id;
 
-    const updated = updateUserProfile(userEmail || userId, { name, avatarUrl, phone });
+    const updated = updateUserProfile(userEmail || userId, { name, avatarUrl, phone, mfaEnabled });
     if (password && updated) {
       await updateCustomerDetails(updated.id, { password });
     }
@@ -172,7 +172,7 @@ router.put('/profile', async (req: AuthenticatedRequest, res) => {
 
     addAuditLog({
       action: 'PROFILE_UPDATED',
-      details: `Profile updated for ${userEmail}: name="${name || updated?.name}"`,
+      details: `Profile updated for ${userEmail}: name="${name || updated?.name}"${mfaEnabled !== undefined ? ` mfaEnabled=${mfaEnabled}` : ''}`,
       actor: userEmail,
       category: 'USERS'
     });
@@ -185,6 +185,7 @@ router.put('/profile', async (req: AuthenticatedRequest, res) => {
       avatarUrl: updated?.avatarUrl || avatarUrl || '',
       approvalStatus: (req.user as any)?.approvalStatus || 'APPROVED',
       phone: updated?.phone || phone,
+      mfaEnabled: updated?.mfaEnabled,
       user_metadata: {
         full_name: updated?.name || name || req.user!.name,
         role: req.user!.role,

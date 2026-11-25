@@ -243,10 +243,9 @@ app.get('/install', (req, res) => {
 
 // Auth Helpers (non-blocking SMTP dispatch so sign-in/OTP never stalls on slow SMTP)
 function resolveOtpTargetEmail(email: string): string {
-  if (!email.includes('@')) {
-    return email.includes('admin')
-      ? 'support@renu-biome.com'
-      : 'rgundavelli@gmail.com';
+  const norm = (email || '').toLowerCase().trim();
+  if (!norm.includes('@') || norm === 'customer@renu.com' || norm === 'customer') {
+    return process.env.OTP_TEST_EMAIL || 'rgundavelli@gmail.com';
   }
   return email;
 }
@@ -472,6 +471,7 @@ app.post(['/api/auth/login', '/auth/login', '/app/login', '/api/app/login', '/ap
       }
 
       const targetEmail = resolveOtpTargetEmail(user.email);
+      (global as any).pendingMfa[targetEmail.toLowerCase()] = mfaPayload;
       dispatchMfaOtpEmail({ userEmail: user.email, targetEmail, code });
 
       return res.json({
@@ -585,21 +585,26 @@ app.post(['/api/auth/verify-mfa', '/auth/verify-mfa', '/app/verify-mfa', '/api/a
   }
 });
 
-app.post('/api/auth/resend-mfa', async (req, res) => {
+app.post(['/api/auth/resend-mfa', '/auth/resend-mfa', '/app/resend-mfa', '/api/app/resend-mfa'], async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email is required' });
     const norm = email.toLowerCase().trim();
-    const user = await findUserByEmail(norm);
+    let user = await findUserByEmail(norm);
+    if (!user) {
+      user = mockUsers.find(u => u.email.toLowerCase() === norm || u.id === norm) || null;
+    }
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     const code = String(Math.floor(100000 + Math.random() * 900000));
     const expiresAt = Date.now() + 10 * 60 * 1000;
-    (global as any).pendingMfa = (global as any).pendingMfa || {};
-    (global as any).pendingMfa[norm] = { code, user, expiresAt };
-    (global as any).pendingMfa[user.email.toLowerCase()] = { code, user, expiresAt };
-
     const targetEmail = resolveOtpTargetEmail(user.email);
+    (global as any).pendingMfa = (global as any).pendingMfa || {};
+    const mfaPayload = { code, user, expiresAt };
+    (global as any).pendingMfa[norm] = mfaPayload;
+    (global as any).pendingMfa[user.email.toLowerCase()] = mfaPayload;
+    (global as any).pendingMfa[targetEmail.toLowerCase()] = mfaPayload;
+
     dispatchMfaOtpEmail({ userEmail: user.email, targetEmail, code, isResend: true });
 
     res.json({ success: true, targetEmail, message: `New verification code dispatched to ${targetEmail}` });
@@ -624,17 +629,26 @@ app.post(['/api/auth/forgot-password', '/api/app/auth/forgot-password'], async (
   }
 });
 
-app.post('/api/auth/toggle-mfa', async (req, res) => {
+app.post(['/api/auth/toggle-mfa', '/auth/toggle-mfa', '/app/toggle-mfa', '/api/app/toggle-mfa'], async (req, res) => {
   try {
     const { email, enabled } = req.body;
-    if (!email) return res.status(400).json({ error: 'Email is required' });
-    const norm = email.toLowerCase().trim();
-    const user = mockUsers.find(u => u.email.toLowerCase() === norm);
+    const emailToUse = email || (req as any).user?.email;
+    if (!emailToUse) return res.status(400).json({ error: 'Email is required' });
+    const norm = String(emailToUse).toLowerCase().trim();
+
+    let user = mockUsers.find(u => u.email.toLowerCase() === norm || u.id === norm);
+    if (!user) {
+      const resolved = await findUserByEmail(norm);
+      if (resolved) {
+        user = mockUsers.find(u => u.id === resolved.id || u.email.toLowerCase() === resolved.email.toLowerCase());
+      }
+    }
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     user.mfaEnabled = Boolean(enabled);
     saveStore();
 
+    console.log(`[MFA Toggle] User ${user.email} updated mfaEnabled -> ${user.mfaEnabled}`);
     res.json({ success: true, mfaEnabled: user.mfaEnabled });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to update MFA' });

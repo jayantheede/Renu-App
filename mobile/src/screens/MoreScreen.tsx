@@ -527,6 +527,30 @@ export const MoreScreen = () => {
     }
   };
 
+  const handleToggleMfa = async (enabled: boolean) => {
+    setTwoFactorAuth(enabled);
+    try {
+      if (user?.email) {
+        await toggleMfa(user.email, enabled);
+        await updateUser({ mfaEnabled: enabled });
+        await AsyncStorage.setItem(
+          `@security_prefs_${user.email}`,
+          JSON.stringify({ twoFactorAuth: enabled })
+        );
+      }
+      Alert.alert(
+        enabled ? '2FA Protection Enabled' : '2FA Protection Disabled',
+        enabled
+          ? 'Two-Factor Authentication is now active. A 6-digit security code will be sent to your email on your next sign-in.'
+          : 'Two-Factor Authentication has been disabled for this account.'
+      );
+    } catch (e: any) {
+      console.warn('Failed to toggle 2FA:', e);
+      setTwoFactorAuth(!enabled);
+      Alert.alert('Notice', e?.message || 'Failed to update two-factor authentication settings.');
+    }
+  };
+
   const handleSaveSecurity = async () => {
     if (newPassword || confirmPassword) {
       if (newPassword !== confirmPassword) {
@@ -871,7 +895,7 @@ export const MoreScreen = () => {
                 </View>
                 <Switch
                   value={twoFactorAuth}
-                  onValueChange={setTwoFactorAuth}
+                  onValueChange={handleToggleMfa}
                   trackColor={{ false: '#E2E8F0', true: '#0C6054' }}
                   thumbColor="#FFFFFF"
                 />

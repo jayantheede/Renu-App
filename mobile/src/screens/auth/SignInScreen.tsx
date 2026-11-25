@@ -73,7 +73,7 @@ export const SignInScreen = ({ navigation }: any) => {
     try {
       const data = await login(loginEmail, loginPassword);
       if (data.mfaRequired) {
-        setMfaEmail(loginEmail);
+        setMfaEmail(data.targetEmail || data.email || loginEmail);
         setMfaCode('');
         setMfaStep(true);
         return;

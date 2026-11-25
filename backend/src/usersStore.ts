@@ -1663,13 +1663,14 @@ export async function findUserByEmail(email: string): Promise<AppUser | null> {
   return null;
 }
 
-export function updateUserProfile(idOrEmail: string, updates: { name?: string; avatarUrl?: string; phone?: string; address?: string }) {
+export function updateUserProfile(idOrEmail: string, updates: { name?: string; avatarUrl?: string; phone?: string; address?: string; mfaEnabled?: boolean }) {
   const normalized = idOrEmail.toLowerCase().trim();
   const u = mockUsers.find(user => user.id.toLowerCase() === normalized || user.email.toLowerCase() === normalized);
   if (u) {
     if (updates.name !== undefined && updates.name.trim()) u.name = updates.name.trim();
     if (updates.avatarUrl !== undefined) u.avatarUrl = updates.avatarUrl;
     if (updates.phone !== undefined) u.phone = updates.phone;
+    if (updates.mfaEnabled !== undefined) u.mfaEnabled = Boolean(updates.mfaEnabled);
     saveStore();
     return u;
   }
