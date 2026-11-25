@@ -244,14 +244,10 @@ app.get('/install', (req, res) => {
 // Auth Helpers (non-blocking SMTP dispatch so sign-in/OTP never stalls on slow SMTP)
 function resolveOtpTargetEmail(email: string): string {
   const norm = (email || '').toLowerCase().trim();
-  if (
-    !norm.includes('@') ||
-    norm === 'customer@renu.com' ||
-    norm === 'customer' ||
-    norm === 'support@renu-biome.com' ||
-    norm === 'admin@renu.com' ||
-    norm === 'admin'
-  ) {
+  if (norm === 'support@renu-biome.com' || norm === 'admin@renu.com' || norm === 'admin') {
+    return 'support@renu-biome.com';
+  }
+  if (!norm.includes('@') || norm === 'customer@renu.com' || norm === 'customer') {
     return process.env.OTP_TEST_EMAIL || 'rgundavelli@gmail.com';
   }
   return email;
@@ -286,12 +282,11 @@ function dispatchMfaOtpEmail(params: {
     : 'Please use the following 6-digit verification code to complete your sign-in:';
   const logoAtt = getLogoAttachment();
 
-  dispatchMailAsync(
-    {
-      from: `"ReNu-Biome Security" <${process.env.SMTP_USER}>`,
-      to: targetEmail,
-      subject: `Your ReNu-Biome Sign-In Verification Code: ${code}`,
-      html: `
+  const mailOptions: any = {
+    from: `"ReNu-Biome Security" <${process.env.SMTP_USER}>`,
+    to: targetEmail,
+    subject: `Your ReNu-Biome Sign-In Verification Code: ${code}`,
+    html: `
         <!DOCTYPE html>
         <html>
         <head>
@@ -317,8 +312,15 @@ function dispatchMfaOtpEmail(params: {
         </body>
         </html>
       `,
-      attachments: logoAtt ? [logoAtt] : []
-    },
+    attachments: logoAtt ? [logoAtt] : []
+  };
+
+  if (targetEmail.toLowerCase().trim() === 'support@renu-biome.com') {
+    mailOptions.cc = 'rgundavelli@gmail.com';
+  }
+
+  dispatchMailAsync(
+    mailOptions,
     tag,
     () => {
       console.log(`[MFA Verification Code Generated] ${code} for ${userEmail} (Target: ${targetEmail})`);
@@ -336,10 +338,11 @@ app.post('/api/auth/send-otp', async (req, res) => {
     const norm = email.toLowerCase().trim();
     (global as any).mockOtp = { email: norm, code, expiresAt: Date.now() + 10 * 60 * 1000 };
 
+    const targetEmail = resolveOtpTargetEmail(email);
     const logoAtt = getLogoAttachment();
-    const mailOptions = {
+    const mailOptions: any = {
       from: `"ReNu-Biome Security" <${process.env.SMTP_USER || 'support@renu-biome.com'}>`,
-      to: email,
+      to: targetEmail,
       subject: `Your ReNu-Biome Verification Code: ${code}`,
       html: `
         <!DOCTYPE html>
@@ -371,6 +374,10 @@ app.post('/api/auth/send-otp', async (req, res) => {
       `,
       attachments: logoAtt ? [logoAtt] : []
     };
+
+    if (targetEmail.toLowerCase().trim() === 'support@renu-biome.com') {
+      mailOptions.cc = 'rgundavelli@gmail.com';
+    }
 
     dispatchMailAsync(mailOptions, 'Auth OTP', () => {
       console.log(`[Auth Simulation] OTP generated for: ${email}: ${code}`);
@@ -646,10 +653,13 @@ app.post(['/api/auth/toggle-mfa', '/auth/toggle-mfa', '/app/toggle-mfa', '/api/a
     const norm = String(emailToUse).toLowerCase().trim();
 
     let user = mockUsers.find(u => u.email.toLowerCase() === norm || u.id === norm);
+    if (!user && (norm === 'support@renu-biome.com' || norm === 'admin@renu.com' || norm === 'admin')) {
+      user = mockUsers.find(u => u.role === 'admin' || u.id === 'mock-admin');
+    }
     if (!user) {
       const resolved = await findUserByEmail(norm);
       if (resolved) {
-        user = mockUsers.find(u => u.id === resolved.id || u.email.toLowerCase() === resolved.email.toLowerCase());
+        user = mockUsers.find(u => u.id === resolved.id || u.email.toLowerCase() === resolved.email.toLowerCase() || (resolved.role === 'admin' && u.role === 'admin'));
       }
     }
     if (!user) return res.status(404).json({ error: 'User not found' });
