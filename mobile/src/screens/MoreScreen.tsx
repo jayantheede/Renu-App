@@ -658,50 +658,6 @@ export const MoreScreen = () => {
           style={styles.clickableItem}
         />
 
-        <List.Item
-          title="ILRP Nitrogen Compliance Reports"
-          description="Section 9.4 A/R Nitrogen ratio calculation & Coalition CSV"
-          left={props => <List.Icon {...props} icon="sprout-outline" color="#0C6054" />}
-          right={props => <List.Icon {...props} icon="chevron-right" color="#94A3B8" />}
-          onPress={() => {
-            setComplianceModalVisible(true);
-            loadCompliance();
-          }}
-          style={styles.clickableItem}
-        />
-
-        <List.Item
-          title="Documents & SDS Vault"
-          description="Product labels, SDS, OMRI/CDFA certificates & signed agreements"
-          left={props => <List.Icon {...props} icon="file-cabinet" color="#0C6054" />}
-          right={props => <List.Icon {...props} icon="chevron-right" color="#94A3B8" />}
-          onPress={() => {
-            setDocumentsModalVisible(true);
-            loadDocs();
-          }}
-          style={styles.clickableItem}
-        />
-
-        <List.Subheader style={[styles.subheader, { marginTop: 12 }]}>Grower Operations & Chat</List.Subheader>
-
-        <List.Item
-          title="Product Catalog & Order Desk"
-          description="Browse ReNu nutrition formulations and submit refill orders"
-          left={props => <List.Icon {...props} icon="storefront-outline" color="#0C6054" />}
-          right={props => <List.Icon {...props} icon="chevron-right" color="#94A3B8" />}
-          onPress={() => navigateTo('Shop')}
-          style={styles.clickableItem}
-        />
-
-        <List.Item
-          title="Agronomist & Dispatch Chat"
-          description="Direct secure messaging with dispatch and field staff"
-          left={props => <List.Icon {...props} icon="chat-processing-outline" color="#0C6054" />}
-          right={props => <List.Icon {...props} icon="chevron-right" color="#94A3B8" />}
-          onPress={() => navigateTo('Messages')}
-          style={styles.clickableItem}
-        />
-
         <List.Subheader style={[styles.subheader, { marginTop: 12 }]}>Support</List.Subheader>
         
         <List.Item

@@ -142,38 +142,21 @@ self.addEventListener('fetch', (e) => {});
 app.use('/assets', express.static(path.join(__dirname, '../../mobile/assets')));
 app.use('/brand', express.static(path.join(__dirname, '../../mobile/assets/brand')));
 
-// Dedicated Apple App Review Demonstration portal & video endpoints
-app.get(['/app-review-demo', '/app-review-demo.html'], (req, res) => {
+// Dedicated Privacy Policy endpoints for Apple App Store & Google Play compliance
+app.get(['/privacy', '/privacy-policy', '/privacy-policy.html'], (req, res) => {
   const candidates = [
-    path.join(__dirname, '../../mobile/assets/app-review-demo.html'),
-    path.join(__dirname, '../assets/app-review-demo.html'),
-    path.join(__dirname, '../../mobile/dist/app-review-demo.html'),
-    path.join(process.cwd(), 'mobile/assets/app-review-demo.html'),
-    path.join(process.cwd(), '../mobile/assets/app-review-demo.html'),
-    path.join(process.cwd(), 'assets/app-review-demo.html'),
+    path.join(__dirname, '../assets/privacy-policy.html'),
+    path.join(__dirname, '../../mobile/assets/privacy-policy.html'),
+    path.join(__dirname, '../../mobile/dist/privacy-policy.html'),
+    path.join(process.cwd(), 'backend/assets/privacy-policy.html'),
+    path.join(process.cwd(), 'assets/privacy-policy.html'),
   ];
   for (const c of candidates) {
     if (fs.existsSync(c)) {
       return res.sendFile(c);
     }
   }
-  res.status(404).send('Walkthrough page not found');
-});
-
-app.get(['/assets/app_review_walkthrough.mp4', '/app_review_walkthrough.mp4'], (req, res) => {
-  const candidates = [
-    path.join(__dirname, '../../mobile/assets/app_review_walkthrough.mp4'),
-    path.join(__dirname, '../assets/app_review_walkthrough.mp4'),
-    path.join(process.cwd(), 'mobile/assets/app_review_walkthrough.mp4'),
-    path.join(process.cwd(), '../mobile/assets/app_review_walkthrough.mp4'),
-    path.join(process.cwd(), 'assets/app_review_walkthrough.mp4'),
-  ];
-  for (const c of candidates) {
-    if (fs.existsSync(c)) {
-      return res.sendFile(c);
-    }
-  }
-  res.status(404).send('Walkthrough video not found');
+  res.status(404).send('Privacy policy not found');
 });
 
 // Standalone /install route for direct browser and QR access
@@ -403,8 +386,7 @@ app.post('/api/auth/verify-otp', async (req, res) => {
 
     const norm = email.toLowerCase().trim();
     const stored = (global as any).mockOtp;
-    const isReviewBypass = String(otp).trim() === '123456';
-    if (!isReviewBypass && (!stored || stored.email !== norm || stored.code !== String(otp).trim() || (stored.expiresAt && Date.now() > stored.expiresAt))) {
+    if (!stored || stored.email !== norm || stored.code !== String(otp).trim() || (stored.expiresAt && Date.now() > stored.expiresAt)) {
       return res.status(400).json({ error: 'Invalid or expired OTP' });
     }
     delete (global as any).mockOtp;
@@ -474,24 +456,8 @@ app.post(['/api/auth/login', '/auth/login', '/app/login', '/api/app/login', '/ap
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    const isDemoAccount = [
-      'customer@renu.com',
-      'support@renu-biome.com',
-      'employee@renu.com',
-      'demo@renu.com',
-      'customer',
-      'admin',
-      'employee'
-    ].includes(email.toLowerCase().trim()) || [
-      'customer@renu.com',
-      'support@renu-biome.com',
-      'employee@renu.com',
-      'demo@renu.com'
-    ].includes(user.email.toLowerCase().trim());
-
-    // Demo/App Review accounts bypass MFA/OTP completely for instant automated review qualification.
-    // For non-demo accounts, MFA is required.
-    const mfaRequired = !isDemoAccount && Boolean(user.mfaEnabled || true);
+    // Check if MFA is explicitly configured/enabled on this account
+    const mfaRequired = Boolean(user.mfaEnabled);
     if (mfaRequired && !mfaCode) {
       const code = String(Math.floor(100000 + Math.random() * 900000));
       (global as any).pendingMfa = (global as any).pendingMfa || {};
@@ -520,8 +486,7 @@ app.post(['/api/auth/login', '/auth/login', '/app/login', '/api/app/login', '/ap
       const norm = user.email.toLowerCase().trim();
       const reqNorm = email.toLowerCase().trim();
       const pending = (global as any).pendingMfa?.[norm] || (global as any).pendingMfa?.[reqNorm];
-      const isReviewBypass = String(mfaCode).trim() === '123456';
-      const validCode = isReviewBypass || (pending && pending.code === String(mfaCode).trim() && Date.now() < pending.expiresAt);
+      const validCode = Boolean(pending && pending.code === String(mfaCode).trim() && Date.now() < pending.expiresAt);
       if (!validCode) {
         return res.status(400).json({ error: 'Invalid or expired verification code' });
       }
@@ -580,9 +545,8 @@ app.post(['/api/auth/verify-mfa', '/auth/verify-mfa', '/app/verify-mfa', '/api/a
       }
     }
 
-    // STRICT VALIDATION: Code must match the real OTP sent, not be expired, or match master review bypass (123456)
-    const isReviewBypass = String(code).trim() === '123456';
-    const isValid = isReviewBypass || Boolean(pending && pending.code === String(code).trim() && Date.now() < pending.expiresAt);
+    // Code must match the real OTP sent and not be expired
+    const isValid = Boolean(pending && pending.code === String(code).trim() && Date.now() < pending.expiresAt);
 
     if (!isValid || !targetUser) {
       return res.status(400).json({ error: 'Invalid or expired verification code' });

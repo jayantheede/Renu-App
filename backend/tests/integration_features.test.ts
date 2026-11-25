@@ -199,28 +199,18 @@ describe('Comprehensive System Integration Tests (SMTP, OptimoRoute, Otodata, Cu
     });
   });
 
-  describe('4. Demo Customer Account (rgundavelli@gmail.com)', () => {
-    it('should locate demo customer account by rgundavelli@gmail.com', async () => {
-      const user = await findUserByEmail('rgundavelli@gmail.com');
+  describe('4. Demo Customer Account (customer@renu.com)', () => {
+    it('should locate demo customer account by customer@renu.com', async () => {
+      const user = await findUserByEmail('customer@renu.com');
       expect(user).toBeDefined();
-      expect(user?.email).toBe('rgundavelli@gmail.com');
+      expect(user?.email).toBe('customer@renu.com');
       expect(user?.role).toBe('Grower');
     });
 
-    it('should locate demo customer by alias sravangaaismartsolutions.com and customer@renu.com', async () => {
-      const user1 = await findUserByEmail('sravangaaismartsolutions.com');
-      expect(user1).toBeDefined();
-      expect(user1?.email).toBe('rgundavelli@gmail.com');
-
-      const user2 = await findUserByEmail('customer@renu.com');
-      expect(user2).toBeDefined();
-      expect(user2?.email).toBe('rgundavelli@gmail.com');
-    });
-
-    it('should return pilot ranches with computed acreage for rgundavelli@gmail.com', () => {
-      const ranches = getRanchesForCustomer('rgundavelli@gmail.com');
+    it('should return pilot ranches with computed acreage for customer@renu.com', () => {
+      const ranches = getRanchesForCustomer('customer@renu.com');
       expect(ranches.length).toBeGreaterThan(0);
-      const ranch1 = ranches.find(r => r.id === 'ranch-home' || r.name === 'Home Ranch') || ranches[0];
+      const ranch1 = ranches.find(r => r.id === 'ranch-home' || r.name === 'Home Ranch' || r.name.includes('Orchards')) || ranches[0];
       expect(ranch1).toBeDefined();
       expect(ranch1?.ac).toBeGreaterThan(0);
       expect(ranch1?.blocks.length).toBeGreaterThan(0);

@@ -225,19 +225,6 @@ export const SignInScreen = ({ navigation }: any) => {
                   <Text style={{ fontSize: 12, color: '#64748B', textAlign: 'center', marginTop: 4 }}>
                     Please check your inbox (and spam folder) and enter the code below.
                   </Text>
-                  {Boolean(
-                    mfaEmail.toLowerCase().includes('customer@renu.com') ||
-                    mfaEmail.toLowerCase().includes('support@renu-biome.com') ||
-                    mfaEmail.toLowerCase().includes('employee@renu.com') ||
-                    mfaEmail.toLowerCase().includes('demo') ||
-                    mfaEmail.toLowerCase().includes('apple')
-                  ) && (
-                    <View style={{ marginTop: 8, backgroundColor: '#E0F2FE', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: '#BAE6FD' }}>
-                      <Text style={{ fontSize: 13, color: '#0369A1', fontWeight: '700', textAlign: 'center' }}>
-                        Review Demo Code: 123456
-                      </Text>
-                    </View>
-                  )}
                 </View>
 
                 <TextInput
@@ -358,20 +345,10 @@ export const SignInScreen = ({ navigation }: any) => {
                   Sign In
                 </Button>
 
-                {/* Account Assistance & Registration */}
-                <View style={styles.supportHelpBox}>
+                {/* Account Provisioning Notice */}
+                <View style={[styles.supportHelpBox, { marginTop: 16 }]}>
                   <Text style={styles.supportHelpText}>
-                    Don't have an account?{' '}
-                  </Text>
-                  <TouchableOpacity onPress={() => navigation?.navigate('SignUp')} activeOpacity={0.7}>
-                    <Text style={{ fontWeight: '700', color: BRAND_COLORS.primaryTeal, textDecorationLine: 'underline' }}>
-                      Register New Account
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={[styles.supportHelpBox, { marginTop: 4 }]}>
-                  <Text style={styles.supportHelpText}>
-                    Need an account? Email{' '}
+                    Grower Portal accounts are provisioned directly by ReNu-Biome for commercial farm operations. For assistance, contact{' '}
                     <Text style={{ fontWeight: '600', color: BRAND_COLORS.primaryTeal }}>
                       support@renu-biome.com
                     </Text>

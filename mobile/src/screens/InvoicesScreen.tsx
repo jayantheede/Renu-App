@@ -57,7 +57,7 @@ export const InvoicesScreen = () => {
   const [bankAccount, setBankAccount] = useState('9841289412');
   const [bankName, setBankName] = useState('Wells Fargo Commercial Ag');
   const [accountType, setAccountType] = useState('Checking');
-  const [cardName, setCardName] = useState('Sierra Agri Group LLC');
+  const [cardName, setCardName] = useState('Sierra Orchards LLC LLC');
   const [cardNumber, setCardNumber] = useState('4242 •••• •••• 8821');
   const [cardExp, setCardExp] = useState('08/28');
   const [cardCvc, setCardCvc] = useState('841');
@@ -285,34 +285,7 @@ export const InvoicesScreen = () => {
         </View>
       </View>
 
-      {/* QuickBooks Online 2-Way Sync Status Banner (Only for admin) */}
-      {isAdmin && quickbooksEnabled && (
-        <View style={[styles.qbBanner, centeredContainerStyle, { marginLeft: Math.max(16, insets.left), marginRight: Math.max(16, insets.right) }]}>
-          <View style={styles.qbBannerLeft}>
-            <View style={styles.qbIconCircle}>
-              <MaterialCommunityIcons name="cloud-sync" size={18} color="#059669" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={styles.qbTitle}>QuickBooks Online</Text>
-                <View style={styles.qbLiveDot} />
-                <Text style={styles.qbLiveText}>Synced</Text>
-              </View>
-              <Text style={styles.qbSub}>Direct QBO ledger sync active · Last check {qbLastSync}</Text>
-            </View>
-          </View>
-          <Button
-            mode="outlined"
-            compact
-            loading={qbSyncing}
-            onPress={handleSyncQuickBooks}
-            textColor="#059669"
-            style={styles.qbSyncBtn}
-          >
-            Sync
-          </Button>
-        </View>
-      )}
+
 
       {/* Filter Tabs: Open, Paid, All */}
       <View style={[styles.filterTabs, safeHorizontalPadding, centeredContainerStyle]}>
@@ -425,18 +398,6 @@ export const InvoicesScreen = () => {
                       </Text>
                     </View>
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
-                      {paymentsEnabled && item.status !== 'Paid' && (
-                        <Button
-                          mode="contained"
-                          buttonColor="#F07E42"
-                          icon="credit-card-outline"
-                          onPress={() => openPaymentModal(item)}
-                          style={{ borderRadius: 8 }}
-                          contentStyle={{ height: 38 }}
-                        >
-                          Pay Online
-                        </Button>
-                      )}
                       <Button
                         mode="contained"
                         buttonColor={BRAND_COLORS.primaryTeal}
@@ -499,7 +460,7 @@ export const InvoicesScreen = () => {
                     <View style={styles.docMetaRow}>
                       <View>
                         <Text style={styles.docLabel}>Billed To Customer:</Text>
-                        <Text style={styles.docVal}>Sierra Agri Group</Text>
+                        <Text style={styles.docVal}>Sierra Orchards LLC</Text>
                         <Text style={styles.docAddress}>{selectedInvoice.customerEmail || 'customer@renu.com'}</Text>
                       </View>
                       <View style={{ alignItems: 'flex-end' }}>
@@ -595,20 +556,6 @@ export const InvoicesScreen = () => {
                   >
                     Print / Export PDF
                   </Button>
-                  {paymentsEnabled && selectedInvoice.status !== 'Paid' && (
-                    <Button
-                      mode="contained"
-                      buttonColor="#F07E42"
-                      icon="credit-card"
-                      onPress={() => {
-                        setDetailModalVisible(false);
-                        openPaymentModal(selectedInvoice);
-                      }}
-                      style={{ borderRadius: 8 }}
-                    >
-                      Pay Online (${Number(selectedInvoice.amount).toLocaleString()})
-                    </Button>
-                  )}
                   <Button
                     mode="contained"
                     buttonColor={BRAND_COLORS.primaryTeal}

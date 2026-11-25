@@ -98,9 +98,9 @@ export const RootNavigator = () => {
     >
       {!isLoggedIn ? (
         <AuthNavigator />
-      ) : role?.toLowerCase() === 'admin' ? (
+      ) : Platform.OS === 'web' && role?.toLowerCase() === 'admin' ? (
         <AdminTabNavigator />
-      ) : role?.toLowerCase() === 'employee' ? (
+      ) : Platform.OS === 'web' && role?.toLowerCase() === 'employee' ? (
         <EmployeeTabNavigator />
       ) : (
         <MainTabNavigator />

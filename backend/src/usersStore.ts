@@ -554,7 +554,7 @@ export const mockUsers: AppUser[] = (_persistedStore.users && _persistedStore.us
       {
         id: 'mock-admin',
         email: 'support@renu-biome.com',
-        password: 'admin',
+        password: process.env.ADMIN_INITIAL_PASSWORD || 'ReNuOffice_2026!Secure',
         name: 'Administrator',
         role: 'admin',
         phone: '(559) 555-0100',
@@ -578,42 +578,6 @@ export const mockUsers: AppUser[] = (_persistedStore.users && _persistedStore.us
       {
         id: 'mock-cust-demo',
         email: 'customer@renu.com',
-        password: 'customer',
-        name: 'Sierra Orchards (Demo Grower)',
-        role: 'Grower',
-        phone: '(559) 555-0188',
-        approvalStatus: 'APPROVED',
-        avatarUrl: '',
-        quickbooksCustomerId: 'QB-CUST-101',
-        createdAt: '2026-01-03T00:00:00.000Z'
-      },
-      {
-        id: 'mock-cust-1',
-        email: 'rgundavelli@gmail.com',
-        password: 'customer',
-        name: 'Sierra Orchards LLC',
-        role: 'Grower',
-        phone: '(559) 555-0188',
-        approvalStatus: 'APPROVED',
-        avatarUrl: '',
-        quickbooksCustomerId: 'QB-CUST-101',
-        createdAt: '2026-01-03T00:00:00.000Z'
-      },
-      {
-        id: 'mock-cust-sravanga',
-        email: 'sravangaaismartsolutions@gmail.com',
-        password: 'customer',
-        name: 'Sierra Orchards LLC',
-        role: 'Grower',
-        phone: '(559) 555-0188',
-        approvalStatus: 'APPROVED',
-        avatarUrl: '',
-        quickbooksCustomerId: 'QB-CUST-101',
-        createdAt: '2026-01-03T00:00:00.000Z'
-      },
-      {
-        id: 'mock-cust-jayanth',
-        email: 'eede.jayanth@sravangaai.in',
         password: 'customer',
         name: 'Sierra Orchards LLC',
         role: 'Grower',
@@ -2512,7 +2476,7 @@ export function createMessage(data: any) {
     body: data.body || '',
     fromEmail: data.fromEmail || 'customer@renu.com',
     toEmail: data.toEmail || 'support@renu-biome.com',
-    senderName: data.senderName || 'Sierra Agri Group',
+    senderName: data.senderName || 'Sierra Orchards LLC',
     date: new Date().toISOString(),
     type: data.type || 'USER',
     photoUrl: data.photoUrl || '',
@@ -2675,7 +2639,7 @@ export function calculateComplianceReport(customerIdOrEmail?: string, season: nu
 
   return {
     season,
-    growerName: 'Sierra Agri Group',
+    growerName: 'Sierra Orchards LLC',
     totalAcres,
     totalAppliedLbN: totalAppliedN,
     totalRemovedLbN: totalRemovedN,

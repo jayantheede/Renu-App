@@ -1846,7 +1846,7 @@ router.get('/documents/audit-pack', async (req: AuthenticatedRequest, res) => {
   const compliance = calculateComplianceReport(user.email, 2026);
   res.json({
     title: 'ReNu-Biome Official Compliance Audit Package (2026)',
-    customer: user.name || 'Sierra Agri Group',
+    customer: user.name || 'Sierra Orchards LLC',
     generatedAt: new Date().toISOString(),
     documents: docs,
     complianceSummary: compliance,

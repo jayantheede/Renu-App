@@ -26,7 +26,7 @@ export const printInvoiceDocument = (inv: InvoicePrintData) => {
   }
 
   const invoiceNumber = inv.invoiceNumber || 'INV-2026';
-  const customerName = inv.customerName || 'Sierra Agri Group';
+  const customerName = inv.customerName || 'Sierra Orchards LLC';
   const customerEmail = inv.customerEmail || 'customer@renu.com';
   const invoiceDate = inv.invoiceDate || new Date().toISOString().split('T')[0];
   const dueDate = inv.dueDate || 'Net 30 Days';

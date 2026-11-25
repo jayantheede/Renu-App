@@ -113,7 +113,7 @@ describe('Auth Login & MFA Non-Blocking Latency', () => {
     const startedAt = Date.now();
     const res = await invokeApp('POST', '/api/auth/login', {
       email: 'support@renu-biome.com',
-      password: 'admin',
+      password: process.env.ADMIN_INITIAL_PASSWORD || 'ReNuOffice_2026!Secure',
     });
     const elapsedMs = Date.now() - startedAt;
 

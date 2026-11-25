@@ -280,20 +280,11 @@ export const DeliveriesScreen = ({ route }: any) => {
         <View style={{ flex: 1, minWidth: 180, paddingRight: 8 }}>
           <Text style={styles.headerTitle}>Deliveries</Text>
           <Text style={styles.headerSubtitle}>
-            Scheduled tank refills, OptimoRoute driver tracking & nutrient accounting
+            Scheduled tank refills, bulk tanker deliveries & nutrient accounting
           </Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <NotificationBellButton color={BRAND_COLORS.primaryTeal} />
-          {orderingEnabled && (
-            <TouchableOpacity
-              style={styles.requestOrderBtn}
-              onPress={() => setOrderModalVisible(true)}
-            >
-              <MaterialCommunityIcons name="plus-circle" size={16} color="#FFFFFF" />
-              <Text style={styles.requestOrderBtnText}>Request Refill</Text>
-            </TouchableOpacity>
-          )}
         </View>
       </View>
 

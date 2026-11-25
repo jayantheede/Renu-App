@@ -12,3 +12,8 @@ backend/dist/
 
 macos_app/*.app
 macos_app/*.dmg
+
+# Local Secure Vault (never commit)
+.secure_vault/
+*vault*.json
+retrieve_credentials.sh
