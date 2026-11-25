@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -6,10 +6,14 @@ import {
   TouchableOpacity,
   Alert,
   Platform,
+  Modal,
+  Switch,
 } from 'react-native';
-import { Text, Divider, Button } from 'react-native-paper';
+import { Text, Divider, Button, TextInput } from 'react-native-paper';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '../../store/useAuthStore';
+import { toggleMfa, updateProfile } from '../../api/client';
 import { BRAND_COLORS } from '../../theme/theme';
 import { InvoiceLogo } from '../../components/InvoiceLogo';
 import { NotificationBellButton } from '../../components/NotificationBellButton';
@@ -17,10 +21,101 @@ import { NotificationCenterModal } from '../../components/NotificationCenterModa
 import { useResponsiveLayout } from '../../utils/responsive';
 
 export const AdminMoreScreen = ({ navigation }: any) => {
-  const { insets, safeHorizontalPadding, centeredContainerStyle, tabBarBottomClearance } = useResponsiveLayout(840);
+  const {
+    insets,
+    safeHorizontalPadding,
+    centeredContainerStyle,
+    tabBarBottomClearance,
+    modalMaxHeight,
+    modalScrollMaxHeight,
+  } = useResponsiveLayout(840);
+
   const logout = useAuthStore((state) => state.logout);
   const user = useAuthStore((state) => state.user);
+  const updateUser = useAuthStore((state) => state.updateUser);
+
   const [alertsModalVisible, setAlertsModalVisible] = useState(false);
+  const [securityModalVisible, setSecurityModalVisible] = useState(false);
+  const [twoFactorAuth, setTwoFactorAuth] = useState(Boolean(user?.mfaEnabled));
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [updatingPassword, setUpdatingPassword] = useState(false);
+
+  useEffect(() => {
+    if (user?.mfaEnabled !== undefined) {
+      setTwoFactorAuth(user.mfaEnabled);
+    } else if (user?.email) {
+      AsyncStorage.getItem(`@security_prefs_${user.email}`).then((stored) => {
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed.twoFactorAuth !== undefined) setTwoFactorAuth(parsed.twoFactorAuth);
+        }
+      }).catch(() => {});
+    }
+  }, [user?.email, user?.mfaEnabled]);
+
+  const handleToggleMfa = async (enabled: boolean) => {
+    setTwoFactorAuth(enabled);
+    try {
+      if (user?.email) {
+        await toggleMfa(user.email, enabled);
+        await updateUser({ mfaEnabled: enabled });
+        await AsyncStorage.setItem(
+          `@security_prefs_${user.email}`,
+          JSON.stringify({ twoFactorAuth: enabled })
+        );
+      }
+      Alert.alert(
+        enabled ? 'Admin 2FA Protection Enabled' : 'Admin 2FA Protection Disabled',
+        enabled
+          ? `Two-Factor Authentication is now active for ${user?.email || 'support@renu-biome.com'}. A 6-digit verification code will be dispatched to your email on your next sign-in.`
+          : 'Two-Factor Authentication has been disabled for this administrator account.'
+      );
+    } catch (e: any) {
+      console.warn('Failed to toggle admin 2FA:', e);
+      setTwoFactorAuth(!enabled);
+      Alert.alert('Notice', e?.message || 'Failed to update two-factor authentication settings.');
+    }
+  };
+
+  const handleSaveSecurity = async () => {
+    if (newPassword || confirmPassword) {
+      if (newPassword !== confirmPassword) {
+        Alert.alert('Validation Error', 'New passwords do not match. Please verify.');
+        return;
+      }
+      if (newPassword.length < 6) {
+        Alert.alert('Validation Error', 'Password must be at least 6 characters long.');
+        return;
+      }
+    }
+
+    setUpdatingPassword(true);
+    try {
+      if (newPassword) {
+        await updateProfile({ password: newPassword });
+      }
+
+      if (user?.email) {
+        await toggleMfa(user.email, twoFactorAuth);
+        await updateUser({ mfaEnabled: twoFactorAuth });
+        await AsyncStorage.setItem(
+          `@security_prefs_${user.email}`,
+          JSON.stringify({ twoFactorAuth })
+        );
+      }
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setSecurityModalVisible(false);
+      Alert.alert('Security Updated', 'Admin credentials and two-factor preferences have been updated.');
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Failed to update admin security preferences.');
+    } finally {
+      setUpdatingPassword(false);
+    }
+  };
 
   const handleSignOut = () => {
     if (Platform.OS === 'web') {
@@ -40,6 +135,13 @@ export const AdminMoreScreen = ({ navigation }: any) => {
       subtitle: 'Live low tank alerts, delivery tracking, lab results & system banners',
       iconType: 'bell-badge-outline',
       action: () => setAlertsModalVisible(true),
+    },
+    {
+      id: 'security',
+      title: 'Security & 2FA',
+      subtitle: `Two-factor protection (${twoFactorAuth ? 'Active' : 'Disabled'}), admin password, and session SSL`,
+      iconType: 'shield-check-outline',
+      action: () => setSecurityModalVisible(true),
     },
     {
       id: 'invoices',
@@ -74,7 +176,7 @@ export const AdminMoreScreen = ({ navigation }: any) => {
       title: 'Reports & Export',
       subtitle: 'Monthly sales by customer/product, aging receivables, CSV & PDF export',
       iconType: 'chart-box-outline',
-      screen: 'AdminFeatureFlags', // AdminFeatureFlags has the comprehensive reports export
+      screen: 'AdminFeatureFlags',
     },
     {
       id: 'settings',
@@ -156,6 +258,20 @@ export const AdminMoreScreen = ({ navigation }: any) => {
           <Text style={styles.adminRoleNote}>
             Two office logins: Owner & Operations. Full administrative authority.
           </Text>
+          <TouchableOpacity
+            style={styles.admin2faStatusRow}
+            onPress={() => setSecurityModalVisible(true)}
+            activeOpacity={0.7}
+          >
+            <MaterialCommunityIcons
+              name={twoFactorAuth ? 'shield-check' : 'shield-alert-outline'}
+              size={18}
+              color={twoFactorAuth ? '#15803D' : '#D97706'}
+            />
+            <Text style={[styles.admin2faStatusText, { color: twoFactorAuth ? '#15803D' : '#D97706' }]}>
+              Two-Factor Authentication (2FA): {twoFactorAuth ? 'Active' : 'Disabled'} — Tap to manage
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Sign Out Button */}
@@ -169,6 +285,107 @@ export const AdminMoreScreen = ({ navigation }: any) => {
         visible={alertsModalVisible}
         onClose={() => setAlertsModalVisible(false)}
       />
+
+      {/* ==================== ADMIN SECURITY & 2FA MODAL ==================== */}
+      <Modal visible={securityModalVisible} animationType="slide" transparent>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingLeft: Math.max(16, insets.left),
+              paddingRight: Math.max(16, insets.right),
+              paddingTop: Math.max(16, insets.top),
+              paddingBottom: Math.max(16, insets.bottom),
+            },
+          ]}
+        >
+          <View style={[styles.modalContent, { maxHeight: modalMaxHeight }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
+                <Text style={styles.modalTitle}>Admin Security & 2FA</Text>
+                <Text style={styles.modalSubtitle}>Manage two-factor protection and administrator password</Text>
+              </View>
+              <TouchableOpacity onPress={() => setSecurityModalVisible(false)} style={styles.closeBtn}>
+                <MaterialCommunityIcons name="close" size={24} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: modalScrollMaxHeight }}>
+              <View style={styles.settingRow}>
+                <View style={{ flex: 1, paddingRight: 12 }}>
+                  <Text style={styles.settingName}>Two-Factor Authentication (2FA)</Text>
+                  <Text style={styles.settingDesc}>
+                    Require secondary 6-digit verification code sent to {user?.email || 'support@renu-biome.com'} when signing in
+                  </Text>
+                </View>
+                <Switch
+                  value={twoFactorAuth}
+                  onValueChange={handleToggleMfa}
+                  trackColor={{ false: '#E2E8F0', true: '#0C6054' }}
+                  thumbColor="#FFFFFF"
+                />
+              </View>
+
+              <Divider style={styles.divider} />
+
+              <Text style={[styles.sectionSubtitle, { marginTop: 12, marginBottom: 8 }]}>Update Administrator Password</Text>
+              
+              <TextInput
+                label="Current Password"
+                value={currentPassword}
+                onChangeText={setCurrentPassword}
+                secureTextEntry
+                mode="outlined"
+                style={styles.input}
+              />
+              <TextInput
+                label="New Password"
+                value={newPassword}
+                onChangeText={setNewPassword}
+                secureTextEntry
+                mode="outlined"
+                style={styles.input}
+              />
+              <TextInput
+                label="Confirm New Password"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry
+                mode="outlined"
+                style={styles.input}
+              />
+
+              <View style={styles.sessionBox}>
+                <MaterialCommunityIcons name="shield-check" size={20} color="#15803D" />
+                <View style={{ marginLeft: 8, flex: 1 }}>
+                  <Text style={styles.sessionText}>Office Session: SSL / TLS Encrypted</Text>
+                  <Text style={styles.sessionSubtext}>Signed in as {user?.email || 'support@renu-biome.com'} (Full Authority)</Text>
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalActions}>
+              <Button 
+                mode="outlined" 
+                onPress={() => setSecurityModalVisible(false)} 
+                textColor="#64748B" 
+                style={{ flex: 1, marginRight: 8, borderColor: '#CBD5E1' }}
+              >
+                Cancel
+              </Button>
+              <Button 
+                mode="contained" 
+                onPress={handleSaveSecurity} 
+                loading={updatingPassword}
+                buttonColor="#0C6054" 
+                style={{ flex: 1, marginLeft: 8 }}
+              >
+                Save Settings
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -276,6 +493,20 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginLeft: 28,
   },
+  admin2faStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(12, 96, 84, 0.12)',
+  },
+  admin2faStatusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    flex: 1,
+  },
   signOutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -292,5 +523,101 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#DC2626',
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    width: '100%',
+    maxWidth: 520,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 5,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  modalSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  closeBtn: {
+    padding: 4,
+  },
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+  },
+  settingName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  settingDesc: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  divider: {
+    marginVertical: 12,
+    backgroundColor: '#F1F5F9',
+  },
+  sectionSubtitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  input: {
+    marginBottom: 12,
+    backgroundColor: '#FFFFFF',
+  },
+  sessionBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  sessionText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  sessionSubtext: {
+    fontSize: 11,
+    color: '#166534',
+    marginTop: 1,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
   },
 });

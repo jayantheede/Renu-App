@@ -12,6 +12,8 @@ backend/dist/
 
 macos_app/*.app
 macos_app/*.dmg
+macos_app/*.pkg
+macos_app/*.provisionprofile
 
 # Local Secure Vault (never commit)
 .secure_vault/
