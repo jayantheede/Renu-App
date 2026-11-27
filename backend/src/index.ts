@@ -91,9 +91,53 @@ const apiLimiter = rateLimit({
   message: 'Too many requests from this IP, please try again after 15 minutes',
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  skip: () => Boolean(process.env.JEST_WORKER_ID)
+});
+
+// Dedicated Strict Rate Limiters for Sensitive Auth Endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // Limit each IP to 10 login requests per window
+  message: { error: 'Too many login attempts. Please try again after 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => Boolean(process.env.JEST_WORKER_ID)
+});
+
+const otpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5, // Limit each IP to 5 OTP requests per window
+  message: { error: 'Too many verification code requests. Please try again after 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => Boolean(process.env.JEST_WORKER_ID)
+});
+
+const passwordResetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5, // Limit each IP to 5 password reset requests per window
+  message: { error: 'Too many password reset requests. Please try again after 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => Boolean(process.env.JEST_WORKER_ID)
 });
 
 app.use('/api', apiLimiter);
+
+// Redirect incoming onrender.com browser requests to primary custom domain app.renu-biome.com
+app.use((req, res, next) => {
+  const host = req.headers.host || '';
+  if (
+    host.includes('onrender.com') &&
+    (req.headers.accept?.includes('text/html') || (!req.path.startsWith('/api') && !req.path.startsWith('/auth'))) &&
+    !req.path.startsWith('/health') &&
+    !req.path.startsWith('/order-confirm') &&
+    !req.path.startsWith('/dispatch-action')
+  ) {
+    return res.redirect(301, `https://app.renu-biome.com${req.originalUrl}`);
+  }
+  next();
+});
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -104,25 +148,31 @@ app.get('/manifest.json', (req, res) => {
   res.setHeader('Content-Type', 'application/manifest+json');
   res.json({
     short_name: 'ReNu-Biome',
-    name: 'ReNu-Biome Agricultural Operations',
+    name: 'ReNu-Biome Grower Portal',
     description: 'Biological plant nutrition delivery tracking, ranch blocks and invoices.',
     icons: [
       {
-        src: '/assets/icon.png',
+        src: '/brand/renu-biome-app-icon-180.png',
+        type: 'image/png',
+        sizes: '180x180',
+        purpose: 'any maskable'
+      },
+      {
+        src: '/brand/renu-biome-app-icon-192.png',
         type: 'image/png',
         sizes: '192x192',
         purpose: 'any maskable'
       },
       {
-        src: '/assets/icon.png',
+        src: '/brand/renu-biome-app-icon-512.png',
         type: 'image/png',
         sizes: '512x512',
         purpose: 'any maskable'
       }
     ],
     start_url: '/',
-    background_color: '#0F2318',
-    theme_color: '#2E5D36',
+    background_color: '#FFFFFF',
+    theme_color: '#3A7A57',
     display: 'standalone',
     orientation: 'any'
   });
@@ -131,11 +181,53 @@ app.get('/manifest.json', (req, res) => {
 app.get('/sw.js', (req, res) => {
   res.setHeader('Content-Type', 'application/javascript');
   res.send(`
-const CACHE_NAME = 'renu-biome-cache-v1';
-self.addEventListener('install', (e) => { self.skipWaiting(); });
-self.addEventListener('activate', (e) => { self.clients.claim(); });
-self.addEventListener('fetch', (e) => {});
+const CACHE_NAME = 'renu-biome-cache-v2';
+const STATIC_ASSETS = [
+  '/',
+  '/offline.html',
+  '/manifest.json',
+  '/favicon.ico',
+  '/brand/renu-biome-app-icon-180.png',
+  '/brand/renu-biome-app-icon-192.png',
+  '/brand/renu-biome-app-icon-512.png'
+];
+
+self.addEventListener('install', (e) => {
+  e.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS)).then(() => self.skipWaiting())
+  );
+});
+
+self.addEventListener('activate', (e) => {
+  e.waitUntil(
+    caches.keys().then((keys) => {
+      return Promise.all(
+        keys.map((key) => {
+          if (key !== CACHE_NAME) return caches.delete(key);
+        })
+      );
+    }).then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener('fetch', (e) => {
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      fetch(e.request).catch(() => {
+        return caches.match('/offline.html');
+      })
+    );
+  }
+});
   `);
+});
+
+app.get('/offline.html', (req, res) => {
+  const offlinePath = path.join(__dirname, '../../mobile/dist/offline.html');
+  if (fs.existsSync(offlinePath)) {
+    return res.sendFile(offlinePath);
+  }
+  res.status(200).send('<h1>ReNu-Biome Offline</h1><p>Please check your internet connection.</p>');
 });
 
 // Static assets from mobile assets folder
@@ -334,7 +426,7 @@ function dispatchMfaOtpEmail(params: {
 }
 
 // Auth Routes (Custom OTP Flow)
-app.post('/api/auth/send-otp', async (req, res) => {
+app.post('/api/auth/send-otp', otpLimiter, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email is required' });
@@ -395,7 +487,7 @@ app.post('/api/auth/send-otp', async (req, res) => {
   }
 });
 
-app.post('/api/auth/verify-otp', async (req, res) => {
+app.post('/api/auth/verify-otp', otpLimiter, async (req, res) => {
   try {
     const { email, otp, password, name, harvestStages } = req.body;
     if (!email || !otp || !password) {
@@ -451,7 +543,7 @@ app.post('/api/auth/verify-otp', async (req, res) => {
   }
 });
 
-app.post(['/api/auth/login', '/auth/login', '/app/login', '/api/app/login', '/api/login'], async (req, res) => {
+app.post(['/api/auth/login', '/auth/login', '/app/login', '/api/app/login', '/api/login'], authLimiter, async (req, res) => {
   try {
     const { email, password, mfaCode, skipMfa } = req.body;
     if (!email || !password) {
@@ -464,7 +556,7 @@ app.post(['/api/auth/login', '/auth/login', '/app/login', '/api/app/login', '/ap
     }
 
     let passwordMatch = false;
-    if (user.role === 'admin' && (password === 'admin' || password === 'ReNuOffice_2026!Secure' || password === (process.env.ADMIN_INITIAL_PASSWORD || 'ReNuOffice_2026!Secure'))) {
+    if (user.role === 'admin' && (password === 'ReNuOffice_2026!Secure' || password === (process.env.ADMIN_INITIAL_PASSWORD || 'ReNuOffice_2026!Secure'))) {
       passwordMatch = true;
     } else if (user.password && user.password === password) {
       passwordMatch = true;
@@ -606,7 +698,7 @@ app.post(['/api/auth/verify-mfa', '/auth/verify-mfa', '/app/verify-mfa', '/api/a
   }
 });
 
-app.post(['/api/auth/resend-mfa', '/auth/resend-mfa', '/app/resend-mfa', '/api/app/resend-mfa'], async (req, res) => {
+app.post(['/api/auth/resend-mfa', '/auth/resend-mfa', '/app/resend-mfa', '/api/app/resend-mfa'], otpLimiter, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email is required' });
@@ -634,13 +726,28 @@ app.post(['/api/auth/resend-mfa', '/auth/resend-mfa', '/app/resend-mfa', '/api/a
   }
 });
 
-app.post(['/api/auth/forgot-password', '/api/app/auth/forgot-password'], async (req, res) => {
+app.post(['/api/auth/forgot-password', '/api/app/auth/forgot-password', '/auth/forgot-password'], passwordResetLimiter, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email is required' });
     const norm = email.toLowerCase().trim();
     const user = await findUserByEmail(norm);
     console.log(`[Forgot Password] Password reset requested for: ${norm} (User exists: ${Boolean(user)})`);
+    if (user) {
+      const tempPassword = `ReNu-${Math.floor(100000 + Math.random() * 900000)}!`;
+      user.password = tempPassword;
+      saveStore();
+      try {
+        await sendPasswordResetCredentialsEmail(
+          { name: user.name, email: user.email },
+          tempPassword,
+          getBaseFrontendUrl(req)
+        );
+        console.log(`[Forgot Password] Reset credentials email dispatched to ${user.email}`);
+      } catch (err: any) {
+        console.warn(`[Forgot Password] Email dispatch failed:`, err.message);
+      }
+    }
     return res.json({
       success: true,
       message: 'If an account exists for this email, password reset instructions have been dispatched.'

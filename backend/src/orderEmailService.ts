@@ -15,7 +15,7 @@ export function getBaseBackendUrl(req?: any): string {
     }
   }
   return process.env.NODE_ENV === 'production'
-    ? 'https://renu-app-backend.onrender.com'
+    ? 'https://app.renu-biome.com'
     : 'http://localhost:3000';
 }
 
@@ -24,7 +24,7 @@ export function getBaseFrontendUrl(req?: any): string {
     return process.env.FRONTEND_PUBLIC_URL.replace(/\/+$/, '');
   }
   return process.env.NODE_ENV === 'production'
-    ? 'https://renu-app-1.onrender.com'
+    ? 'https://app.renu-biome.com'
     : 'http://localhost:8081';
 }
 
