@@ -3,13 +3,17 @@
   <head>
     <meta charset="utf-8" />
     <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover" />
     <title>ReNu-Biome Grower Portal</title>
     <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/brand/renu-biome-app-icon-180.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/brand/renu-biome-app-icon-180.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/brand/renu-biome-app-icon-192.png" />
+    <link rel="apple-touch-icon" sizes="512x512" href="/brand/renu-biome-app-icon-512.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="ReNu-Biome" />
+    <meta name="application-name" content="ReNu-Biome" />
     <meta name="theme-color" content="#3A7A57" />
     <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
     <style id="expo-reset">
@@ -38,6 +42,33 @@
     </noscript>
     <!-- The root element for your Expo app. -->
     <div id="root"></div>
+
+    <!-- PWA Install Banner for Android & iOS -->
+    <div id="pwa-install-banner" style="display: none; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: calc(100% - 32px); max-width: 440px; background: #ffffff; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08); border: 1px solid #E2E8F0; z-index: 999999; padding: 14px 16px; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <img src="/brand/renu-biome-app-icon-180.png" alt="ReNu-Biome" style="width: 44px; height: 44px; border-radius: 10px; flex-shrink: 0; box-shadow: 0 2px 6px rgba(0,0,0,0.1);">
+        <div style="flex: 1; min-width: 0;">
+          <div style="font-size: 14px; font-weight: 700; color: #0F172A; display: flex; align-items: center; gap: 6px;">
+            ReNu-Biome App
+            <span style="font-size: 10px; background: #F0FDFA; color: #0C6054; border: 1px solid #99F6E4; padding: 1px 6px; border-radius: 6px; font-weight: 700;">INSTANT ACCESS</span>
+          </div>
+          <div id="pwa-banner-text" style="font-size: 12px; color: #64748B; margin-top: 2px; line-height: 1.3;">
+            Add to your home screen for fast 1-tap grower access & offline support.
+          </div>
+        </div>
+        <button id="pwa-install-btn" style="display: none; background: #3A7A57; color: #ffffff; border: none; padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap;">
+          Install
+        </button>
+        <button id="pwa-dismiss-btn" aria-label="Close" style="background: transparent; border: none; font-size: 18px; line-height: 1; color: #94A3B8; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center;">
+          ✕
+        </button>
+      </div>
+      <!-- iOS-specific instructions -->
+      <div id="pwa-ios-instructions" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid #F1F5F9; font-size: 12px; color: #334155; line-height: 1.4;">
+        Tap the <strong>Share</strong> button <svg style="display:inline-block; vertical-align:middle; width:15px; height:15px; fill:#007AFF;" viewBox="0 0 24 24"><path d="M16 5l-1.42 1.42-1.59-1.59V16h-1.98V4.83L9.42 6.42 8 5l4-4 4 4zm4 5v11c0 1.1-.9 2-2 2H6c-1.1 0-2-.9-2-2V10c0-1.1.9-2 2-2h3v2H6v11h12V10h-3V8h3c1.1 0 2 .9 2 2z"/></svg> at the bottom of Safari, then choose <strong>"Add to Home Screen"</strong>.
+      </div>
+    </div>
+
   <script src="/_expo/static/js/web/index-c385fa0cf8b297011dc87cb1e6177071.js" defer></script>
   <script>
     if ('serviceWorker' in navigator) {
@@ -47,6 +78,63 @@
         });
       });
     }
+
+    // PWA Install Prompt for Android & iOS
+    (function initPwaInstall() {
+      const banner = document.getElementById('pwa-install-banner');
+      const installBtn = document.getElementById('pwa-install-btn');
+      const dismissBtn = document.getElementById('pwa-dismiss-btn');
+      const iosInstructions = document.getElementById('pwa-ios-instructions');
+      let deferredPrompt = null;
+
+      // 1. Check if already running as installed standalone app
+      const isStandalone = window.navigator.standalone === true || 
+        window.matchMedia('(display-mode: standalone)').matches ||
+        document.referrer.includes('android-app://');
+      if (isStandalone) return;
+
+      // 2. Check if user dismissed recently (within 7 days)
+      const dismissedTimestamp = localStorage.getItem('renu_pwa_dismissed');
+      if (dismissedTimestamp && (Date.now() - parseInt(dismissedTimestamp, 10) < 7 * 86400 * 1000)) {
+        return;
+      }
+
+      dismissBtn.addEventListener('click', () => {
+        banner.style.display = 'none';
+        localStorage.setItem('renu_pwa_dismissed', Date.now().toString());
+      });
+
+      // 3. Android / Chrome / Chromium install prompt
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        installBtn.style.display = 'inline-block';
+        banner.style.display = 'block';
+      });
+
+      installBtn.addEventListener('click', async () => {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+          banner.style.display = 'none';
+        }
+        deferredPrompt = null;
+      });
+
+      // 4. iOS Safari install prompt
+      const ua = window.navigator.userAgent || '';
+      const isIOS = /iPad|iPhone|iPod/.test(ua) || (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1);
+      const isSafari = /Safari/.test(ua) && !/Chrome|CriOS|FxiOS|EdgiOS/.test(ua);
+
+      if (isIOS && isSafari && !isStandalone) {
+        // Show iOS instructions after 1.5s delay so page finishes loading
+        setTimeout(() => {
+          iosInstructions.style.display = 'block';
+          banner.style.display = 'block';
+        }, 1500);
+      }
+    })();
   </script>
 </body>
 </html>
